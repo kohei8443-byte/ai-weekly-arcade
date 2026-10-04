@@ -3,30 +3,29 @@
   "week": 2,
   "title_ja": "だるま落とし",
   "title_en": "Daruma Knock",
-  "tagline_ja": "長押し、離して、カーン! 傾くだるまを叩く向きで立て直せ。",
-  "tagline_en": "Hold, release, KNOCK! Steer a wobbling daruma tower by choosing which side you strike from.",
-  "how_to_play_ja": "画面を長押しするとパワーメーターが往復します。いちばん下の段の種類(漆・白木・ゴムなど)ごとに決まった緑の帯で指を離すと、その段が飛んでいきます。帯の真ん中(金色)ならPERFECT。画面の左半分で離すと左から、右半分なら右から叩き、叩いた側へ塔が傾きます。傾きと反対側から叩いて立て直し、崩れるまでに何枚落とせるか挑戦しよう。キーボードは←/→(またはSpace)を押し続けて離す。Rでリスタート、P/Escで一時停止、Mで消音。",
-  "how_to_play_en": "Press and hold to charge a power meter that sweeps up and down. Release inside the green band for the bottom disc's type to knock it out; the gold center is a PERFECT. Releasing on the left half strikes from the left, the right half from the right, and the tower leans toward the side you hit. Strike from the side opposite the lean to straighten it, and knock out as many discs as you can before it topples. Keyboard: hold and release Left/Right arrow (Space strikes from the last side); R restarts, P/Esc pauses, M mutes.",
+  "tagline_ja": "長押しして、帯ではなして、スコーン! 傾くだるまを、叩く向きで立て直す。",
+  "tagline_en": "Hold, let go in the band, KNOCK! Steer a wobbling daruma tower by the side you strike from.",
+  "how_to_play_ja": "画面の左か右を長押しすると、その側の木槌が引かれ、ものさしの針が動きます。いちばん下のだんの帯で指をはなすと、だんが飛びます。叩くと塔は木槌の進む向きに押されるので、傾いた側から叩いて立て直します。傾いたまま落とすと点が2倍、3倍になり、倒れかけたら傾いた側からの1打でセーフにできます。",
+  "how_to_play_en": "Hold the left or right side of the screen to pull that mallet back while a needle runs along the ruler. Let go inside the bottom disc's band to knock it out. Each strike pushes the tower the way the mallet travels, so hit from the leaning side to straighten it. Knocks on a leaning tower score x2 or x3, and when it teeters one clean strike from the leaning side saves it.",
   "controls": [
-    "press-and-hold / release (touch or mouse)",
-    "left half / right half picks strike side",
-    "hold Left / Right arrow (or A / D)",
-    "space (strike from the last side)",
-    "R restart",
+    "hold left / right half, release (touch or mouse)",
+    "tap, then tap again (quick taps also work)",
+    "hold Left / Right arrow or A / D, release",
+    "space (strike from the side used last)",
     "P / Esc pause",
     "M mute"
   ],
-  "genre": "Timing / power-meter dexterity with a balance twist",
+  "genre": "one-button timing with a balance twist",
   "tags": [
     "one-button",
     "timing",
-    "japanese",
     "balance",
+    "japanese",
+    "pixel-art",
     "arcade",
-    "casual",
-    "mobile-friendly",
-    "physics"
+    "mobile-friendly"
   ],
-  "session_length_sec": 60,
-  "video_hook_ja": "傾くだるまを叩く向きで立て直す、だるま落とし上級編"
+  "session_length_sec": 70,
+  "video_hook_ja": "倒れる寸前のだるまを、最後の1打でセーフにできるか",
+  "quality_bar": 1
 }
