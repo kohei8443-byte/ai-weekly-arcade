@@ -197,18 +197,34 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
       }
     }
     const goBefore = (await page.evaluate(() => window.__qa.log.gameOver));
-    const t0 = Date.now();
+    let t0 = Date.now();
     let over = false, laterShot = null, actions = 0, stressed = false;
-    // phase 1: random input for playSec; phase 2 (only if still alive): stress input for extraSec more
-    while (Date.now() - t0 < (opts.playSec + opts.extraSec) * 1000) {
-      const st = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, resume: window.__qa.resume(), state: window.__qa.state() }));
-      if (st.retry || st.go > goBefore || st.state === 'over' || st.state === 'gameover') { over = true; break; }
-      if (st.resume) { await tap(st.resume); await sleep(200); continue; }
-      if (errors.length >= 20) break; // the game keeps throwing; no point playing on
-      if (!laterShot && Date.now() - t0 > 2500 && canvasRect) laterShot = await shot(page, '3-later', await probe('canvas') || undefined);
-      if (Date.now() - t0 < opts.playSec * 1000) await randomAction();
-      else { stressed = true; await stressAction(); }
-      actions++;
+    // An input still in flight when a run ends (a long press, a drag) can land after the game's retry lockout and start
+    // the next run, as a quick retry should. Then that run is played on (at most twice) so the retry button is tested
+    // on a game over screen that no input is touching.
+    for (let stray = 0; ; stray++) {
+      const goStart = stray ? await page.evaluate(() => window.__qa.log.gameOver) : goBefore;
+      let startsBefore = await page.evaluate(() => window.__qa.log.gameplayStart);
+      over = false;
+      // phase 1: random input for playSec; phase 2 (only if still alive): stress input for extraSec more
+      while (Date.now() - t0 < (opts.playSec + opts.extraSec) * 1000) {
+        const st = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, starts: window.__qa.log.gameplayStart, resume: window.__qa.resume(), state: window.__qa.state() }));
+        if (st.retry || st.go > goStart || st.state === 'over' || st.state === 'gameover') { over = true; break; }
+        startsBefore = st.starts;
+        if (st.resume) { await tap(st.resume); await sleep(200); continue; }
+        if (errors.length >= 20) break; // the game keeps throwing; no point playing on
+        if (!laterShot && Date.now() - t0 > 2500 && canvasRect) laterShot = await shot(page, '3-later', await probe('canvas') || undefined);
+        if (Date.now() - t0 < opts.playSec * 1000) await randomAction();
+        else { stressed = true; await stressAction(); }
+        actions++;
+      }
+      if (!over || stray >= 2) break;
+      await sleep(700);
+      const s = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, starts: window.__qa.log.gameplayStart, state: window.__qa.state() }));
+      const restarted = !s.retry && s.state !== 'over' && s.state !== 'gameover' && s.starts > startsBefore;
+      if (!restarted) break;
+      add('info', 'retry', `an input still in flight when run ${stray + 1} ended started the next run after the retry lockout; playing on to test the retry button`);
+      t0 = Date.now();
     }
     const playSecs = ((Date.now() - t0) / 1000).toFixed(1);
     if (playShot && laterShot) {
