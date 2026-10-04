@@ -1,0 +1,15 @@
+{
+  "slug": "orbit-hopper",
+  "week": 1,
+  "title_ja": "軌道ホッパー",
+  "title_en": "Orbit Hopper",
+  "tagline_ja": "ワンタップで惑星から惑星へ。軌道をつなぐ宇宙ジャンプ。",
+  "tagline_en": "One tap to fling from planet to planet. Chain orbits across the night sky.",
+  "how_to_play_ja": "小さな星が惑星のまわりを回っています。タップ（またはスペース）で接線方向に飛び出し、次の惑星の軌道（点線の円）に入れば着地。円の真ん中を通すと PERFECT、連続でボーナス点。外れて宇宙に飛んでいったらゲームオーバー。",
+  "how_to_play_en": "A little star circles a planet. Tap (or press Space) to fling it off along its orbit; reach the next planet's dotted orbit to land. Thread the centre for a PERFECT and chain them for bonus points. Miss and you drift off into space.",
+  "controls": ["tap/click", "space", "enter", "esc/p to pause"],
+  "genre": "one-button arcade",
+  "tags": ["one-button", "arcade", "space", "timing", "casual", "endless", "mobile-friendly", "high-score"],
+  "session_length_sec": 60,
+  "video_hook_ja": "タップ1回で惑星から惑星へ…真ん中を通せたら気持ちよすぎる。"
+}

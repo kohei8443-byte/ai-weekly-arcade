@@ -1,0 +1,30 @@
+{
+  "slug": "mochitsuki-beat",
+  "week": 4,
+  "title_ja": "餅つきビート",
+  "title_en": "Mochi Pound",
+  "tagline_ja": "ペッタン!ペッタン!テンポは90から200超えへ。相方の手だけは叩くな!",
+  "tagline_en": "Pound mochi on the beat as the tempo climbs from 90 to 200+ BPM. Just don't hit your partner's hands!",
+  "how_to_play_ja": "「ドン」の拍（相方の手が臼から出ている時）にタップ・クリック・スペースでつきます。拍ぴったり(±45ms)でペッタン(PERFECT)、少しずれるとペタッ(GOOD)、大きくずれると餅が冷めて、3回冷めると終了。相方の手が臼に入っている時に打つと「イタッ!!」で2回分冷める（最初の餅の1回目だけは1回分）。冷めが3回になったらそこで終了。臼のふちは拍ごとに光り、手が入っている間は赤くなるので、音なしでも拍がわかる。吹き出しの合図を読もう：「もう一回!」は1拍がまん、「お水~」は手が出るまで待つ、「ニヤリ」はフェイントなので拍を信じて打つ、「あれ?」はよそ見で手が遅れるので拍ぴったりに。20回つくと餅が1個完成してテンポUP、5個目ごとに金の餅（得点2倍）。餅3個目まで行けば、次からは120 BPMでスタート。",
+  "how_to_play_en": "Tap, click or press Space on the DON beat, when your partner's hands are out of the mortar. Dead on the beat (±45 ms) is a PERFECT, a little off is GOOD, way off cools the mochi (3 cools and you're done). Pound while the hands are in and it's OUCH!!, which costs two cools (the very first OUCH on the first mochi costs only one); if that makes three, the run ends. The mortar rim flashes on every beat and glows red while the hands are in, so you can play with the sound off. Read the speech bubble one beat ahead: \"Once more!\" means skip a beat, \"Water~\" means wait until the hands come out, \"Heh heh\" is a fake so trust the beat, and \"Huh?\" means slow hands, so hit right on the beat. Every 20 pounds finishes a mochi and raises the tempo. Every 5th mochi is golden and worth double. Reach the 3rd mochi once and later runs start at 120 BPM.",
+  "controls": [
+    "tap/click",
+    "space",
+    "any key",
+    "esc/p to pause",
+    "m to mute"
+  ],
+  "genre": "rhythm / reaction",
+  "tags": [
+    "rhythm",
+    "one-button",
+    "music",
+    "japanese",
+    "new-year",
+    "casual",
+    "mobile-friendly",
+    "high-score"
+  ],
+  "session_length_sec": 75,
+  "video_hook_ja": "BPM200で餅つきしたら、相方の手がヤバすぎた。"
+}

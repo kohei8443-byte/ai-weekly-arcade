@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Generated gallery site (built by tools, deployed by Actions)
+/site/
+
+# Captured media: kept locally or attached to GitHub Releases, never committed
+/media/
+*.mp4
+*.gif
+
+# Test and build output (QA screenshots, CrazyGames or other portal builds, release scratch)
+/qa-shots/
+/dist/
+/release-assets/
+/release-text/
+test-results/
+playwright-report/
+
+# Local noise
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*

@@ -1,0 +1,1817 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#d9d3c5">
+<title>押し屋ラッシュ / Oshiya Rush</title>
+<style>
+:root {
+  --ink: #2a2f3a;
+  --cream: #fbf6ea;
+  --green: #6fbf8e;
+  --red: #e2574c;
+  --yellow: #f3c43a;
+  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  color-scheme: light;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: #d9d3c5; color: var(--ink); font-family: var(--font); overflow: hidden;
+  overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+#bar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 5; }
+#bar button {
+  width: 36px; height: 36px; border-radius: 50%; border: 2px solid #2a2f3a26; background: #fffdf6e8;
+  color: var(--ink); font: 900 12px var(--font); display: grid; place-items: center; cursor: pointer; padding: 0;
+  box-shadow: 0 2px 0 #00000022;
+}
+#bar button svg { width: 18px; height: 18px; fill: currentColor; }
+button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+.ov {
+  position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center;
+  padding: 16px; box-sizing: border-box; background: #2a2f3a59;
+}
+#ovTitle { align-items: flex-end; background: linear-gradient(180deg, #2a2f3a00 0%, #2a2f3a10 45%, #2a2f3a80 100%); padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+.card {
+  width: 100%; max-width: 340px; background: var(--cream); border-radius: 22px; padding: 18px 18px 16px;
+  box-sizing: border-box; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 9px;
+  box-shadow: 0 8px 0 #00000026, inset 0 -7px 0 var(--green);
+}
+.kicker { font: 800 11px var(--font); letter-spacing: .28em; color: #7b7f88; }
+h1 { margin: -2px 0 0; font: 900 clamp(32px, 10vw, 42px)/1.1 var(--font); letter-spacing: .03em; color: var(--ink); white-space: nowrap; }
+h1 span { color: var(--red); }
+h2 { margin: 0; font: 900 30px/1.1 var(--font); color: var(--ink); }
+.sub { font: 900 13px var(--font); letter-spacing: .32em; color: var(--green); margin-top: -4px; }
+.how { font: 800 15px/1.5 var(--font); color: var(--ink); background: #fff; border: 2px dashed #6fbf8e88; border-radius: 12px; padding: 8px 12px; }
+.ov button.main {
+  min-width: 200px; padding: 13px 26px; border-radius: 999px; border: 0; cursor: pointer;
+  font: 900 20px var(--font); color: #fff; background: var(--red);
+  box-shadow: 0 5px 0 #a8382f; letter-spacing: .06em;
+}
+.ov button.main:active { transform: translateY(3px); box-shadow: 0 2px 0 #a8382f; }
+.ov button.ghost {
+  padding: 9px 22px; border-radius: 999px; border: 2px solid #2a2f3a40; background: transparent;
+  color: var(--ink); font: 800 15px var(--font); cursor: pointer;
+}
+.best { font: 800 14px var(--font); color: #6b6f78; }
+.keys { font: 700 11.5px/1.5 var(--font); color: #7b7f88; white-space: pre-line; }
+.credit { position: absolute; bottom: calc(10px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font: 800 11px var(--font); color: #fffffff0; letter-spacing: .1em; text-shadow: 0 1px 2px #0006; }
+.score { font: 900 52px/1 var(--font); color: var(--ink); }
+.newbest { font: 900 14px var(--font); color: #fff; background: var(--red); border-radius: 999px; padding: 4px 12px; }
+.stats { display: flex; gap: 16px; font: 700 12px var(--font); color: #6b6f78; }
+.stats b { display: block; font: 900 21px var(--font); color: var(--ink); }
+.tease { font: 800 13px/1.45 var(--font); color: var(--ink); background: #fff; border: 2px dashed var(--yellow); border-radius: 12px; padding: 6px 12px; text-wrap: balance; }
+@media (max-height: 760px) {
+  .card { gap: 6px; padding: 12px 14px; }
+  .how { font-size: 13px; padding: 6px 10px; }
+  .tease { font-size: 12px; padding: 5px 10px; }
+  h1 { font-size: 34px; }
+  .ov button.main { padding: 10px 22px; font-size: 18px; }
+}
+@media (max-height: 440px) {
+  .kicker, .keys { display: none; }
+  .card { gap: 4px; padding: 10px 14px 14px; }
+  h1 { font-size: 28px; }
+  .score { font-size: 40px; }
+  #ovTitle { padding-bottom: 30px; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" tabindex="-1" aria-label="game"></canvas>
+  <div id="bar">
+    <button id="btnPause" type="button" aria-label="pause"><svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+    <button id="btnMute" type="button" aria-label="sound"></button>
+    <button id="btnLang" type="button" aria-label="language">EN</button>
+  </div>
+  <div id="ovTitle" class="ov">
+    <div class="card">
+      <div class="kicker">WEEKLY MINI GAME #06</div>
+      <h1 id="titleH1"></h1>
+      <div class="sub" data-t="sub"></div>
+      <div class="how" data-t="how"></div>
+      <button class="main" id="btnStart" type="button" data-t="start"></button>
+      <div class="best" id="titleBest"></div>
+      <div class="keys" data-t="keysTitle"></div>
+    </div>
+    <div class="credit">Made with Claude</div>
+  </div>
+  <div id="ovPause" class="ov" hidden>
+    <div class="card">
+      <h2 data-t="paused"></h2>
+      <button class="main" id="btnResume" type="button" data-t="resume"></button>
+      <button class="ghost" id="btnRestart" type="button" data-t="restart"></button>
+    </div>
+  </div>
+  <div id="ovOver" class="ov" hidden>
+    <div class="card">
+      <h2 data-t="over"></h2>
+      <div class="score" id="overScore">0</div>
+      <div class="newbest" id="overNew" data-t="newBest" hidden></div>
+      <div class="best" id="overBest"></div>
+      <div class="stats">
+        <div><span data-t="stStations"></span><b id="overStations">1</b></div>
+        <div><span data-t="stPacked"></span><b id="overPacked">0</b></div>
+        <div><span data-t="stPressure"></span><b id="overPressure">0%</b></div>
+      </div>
+      <div class="tease" id="overTease"></div>
+      <button class="main" id="btnRetry" type="button" data-t="retry"></button>
+      <div class="keys" data-t="keysRetry"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+"use strict";
+
+window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+const Platform = window.Platform;
+
+// ---- strings
+const STR = {
+  ja: {
+    title: "押し屋<span>ラッシュ</span>", titlePlain: "押し屋ラッシュ", sub: "OSHIYA RUSH", start: "出発進行！",
+    how: "乗客をスワイプして車内へ。ドアが閉まる前に全員押し込め！",
+    keysTitle: "ドア長押しで押し込み（やりすぎると窓が割れる）\n← → 狙い ・ Space はじく ・ Shift 押し込み",
+    best: "ベスト", paused: "一時停止中", resume: "つづける", restart: "最初から",
+    over: "本日の運行終了", retry: "もう一回", newBest: "自己ベスト更新！", keysRetry: "Space / Enter でリトライ",
+    stStations: "到達駅", stPacked: "乗せた人数", stPressure: "最高圧力",
+    pressure: "圧力", stamina: "押し屋", score: "SCORE",
+    departIn: "発車まで", closing: "ドアが\n閉まります", arriving: "到着", departing: "発車",
+    remain: n => "残り " + n + "人",
+    hintFlick: "スワイプで車内へ！", hintFlickKey: "← → で狙って Space！",
+    hintShove: "ドアを長押しで押し込め！", hintShoveKey: "Shift 長押しで押し込め！",
+    pinch: "挟まった！", pop: "窓が割れた！", safe: "セーフ！", offFar: "反対側で降りちゃった…",
+    leftBehind: n => n + "人 乗り残し…", nobody: "誰も乗れなかった…", allAboard: "全員乗車！", combo: n => "連続 ×" + n,
+    packed: n => "×" + n + " 満員！", tally: (b, p) => "乗車 " + b + "人 × 圧力 " + p + "%",
+    station: n => "第" + n + "駅", earlyGo: "全員乗車！ まもなく発車", tapSkip: "タップで次へ",
+    noteRigid: "硬い荷物は縮まない！", noteSumo: "おすもうさんが並んでいる！", noteExpress: "急行：車内せまめ！", noteFar: "反対側のドアも開く！",
+    teaseRigid: "第3駅から 硬い荷物の客が並びます", teaseSumo: "第5駅で おすもうさんが待っています",
+    teaseExpress: "第7駅から せまい急行がやって来ます", teaseFar: "第9駅で 反対側のドアも開きます",
+    teaseDone: "全部の駅を見た！ あとはベスト更新だ",
+    plus: "乗車",
+  },
+  en: {
+    title: "Oshiya <span>Rush</span>", titlePlain: "Oshiya Rush", sub: "TOKYO TRAIN PUSHER", start: "All aboard!",
+    how: "Swipe passengers into the car. Cram everyone in before the doors shut!",
+    keysTitle: "Hold the door to shove (overdo it and a window pops)\n← → aim · Space flick · Shift shove",
+    best: "Best", paused: "Paused", resume: "Resume", restart: "Restart",
+    over: "End of Service", retry: "Again", newBest: "New best!", keysRetry: "Space / Enter to retry",
+    stStations: "Stations", stPacked: "Packed", stPressure: "Max pressure",
+    pressure: "PRESSURE", stamina: "SHOVE", score: "SCORE",
+    departIn: "DEPARTS IN", closing: "DOORS\nCLOSING", arriving: "ARRIVING", departing: "DEPARTING",
+    remain: n => n + " left",
+    hintFlick: "Swipe them in!", hintFlickKey: "← → aim, then Space!",
+    hintShove: "Hold the door to shove!", hintShoveKey: "Hold Shift to shove!",
+    pinch: "PINCHED!", pop: "WINDOW POP!", safe: "Safe!", offFar: "Got off the far side…",
+    leftBehind: n => n + " left behind…", nobody: "Nobody got on…", allAboard: "ALL ABOARD!", combo: n => "STREAK ×" + n,
+    packed: n => "×" + n + " PACKED", tally: (b, p) => b + " boarded × " + p + "% pressure",
+    station: n => "STATION " + n, earlyGo: "All aboard! Departing", tapSkip: "TAP TO SKIP",
+    noteRigid: "Hard luggage won't squish!", noteSumo: "A sumo wrestler is queuing!", noteExpress: "Express: narrow car!", noteFar: "The far door opens too!",
+    teaseRigid: "Hard luggage shows up at Station 3", teaseSumo: "A sumo wrestler awaits at Station 5",
+    teaseExpress: "A narrow express rolls in at Station 7", teaseFar: "The far door opens at Station 9",
+    teaseDone: "You've seen every station. Now beat your best!",
+    plus: "IN",
+  },
+};
+const STATION_NAMES = [
+  ["豆ヶ丘", "Mamegaoka"], ["寿司詰町", "Sushizume-cho"], ["押合坂", "Oshiai-zaka"], ["もちもち台", "Mochimochi-dai"],
+  ["満員橋", "Man-in-bashi"], ["圧縮ヶ原", "Asshuku-gahara"], ["ぎゅう谷", "Gyu-dani"], ["肩寄町", "Katayose-machi"],
+  ["汗だく本町", "Asedaku-honcho"], ["押出中央", "Oshidashi-chuo"],
+];
+
+// ---- storage (never trusted)
+function load(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } }
+function save(key, value) { try { localStorage.setItem(key, String(value)); } catch (e) { /* storage blocked */ } }
+const K_BEST = "oshiya-rush-best", K_MUTE = "oshiya-rush-muted", K_LANG = "oshiya-rush-lang";
+
+const DEMO = /(?:^|[?&])demo=1(?:&|$)/.test(location.search.slice(1));
+const REDUCED = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+let lang = load(K_LANG, "") || ((navigator.language || "ja").toLowerCase().startsWith("ja") ? "ja" : "en");
+if (!STR[lang]) lang = "ja";
+const T = () => STR[lang];
+
+// ---- geometry & tuning
+// World is a 450x800 portrait column. The car sits on top, the platform below.
+const W = 450, H = 800;
+const ROOF_Y = 86, TOP_IN = 98, BENCH_TOP = 128;
+const DOOR_Y0 = 432, DOOR_Y1 = 444, DOOR_LINE = 438, FAR_LINE = 92;
+const DOOR_CX = 225, DOOR_HW = 49, BENCH_GAP = 97, BENCH_BOT = 402;
+const READY_X = 225, READY_Y = 512;
+const BASE_R = 27;
+const FRICTION = 380;               // constant deceleration on the floor (units/s^2)
+const MAX_DRAG = 130, MAX_SPEED = 640, KEY_SPEED = 470;
+const K_SOFT = 6000, K_RIGID = 14000, DAMP = 0.22;
+const SUB_DT = 1 / 240;
+const CHIME_TIME = 0.9, CLOSE_TIME = 1.2;
+// between stations: the car rolls in for ARRIVE_TIME, rolls out over DEPART_ROLL and the next station starts at DEPART_TIME (a tap skips ahead)
+const ARRIVE_TIME = 0.6, DEPART_ROLL = 0.8, DEPART_TIME = 1.05, BANNER_TIME = 2.4;
+const EJECT_G = 1600, CUSHION_Y = 650;  // window-pop flight: up out of the car, then down onto a cushion on the platform
+const COMPRESS = 0.15;
+const PN_PER = 4.6, PN_BASE = 20;   // pressure normaliser: total overlap / (PN_PER * riders + PN_BASE)
+const QUEUE_COLS = [176, 274, 120, 330];
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
+const easeIn = t => t * t * t;
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+// ---- audio (synthesised, starts on first gesture)
+const Sfx = (() => {
+  let ac = null, master = null, noiseBuf = null, muted = load(K_MUTE, "0") === "1", lastBoing = 0;
+  function init() {
+    if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      ac = new AC();
+      master = ac.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(ac.destination);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    } catch (e) { ac = null; }
+  }
+  const ok = () => ac && !muted && ac.state === "running";
+  function env(g, t, a, peak, dur) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+  function osc(type, f0, f1, dur, vol, delay, filt) {
+    const t = ac.currentTime + (delay || 0), o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    env(g, t, 0.006, vol, dur);
+    if (filt) { const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = filt; o.connect(f); f.connect(g); } else o.connect(g);
+    g.connect(master); o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noise(dur, vol, type, f0, f1, delay, q) {
+    const t = ac.currentTime + (delay || 0), s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; s.loop = true; f.type = type; f.Q.value = q || 0.8;
+    f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    env(g, t, 0.01, vol, dur);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.03);
+  }
+  function bell(f, delay, vol) { osc("sine", f, f, 0.75, vol, delay); osc("sine", f * 2.01, f * 2.01, 0.3, vol * 0.3, delay); }
+  return {
+    init,
+    get muted() { return muted; },
+    setMuted(m) { muted = m; save(K_MUTE, m ? "1" : "0"); if (master) master.gain.value = m ? 0 : 0.8; },
+    boing(mass, power) {
+      if (!ok()) return;
+      const now = ac.currentTime; if (now - lastBoing < 0.05) return; lastBoing = now;
+      const f = rand(480, 640) / Math.sqrt(mass), t = now, o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(f, t);
+      o.frequency.linearRampToValueAtTime(f * 1.9, t + 0.045); o.frequency.exponentialRampToValueAtTime(f * 0.8, t + 0.17);
+      env(g, t, 0.005, 0.05 + 0.13 * power, 0.18); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.2);
+    },
+    flick(p) { if (!ok()) return; noise(0.16, 0.12 + 0.1 * p, "bandpass", 700, 2600, 0, 1.4); osc("triangle", 300, 520, 0.1, 0.06); },
+    board(n) { if (!ok()) return; const f = 520 * Math.pow(2, Math.min(n, 16) / 12); osc("sine", f, f * 1.5, 0.09, 0.11); osc("triangle", f * 2, f * 2, 0.06, 0.04, 0.04); },
+    chime() { if (!ok()) return; [880, 1109, 1319, 1109, 1480, 1319].forEach((f, i) => bell(f, i * 0.13, 0.11)); },
+    hiss() { if (!ok()) return; noise(0.7, 0.13, "highpass", 3800, 1600, 0, 0.6); },
+    thunk() { if (!ok()) return; osc("sine", 140, 55, 0.18, 0.32); noise(0.08, 0.15, "lowpass", 600, 200); },
+    pinch() { if (!ok()) return; osc("square", 230, 110, 0.14, 0.09, 0, 1200); osc("sine", 900, 1900, 0.22, 0.13, 0.08); osc("sine", 1900, 700, 0.25, 0.1, 0.3); },
+    glass() {
+      if (!ok()) return; noise(0.35, 0.2, "highpass", 2500, 5000);
+      for (let i = 0; i < 9; i++) { const f = rand(2200, 5200); osc("sine", f, f * 0.98, rand(0.08, 0.3), 0.05, i * 0.025); }
+      osc("sine", 160, 60, 0.25, 0.25);
+    },
+    shove() { if (!ok()) return; osc("sawtooth", 170, 95, 0.22, 0.12, 0, 700); noise(0.12, 0.08, "lowpass", 500, 200); },
+    creak() { if (!ok()) return; osc("square", 1250, 1250, 0.05, 0.035); },
+    tick() { if (!ok()) return; osc("square", 1000, 1000, 0.05, 0.03, 0, 3000); },
+    stamp() { if (!ok()) return; osc("sine", 110, 50, 0.22, 0.35); noise(0.1, 0.18, "lowpass", 900, 300); },
+    depart() {
+      if (!ok()) return; noise(1.0, 0.12, "lowpass", 220, 120);
+      for (let i = 0; i < 6; i++) noise(0.05, 0.1, "bandpass", 900, 600, 0.175 + i * (0.18 - i * 0.02), 3);
+    },
+    cushion() { if (!ok()) return; osc("sine", 190, 430, 0.12, 0.22); osc("sine", 430, 210, 0.24, 0.15, 0.1); noise(0.14, 0.07, "lowpass", 700, 250); },
+    cheer() { if (!ok()) return; [784, 988, 1175, 1568].forEach((f, i) => osc("triangle", f, f, 0.16, 0.08, i * 0.07)); },
+    lose() { if (!ok()) return; osc("triangle", 440, 200, 0.45, 0.12); osc("triangle", 330, 150, 0.45, 0.08, 0.12); },
+    over() { if (!ok()) return; [523, 466, 392, 330].forEach((f, i) => osc("triangle", f, f * 0.98, 0.3, 0.1, i * 0.18)); },
+  };
+})();
+
+// ---- DOM
+const $ = id => document.getElementById(id);
+const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver");
+const ICON_ON = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none"/><path d="M4 9h4l5-4v14l-5-4H4z"/></svg>';
+const ICON_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2"/></svg>';
+
+let best = parseInt(load(K_BEST, "0"), 10) || 0;
+
+function applyLang() {
+  const s = T();
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach(el => { const v = s[el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  $("titleH1").innerHTML = s.title;
+  $("btnLang").textContent = lang === "ja" ? "EN" : "JA";
+  $("titleBest").textContent = $("overBest").textContent = s.best + " " + best;
+  $("overTease").textContent = s[teaseKey(G.station)];
+  document.title = s.titlePlain + (lang === "ja" ? " / Oshiya Rush" : ": Tokyo Train Pusher");
+}
+// game over teaser: the next new element after the station the run ended at
+function teaseKey(n) { return n < 3 ? "teaseRigid" : n < 5 ? "teaseSumo" : n < 7 ? "teaseExpress" : n < 9 ? "teaseFar" : "teaseDone"; }
+function updateMuteIcon() { $("btnMute").innerHTML = Sfx.muted ? ICON_OFF : ICON_ON; }
+
+// ---- game state
+const G = {
+  mode: "title", paused: false, ai: true,
+  station: 1, phase: "arrive", phaseT: 0, timer: 10, timerMax: 10, closeAmt: 1, doorsSolid: true,
+  carX: 560, carL: 22, carR: 428, farDoor: false, walls: [], doorRects: [],
+  ps: [], queue: [], seats: [],
+  lives: 3, score: 0, combo: 0, stamina: 1, comp: 0, shoving: false, shovingFar: false, shoveSoundT: 0,
+  pressure: 0, closePressure: 0, pressureShown: 0, redT: 0, popGrace: 0, maxPressure: 0, totalPacked: 0, boardedCount: 0,
+  hitstop: 0, shake: 0, sway: 0, endT: 0, earlyGo: false, tickNext: 3, creakT: 0,
+  broken: [], particles: [], popups: [], stamps: [], cushions: [], banner: null, aim: null,
+  hintFlick: true, hintShove: true, usedShove: false, kbAim: -Math.PI / 2, kbShown: false, kbUsed: false,
+  aiRounds: 0, pendingFlick: null, overAt: 0, stationLoss: false,
+};
+const keys = { left: false, right: false, shift: false };
+const pointers = new Map();
+
+const SUITS = ["#2f3f63", "#45474f", "#b49e78", "#5f6878", "#6b5544", "#33415a"];
+const TIES = ["#d9534f", "#e8a33d", "#4a7fc1", "#5aa86a", "#9b59b6", "#c0392b"];
+const SKINS = ["#f6d2b5", "#efc4a2", "#e3b08a", "#f9dcc6"];
+const HAIRS = ["#2b2420", "#3d2f28", "#5a463a", "#1d1d22", "#8d8a86"];
+
+function makePassenger(kind) {
+  let r = BASE_R * rand(0.94, 1.06);
+  if (kind === "sumo") r = BASE_R * Math.sqrt(3);
+  if (kind === "suitcase" || kind === "hiker") r = BASE_R * 1.1;
+  const p = {
+    kind, r, m: (r / BASE_R) * (r / BASE_R), rigid: kind === "suitcase" || kind === "hiker",
+    x: 0, y: 0, vx: 0, vy: 0, ax: 0, ay: 0, rc: r, state: "queue", inCar: false, fromQueue: true, boarded: false,
+    body: pick(SUITS), tie: pick(TIES), skin: pick(SKINS), hair: pick(HAIRS), bag: pick(["#3c3a36", "#7a5a3a", "#2d4f6e", "#8a3b3b"]),
+    pAcc: 0, sxx: 0, sxy: 0, syy: 0, lp: 0, sqA: 0, sqS: 0, wob: 0, restT: 0, walk: Math.random() * 6, rot: 0, vr: 0,
+    blink: rand(1, 4), sad: false, seed: Math.random() * 100,
+  };
+  if (kind === "student") { p.body = "#23262f"; p.hair = pick(["#1d1d22", "#2b2420"]); }
+  if (kind === "blazer") { p.body = "#2c3a63"; p.tie = pick(["#8a2f3c", "#2f6b4f"]); p.hair = pick(["#1d1d22", "#3d2f28", "#5a3f2a"]); }
+  if (kind === "sumo") { p.body = "#4a5ca0"; p.hair = "#1d1d22"; p.skin = "#f2c7a5"; }
+  if (kind === "suitcase") { p.body = "#c9b48a"; p.bag = pick(["#38b2a6", "#e46f5c", "#e9b93a"]); }
+  if (kind === "hiker") { p.body = "#d0603c"; p.bag = pick(["#3f6f4f", "#2f4f7e"]); }
+  return p;
+}
+function randomKind() {
+  const r = Math.random();
+  return r < 0.58 ? "suit" : r < 0.7 ? "student" : r < 0.8 ? "blazer" : "backpack";
+}
+
+function stationParams(n) {
+  return {
+    queue: Math.min(21, 6 + 2 * (n - 1)),
+    timer: Math.max(5, 10 - 0.4 * (n - 1)),
+    rigid: n >= 3 ? Math.min(3, 1 + Math.floor((n - 3) / 2)) : 0,
+    sumo: n === 5 || (n > 5 && Math.random() < 0.6) ? 1 : 0,
+    express: n >= 7,
+    farDoor: n >= 9,
+    prefill: n === 1 ? 0 : 4 * (n - 1),
+  };
+}
+
+function buildWalls() {
+  const L = G.carL, R = G.carR, w = [];
+  w.push({ x0: L - 12, y0: ROOF_Y - 40, x1: L, y1: DOOR_Y1 });
+  w.push({ x0: R, y0: ROOF_Y - 40, x1: R + 12, y1: DOOR_Y1 });
+  if (G.farDoor) {
+    w.push({ x0: L - 12, y0: ROOF_Y, x1: DOOR_CX - DOOR_HW, y1: TOP_IN }, { x0: DOOR_CX + DOOR_HW, y0: ROOF_Y, x1: R + 12, y1: TOP_IN });
+    w.push({ x0: L, y0: TOP_IN, x1: DOOR_CX - BENCH_GAP, y1: BENCH_TOP }, { x0: DOOR_CX + BENCH_GAP, y0: TOP_IN, x1: R, y1: BENCH_TOP });
+  } else {
+    w.push({ x0: L - 12, y0: ROOF_Y, x1: R + 12, y1: TOP_IN }, { x0: L, y0: TOP_IN, x1: R, y1: BENCH_TOP });
+  }
+  w.push({ x0: L - 12, y0: DOOR_Y0, x1: DOOR_CX - DOOR_HW, y1: DOOR_Y1 }, { x0: DOOR_CX + DOOR_HW, y0: DOOR_Y0, x1: R + 12, y1: DOOR_Y1 });
+  w.push({ x0: L, y0: BENCH_BOT, x1: DOOR_CX - BENCH_GAP, y1: DOOR_Y0 }, { x0: DOOR_CX + BENCH_GAP, y0: BENCH_BOT, x1: R, y1: DOOR_Y0 });
+  // platform edge beside the car, and the world bounds of the platform
+  w.push({ x0: -300, y0: 300, x1: L - 12, y1: DOOR_Y1 }, { x0: R + 12, y0: 300, x1: W + 300, y1: DOOR_Y1 });
+  w.push({ x0: -300, y0: DOOR_Y1, x1: 0, y1: H + 300 }, { x0: W, y0: DOOR_Y1, x1: W + 300, y1: H + 300 }, { x0: -300, y0: H, x1: W + 300, y1: H + 300 });
+  G.walls = w;
+  G.doorRects = [{ x0: DOOR_CX - DOOR_HW, y0: DOOR_Y0, x1: DOOR_CX + DOOR_HW, y1: DOOR_Y1 }];
+  if (G.farDoor) G.doorRects.push({ x0: DOOR_CX - DOOR_HW, y0: ROOF_Y, x1: DOOR_CX + DOOR_HW, y1: TOP_IN });
+}
+
+function standingArea() {
+  const w = G.carR - G.carL;
+  return w * (DOOR_Y0 - BENCH_TOP) - 2 * (DOOR_CX - BENCH_GAP - G.carL) * (DOOR_Y0 - BENCH_BOT);
+}
+
+function queueSlot(i) {
+  if (i === 0) return [READY_X, READY_Y];
+  const k = i - 1;
+  return [QUEUE_COLS[k % 4], 570 + 52 * Math.floor(k / 4)];
+}
+
+function makeSeats() {
+  G.seats = [];
+  const add = (x0, x1, y, top) => { for (let x = x0 + 18; x <= x1 - 16; x += 34) G.seats.push({ x, y, top, body: pick(SUITS), skin: pick(SKINS), hair: pick(HAIRS), ph: Math.random() * 6 }); };
+  if (G.farDoor) { add(G.carL, DOOR_CX - BENCH_GAP, 112, true); add(DOOR_CX + BENCH_GAP, G.carR, 112, true); }
+  else add(G.carL, G.carR, 112, true);
+  add(G.carL, DOOR_CX - BENCH_GAP, 418, false); add(DOOR_CX + BENCH_GAP, G.carR, 418, false);
+}
+
+function setupStation(n) {
+  const sp = stationParams(n);
+  G.station = n;
+  G.farDoor = sp.farDoor;
+  const narrow = sp.express ? Math.round((406 * 0.15) / 2) : 0;
+  G.carL = 22 + narrow; G.carR = 428 - narrow;
+  buildWalls(); makeSeats();
+  // a rider still flying from a popped window finishes the flight onto the cushion; they no longer count for this station
+  G.ps = G.ps.filter(p => p.state === "eject"); G.queue = []; G.broken = [];
+  for (const p of G.ps) p.fromQueue = false;
+  // riders already aboard
+  const cap = standingArea() * 0.62 / (Math.PI * BASE_R * BASE_R);
+  const prefill = Math.min(sp.prefill, Math.floor(cap * 0.8));
+  for (let i = 0; i < prefill; i++) {
+    const p = makePassenger(randomKind());
+    p.state = "free"; p.fromQueue = false; p.inCar = true;
+    let tries = 0;
+    do {
+      p.x = rand(G.carL + p.r, G.carR - p.r); p.y = rand(BENCH_TOP + p.r, BENCH_BOT - p.r * 0.4);
+      tries++;
+    } while (tries < 80 && (G.ps.some(o => Math.hypot(o.x - p.x, o.y - p.y) < o.r + p.r - 2) || (Math.abs(p.x - DOOR_CX) < 80 && p.y > 330)));
+    G.ps.push(p);
+  }
+  // the queue on the platform
+  const kinds = [];
+  for (let i = 0; i < sp.queue; i++) kinds.push(randomKind());
+  for (let i = 0; i < sp.rigid; i++) kinds[2 + ((i * 3 + (Math.random() * 3 | 0)) % Math.max(1, sp.queue - 2))] = Math.random() < 0.5 ? "suitcase" : "hiker";
+  if (sp.sumo) kinds[Math.min(sp.queue - 1, 2 + (Math.random() * 3 | 0))] = "sumo";
+  kinds.forEach((k, i) => {
+    const p = makePassenger(k);
+    const [sx, sy] = queueSlot(i);
+    p.x = sx; p.y = H + 50 + (sy - 500) * 0.6 + i * 6;
+    G.queue.push(p); G.ps.push(p);
+  });
+  G.timerMax = sp.timer; G.timer = sp.timer;
+  G.phase = "arrive"; G.phaseT = 0; G.carX = 560; G.closeAmt = 1; G.doorsSolid = true;
+  G.redT = 0; G.popGrace = 0; G.boardedCount = 0; G.earlyGo = false; G.tickNext = 3;
+  G.comp = 0; G.aim = null; G.pendingFlick = null; G.stationLoss = false;
+  // let the riders settle before the train rolls in
+  for (let i = 0; i < 180; i++) physicsStep(SUB_DT);
+  for (const p of G.ps) { p.vx = 0; p.vy = 0; }
+  // note keys, not strings, so a JA/EN switch mid-banner shows the new language
+  const notes = [];
+  if (n === 3) notes.push("noteRigid");
+  if (sp.sumo && n === 5) notes.push("noteSumo");
+  if (n === 7) notes.push("noteExpress");
+  if (n === 9) notes.push("noteFar");
+  G.banner = { n, notes, t: 0 };
+  AI.sloppy = G.ai && (G.aiRounds++ % 4 === 1);
+  AI.overShove = AI.sloppy && n >= 5;
+  AI.lateDone = false; AI.wait = 0.5; AI.shove = false; AI.shoveFar = false; AI.aiming = null;
+}
+
+function startRun(ai) {
+  G.ai = ai; G.mode = ai && !DEMO ? "title" : "play"; G.paused = false;
+  G.lives = 3; G.score = 0; G.combo = 0; G.stamina = 1; G.maxPressure = 0; G.totalPacked = 0;
+  G.endT = 0; G.particles = []; G.popups = []; G.stamps = []; G.cushions = []; G.hitstop = 0; G.shake = 0;
+  G.ps = [];
+  G.hintFlick = !ai; G.hintShove = !ai; G.usedShove = false; G.kbShown = false;
+  if (ai) G.aiRounds = 0;
+  pointers.clear(); keys.left = keys.right = keys.shift = false;
+  setupStation(1);
+}
+
+// ---- physics
+function collideRect(p, rad, R) {
+  const cx = p.x < R.x0 ? R.x0 : p.x > R.x1 ? R.x1 : p.x;
+  const cy = p.y < R.y0 ? R.y0 : p.y > R.y1 ? R.y1 : p.y;
+  let dx = p.x - cx, dy = p.y - cy, nx, ny, pen;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= rad * rad) return;
+  if (d2 > 1e-8) { const d = Math.sqrt(d2); nx = dx / d; ny = dy / d; pen = rad - d; }
+  else {
+    const l = p.x - R.x0, r = R.x1 - p.x, t = p.y - R.y0, b = R.y1 - p.y, m = Math.min(l, r, t, b);
+    if (m === l) { nx = -1; ny = 0; pen = l + rad; } else if (m === r) { nx = 1; ny = 0; pen = r + rad; }
+    else if (m === t) { nx = 0; ny = -1; pen = t + rad; } else { nx = 0; ny = 1; pen = b + rad; }
+  }
+  p.x += nx * pen; p.y += ny * pen;
+  const vn = p.vx * nx + p.vy * ny;
+  if (vn < 0) {
+    p.vx -= 1.35 * vn * nx; p.vy -= 1.35 * vn * ny;
+    if (vn < -160) { p.wob = Math.min(1, -vn / 500); if (vn < -220) Sfx.boing(p.m * 1.6, Math.min(1, -vn / 700)); }
+  }
+}
+
+function physicsStep(dt) {
+  const ps = G.ps, n = ps.length;
+  const comp = G.comp;
+  for (let i = 0; i < n; i++) {
+    const p = ps[i];
+    p.ax = 0; p.ay = 0;
+    p.rc = p.rigid ? p.r : p.r * (1 - COMPRESS * comp);
+  }
+  for (let i = 0; i < n; i++) {
+    const a = ps[i];
+    const aFree = a.state === "free";
+    if (!aFree && a.state !== "queue") continue;
+    for (let j = i + 1; j < n; j++) {
+      const b = ps[j];
+      const bFree = b.state === "free";
+      if (!bFree && (b.state !== "queue" || !aFree)) continue;
+      if (!aFree && !bFree) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, rr = a.rc + b.rc;
+      if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rr * rr) continue;
+      const d = Math.sqrt(d2) || 0.01, nx = dx / d, ny = dy / d, o = rr - d;
+      if (aFree && bFree) {
+        const k = a.rigid || b.rigid ? K_RIGID : K_SOFT;
+        const rvn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        const meff = a.m * b.m / (a.m + b.m);
+        let F = k * o - 2 * DAMP * Math.sqrt(k * meff) * rvn;
+        if (F < 0) F = 0;
+        a.ax -= F * nx / a.m; a.ay -= F * ny / a.m;
+        b.ax += F * nx / b.m; b.ay += F * ny / b.m;
+        if (rvn < -150 && o < -rvn * dt * 1.6) impact(a, b, nx, ny, -rvn);
+      } else {
+        // a queued passenger is an immovable obstacle
+        const f = aFree ? a : b, s = aFree ? -1 : 1;
+        f.x += s * nx * o; f.y += s * ny * o;
+        const vn = (f.vx * nx + f.vy * ny) * s;
+        if (vn < 0) { f.vx -= 1.3 * vn * nx * s; f.vy -= 1.3 * vn * ny * s; }
+      }
+    }
+  }
+  if (G.shoving || G.shovingFar) shoveField();
+  const walls = G.walls, doors = G.doorsSolid ? G.doorRects : null;
+  for (let i = 0; i < n; i++) {
+    const p = ps[i];
+    if (p.state !== "free") continue;
+    p.vx += p.ax * dt; p.vy += p.ay * dt;
+    let sp = Math.hypot(p.vx, p.vy);
+    if (sp > 1300) { p.vx *= 1300 / sp; p.vy *= 1300 / sp; sp = 1300; }
+    if (sp > 0) { const ns = Math.max(0, sp - FRICTION * dt); p.vx *= ns / sp; p.vy *= ns / sp; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    for (let w = 0; w < walls.length; w++) collideRect(p, p.rc, walls[w]);
+    if (doors) for (let w = 0; w < doors.length; w++) collideRect(p, p.rc, doors[w]);
+  }
+}
+
+function shoveField() {
+  for (const p of G.ps) {
+    if (p.state !== "free") continue;
+    const dx = p.x - DOOR_CX, ax = Math.abs(dx);
+    if (ax > 170) continue;
+    const fx = 1 - ax / 170;
+    if (G.shoving) {
+      const dy = p.y - DOOR_LINE;
+      if (dy > -190 && dy < 95) {
+        const f = fx * (dy > 0 ? 1.15 : 1 + dy / 190);
+        p.ay -= 2300 * f;
+        if (dy > -40) p.ax -= dx * 9 * f;
+      }
+    }
+    if (G.shovingFar) {
+      const dy = p.y - FAR_LINE;
+      if (dy < 190 && dy > -60) {
+        const f = fx * (dy < 0 ? 1.15 : 1 - dy / 190);
+        p.ay += 2300 * f;
+        if (dy < 40) p.ax -= dx * 9 * f;
+      }
+    }
+  }
+}
+
+function impact(a, b, nx, ny, speed) {
+  const pw = Math.min(1, speed / 650);
+  a.wob = Math.max(a.wob, pw); b.wob = Math.max(b.wob, pw);
+  Sfx.boing(Math.max(a.m, b.m), pw);
+  if (speed > 230) {
+    const x = a.x + nx * a.rc, y = a.y + ny * a.rc;
+    for (let k = 0; k < 4; k++) puff(x, y, rand(-80, 80), rand(-80, 80), "#ffffff", rand(3, 6));
+    if (speed > 420 && (a.kind === "sumo" || b.kind === "sumo")) addShake(5);
+  }
+}
+
+// pressure: total overlap of the riders measured with their true (uncompressed) radii
+function measurePressure() {
+  const ps = G.ps;
+  let total = 0, riders = 0;
+  for (const p of ps) { p.pAcc = 0; p.sxx = 0; p.sxy = 0; p.syy = 0; }
+  for (let i = 0; i < ps.length; i++) {
+    const a = ps[i];
+    if (a.state !== "free") continue;
+    if (a.inCar) riders += a.m;
+    for (let j = i + 1; j < ps.length; j++) {
+      const b = ps[j];
+      if (b.state !== "free") continue;
+      const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r;
+      if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rr * rr) continue;
+      const d = Math.sqrt(d2) || 0.01, o = rr - d, nx = dx / d, ny = dy / d;
+      if (a.inCar && b.inCar) total += o;
+      a.pAcc += o; b.pAcc += o;
+      a.sxx += o * nx * nx; a.sxy += o * nx * ny; a.syy += o * ny * ny;
+      b.sxx += o * nx * nx; b.sxy += o * nx * ny; b.syy += o * ny * ny;
+    }
+    if (!a.inCar) continue;
+    for (const R of G.walls) {
+      const cx = clamp(a.x, R.x0, R.x1), cy = clamp(a.y, R.y0, R.y1), dx = a.x - cx, dy = a.y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= a.r * a.r || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2), o = a.r - d, nx = dx / d, ny = dy / d;
+      total += o; a.pAcc += o;
+      a.sxx += o * nx * nx; a.sxy += o * nx * ny; a.syy += o * ny * ny;
+    }
+  }
+  return total / (PN_PER * riders + PN_BASE);
+}
+
+// ---- effects
+function addShake(a) { if (!REDUCED) G.shake = Math.min(18, G.shake + a); }
+function puff(x, y, vx, vy, color, size) {
+  if (G.particles.length > 420) return;
+  G.particles.push({ x, y, vx, vy, life: 0, max: rand(0.3, 0.55), size, color, type: "puff", rot: 0, vr: 0, g: 0 });
+}
+function burst(x, y, n, type, colors, speed, g) {
+  for (let i = 0; i < n && G.particles.length < 420; i++) {
+    const a = Math.random() * Math.PI * 2, s = rand(0.3, 1) * speed;
+    G.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - (type === "confetti" ? speed * 0.4 : 0), life: 0, max: rand(0.6, 1.3), size: rand(3, 7), color: pick(colors), type, rot: Math.random() * 6, vr: rand(-12, 12), g: g || 0 });
+  }
+}
+function popup(text, x, y, color, size, life, still) { G.popups.push({ text, x, y, color: color || "#2a2f3a", size: size || 18, t: 0, life: life || 1, rise: still ? 0 : 30 }); }
+function stamp(text, x, y, color, size, sub, silent) {
+  G.stamps.push({ text, sub: sub || "", x, y, color: color || "#e2574c", size: size || 40, t: 0, rot: rand(-0.14, 0.06) });
+  if (!silent) Sfx.stamp();
+}
+
+// ---- flow
+function readyPassenger() {
+  const q = G.queue[0];
+  return q && Math.abs(q.x - READY_X) < 6 && Math.abs(q.y - READY_Y) < 6 ? q : null;
+}
+const boardingPhase = () => G.phase === "board" || G.phase === "chime" || G.phase === "closing";
+function doorTime() {
+  if (G.phase === "board") return G.timer + CHIME_TIME + CLOSE_TIME;
+  if (G.phase === "chime") return CHIME_TIME - G.phaseT + CLOSE_TIME;
+  if (G.phase === "closing") return CLOSE_TIME - G.phaseT;
+  return G.phase === "arrive" || G.phase === "open" ? 99 : 0;
+}
+function speedFromDrag(len) { return MAX_SPEED * Math.pow(Math.min(1, len / MAX_DRAG), 0.8); }
+function dragFromSpeed(v) { return MAX_DRAG * Math.pow(Math.min(1, v / MAX_SPEED), 1.25); }
+
+function flick(vx, vy) {
+  const p = readyPassenger();
+  if (!boardingPhase() || G.lives <= 0) return false;
+  if (!p) {
+    // the next rider is still stepping up: hold a quick player input for a moment instead of dropping it
+    if (!G.ai && G.queue.length) G.pendingFlick = { vx, vy, t: 0.3 };
+    return false;
+  }
+  G.pendingFlick = null;
+  G.queue.shift();
+  p.state = "free"; p.vx = vx; p.vy = vy; p.wob = 1; p.restT = 0;
+  const sp = Math.hypot(vx, vy);
+  Sfx.flick(sp / MAX_SPEED);
+  for (let k = 0; k < 5; k++) puff(p.x, p.y + p.r * 0.7, rand(-60, 60) - vx * 0.1, rand(10, 60), "#fffaf0", rand(3, 6));
+  if (!G.ai) G.hintFlick = false;
+  return true;
+}
+
+function requeue(p) {
+  p.state = "queue"; p.vx = 0; p.vy = 0; p.restT = 0;
+  const dragging = [...pointers.values()].some(q => q.role === "flick");
+  if (dragging) G.queue.splice(1, 0, p); else G.queue.unshift(p);
+}
+
+function loseLife(x, y) {
+  if (G.lives <= 0) return;
+  G.lives--; G.stationLoss = true;
+  Sfx.lose();
+  popup("-1 ♥", x, y - 40, "#e2574c", 22, 1.2);
+  if (G.lives <= 0) G.endT = G.ai ? 1.0 : 1.8;
+}
+
+function popWindow() {
+  let victim = null, bestScore = -1e9;
+  for (const p of G.ps) {
+    if (p.state !== "free" || !p.inCar) continue;
+    const sc = p.pAcc / p.r - (p.y - BENCH_TOP) / 120;
+    if (sc > bestScore) { bestScore = sc; victim = p; }
+  }
+  if (!victim) return;
+  victim.state = "eject"; victim.inCar = false;
+  // the rider pops up out of the car and comes down softly on a cushion that appears on the platform
+  const cw = victim.r * 3.2, side = victim.x < DOOR_CX ? -1 : 1;
+  const lx = side < 0 ? Math.max(cw / 2 + 4, 52) : Math.min(W - cw / 2 - 4, W - 52), ly = CUSHION_Y;
+  const x0 = victim.x + G.carX, y0 = victim.y, apex = Math.min(30, y0 - 10);
+  const up = Math.sqrt(2 * (y0 - apex) / EJECT_G), down = Math.sqrt(2 * (ly - apex) / EJECT_G);
+  victim.ex = x0; victim.ey = y0; victim.et = 0; victim.eD = up + down;
+  victim.evx = (lx - x0) / victim.eD; victim.evy = -EJECT_G * up;
+  victim.spin = (Math.random() < 0.5 ? -4 : 4) * Math.PI;  // two full turns, so the rider lands upright
+  G.cushions.push({ x: lx, y: ly, w: cw, h: victim.r * 1.8, t: 0, landT: -1, rider: victim });
+  const wx = clamp(victim.x, G.carL + 20, G.carR - 20);
+  G.broken.push(wx);
+  burst(wx + G.carX, FAR_LINE, 26, "shard", ["#d8f0ff", "#ffffff", "#a8d8f0"], 380, 600);
+  Sfx.glass(); addShake(14); G.hitstop = 0.16;
+  stamp(T().pop, 225, 230, "#e2574c", 38);
+  loseLife(wx, 140);
+  G.redT = 0; G.popGrace = 1.3;
+}
+
+function landOnCushion(p) {
+  p.state = "gone";
+  const c = G.cushions.find(q => q.rider === p);
+  if (!c) return;
+  c.landT = 0;
+  p.sad = false; p.lp = 0; p.blink = 2; p.rot = 0;
+  Sfx.cushion();
+  for (let k = 0; k < 8; k++) puff(c.x + rand(-c.w, c.w) * 0.45, c.y + rand(-4, 10), rand(-90, 90), rand(-40, 20), "#ffffff", rand(4, 7));
+  stamp(T().safe, clamp(c.x, 92, W - 92), c.y - c.h * 0.5 - 40, "#2f7a52", 30, "", true);
+}
+
+function resolveDoors() {
+  let pinchedAny = false;
+  G.closePressure = G.pressure;
+  const check = (line, sideSign) => {
+    let victim = null, bestD = 1e9;
+    const crossers = [];
+    for (const p of G.ps) {
+      if (p.state !== "free") continue;
+      if (Math.abs(p.x - DOOR_CX) > DOOR_HW + p.r * 0.2) continue;
+      const d = Math.abs(p.y - line);
+      if (d < p.r * 0.8) { crossers.push(p); if (d < bestD) { bestD = d; victim = p; } }
+    }
+    for (const p of crossers) {
+      if (p === victim) continue;
+      const inside = (p.y - line) * sideSign < 0;
+      p.y = line + sideSign * (inside ? -1 : 1) * (6 + p.r * 0.85);
+      p.vx = 0; p.vy = 0;
+    }
+    if (!victim) return;
+    pinchedAny = true;
+    victim.state = "pinched"; victim.vx = 0; victim.vy = 0;
+    victim.pinchLine = line; victim.pinchT = 0; victim.inCar = false;
+    // the doors shut on the rider's bag or coat hem, never on the rider: the rider stands just below the door line
+    // (on the platform at the near door, inside the car at the far door) and tugs at what got caught
+    victim.pinchItem = victim.kind === "suitcase" || (victim.seed * 7 | 0) % 3 === 0 ? "hem" : "bag";
+    victim.x = lerp(victim.x, DOOR_CX, 0.75); victim.y = line + victim.r * 1.2;
+    G.hitstop = 0.22; addShake(12);
+    Sfx.pinch();
+    stamp(T().pinch, 225, line > 200 ? 270 : 300, "#e2574c", 40);
+    burst(victim.x, line, 14, "star", ["#ffd84a", "#ffffff"], 260, 0);
+    loseLife(victim.x, line);
+  };
+  check(DOOR_LINE, 1);
+  if (G.farDoor) check(FAR_LINE, -1);
+  if (pinchedAny) { G.phase = "pinch"; G.phaseT = 0; }
+  else { G.doorsSolid = true; Sfx.thunk(); addShake(3); G.phase = "settle"; G.phaseT = 0; }
+}
+
+function finishPinch() {
+  for (const p of G.ps) {
+    if (p.state !== "pinched") continue;
+    if (p.pinchLine === DOOR_LINE) {
+      p.state = "free"; p.y = DOOR_Y1 + p.r + 3; p.vy = 260; p.vx = rand(-60, 60); p.sad = true; p.wob = 1;
+    } else {
+      p.state = "fall"; p.vy = -220; p.vx = rand(-40, 40);
+    }
+  }
+  G.doorsSolid = true; Sfx.thunk(); addShake(4);
+  G.phase = "settle"; G.phaseT = 0;
+}
+
+function depart() {
+  const s = T();
+  let boarded = 0, packed = 0, left = 0;
+  for (const p of G.ps) {
+    if (p.state === "free" && p.inCar) { packed++; if (p.fromQueue) boarded++; }
+    else if (p.fromQueue) { left++; p.sad = true; }
+  }
+  const pr = clamp(Math.max(G.pressure, G.closePressure), 0, 1.5);
+  const packScore = Math.round(boarded * 100 * (1 + pr));
+  let gain = packScore;
+  if (left === 0) { G.combo++; gain += 500 + 200 * (G.combo - 1); } else G.combo = 0;
+  G.score += gain;
+  G.totalPacked += boarded;
+  G.maxPressure = Math.max(G.maxPressure, pr);
+  if (boarded === 0) stamp(s.nobody, 225, 210, "#6b6f78", 30, "+0");
+  else stamp(s.packed(packed), 225, 210, packed >= 30 ? "#e2574c" : "#2f7a52", packed >= 30 ? 50 : 44, "+" + gain);
+  popup(s.tally(boarded, Math.round(pr * 100)), 225, 318, "#2a2f3a", 15, 2.2, true);
+  if (left === 0) {
+    popup(s.allAboard + "  " + s.combo(G.combo), 225, 346, "#2f7a52", 18, 2.2, true);
+    burst(225, 260, 50, "confetti", ["#e2574c", "#f3c43a", "#6fbf8e", "#4a7fc1", "#ffffff"], 420, 520);
+    Sfx.cheer();
+    if (!G.ai && (G.combo >= 2 || pr > 0.5)) Platform.happytime();
+  } else if (boarded === 0) {
+    // a station where nobody boards costs a life, so an idle run still ends (but never on top of a pinch or pop here)
+    if (!G.stationLoss) loseLife(225, 690);
+  } else popup(s.leftBehind(left), 225, 600, "#6b6f78", 18, 2.2);
+  Sfx.depart();
+  G.phase = "depart"; G.phaseT = 0;
+}
+
+function gameOver() {
+  if (G.ai) { startRun(true); return; }
+  G.mode = "over"; G.overAt = performance.now();
+  if (G.phase !== "depart") G.totalPacked += G.ps.filter(p => p.fromQueue && p.inCar && p.state === "free").length;
+  Platform.gameplayStop();
+  Platform.gameOver(G.score);
+  Sfx.over();
+  const nb = G.score > best;
+  if (nb) { best = G.score; save(K_BEST, best); }
+  const s = T();
+  $("overScore").textContent = G.score;
+  $("overNew").hidden = !nb;
+  $("overBest").textContent = s.best + " " + best;
+  $("overStations").textContent = G.station;
+  $("overPacked").textContent = G.totalPacked;
+  $("overPressure").textContent = Math.round(G.maxPressure * 100) + "%";
+  $("overTease").textContent = s[teaseKey(G.station)];
+  $("titleBest").textContent = s.best + " " + best;
+  ovOver.hidden = false;
+  setTimeout(() => { if (!ovOver.hidden) $("btnRetry").focus({ preventScroll: true }); }, 50);
+}
+
+// ---- AI (attract + demo)
+const AI = { wait: 0.5, aiming: null, shove: false, shoveFar: false, sloppy: false, overShove: false, lateDone: false };
+const GRID_C = 10, GRID_R = 6;
+
+function aiPlan() {
+  const L = G.carL, R = G.carR, cw = (R - L) / GRID_C, chh = (DOOR_Y0 - BENCH_TOP) / GRID_R;
+  const bodies = [];
+  for (const p of G.ps) {
+    if (p.state !== "free") continue;
+    let x = p.x, y = p.y;
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > 40) { const d = sp * sp / (2 * FRICTION); x += p.vx / sp * d; y += p.vy / sp * d; }
+    if (y < DOOR_Y0 + 10) bodies.push([x, y, p.r]);
+  }
+  let bestCell = null, bestScore = 1e9;
+  for (let r = 0; r < GRID_R; r++) {
+    for (let c = 0; c < GRID_C; c++) {
+      const x = L + (c + 0.5) * cw, y = BENCH_TOP + (r + 0.5) * chh;
+      let occ = 0;
+      for (const b of bodies) { const d = Math.hypot(b[0] - x, b[1] - y); occ += Math.max(0, 1 - d / (b[2] + 26)); }
+      if (y > BENCH_BOT && Math.abs(x - DOOR_CX) > BENCH_GAP) occ += 5;
+      // reachable: the straight path must pass through the door gap
+      const xAtDoor = READY_X + (x - READY_X) * (READY_Y - DOOR_LINE) / (READY_Y - y);
+      if (Math.abs(xAtDoor - DOOR_CX) > DOOR_HW - BASE_R - 3) continue;
+      const score = occ + (y > 360 ? 0.7 : 0) - (DOOR_Y0 - y) / 900 + Math.random() * 0.08;
+      if (score < bestScore) { bestScore = score; bestCell = [x, y]; }
+    }
+  }
+  return bestCell;
+}
+
+function aiUpdate(dt) {
+  const dtm = doorTime();
+  const band = (line, p) => p.state === "free" && Math.abs(p.y - line) < p.r + 10 && Math.abs(p.x - DOOR_CX) < DOOR_HW + p.r;
+  const nearDoor = G.ps.some(p => band(DOOR_LINE, p) || (p.state === "free" && !p.inCar && p.y > DOOR_Y1 && p.y < 600 && p.vy < -80));
+  const nearFar = G.farDoor && G.ps.some(p => band(FAR_LINE, p));
+  const canShove = boardingPhase() && G.stamina > 0.02;
+  // in an "over-shove" round the AI forgets to let go, which tends to pop a window
+  if (!AI.shove) { if (canShove && nearDoor && (AI.overShove ? dtm < 2.6 : dtm < 1.5 && G.pressure < 0.9 && !AI.sloppy)) AI.shove = true; }
+  else if (!canShove || (G.pressure >= 0.9 && !AI.overShove)) AI.shove = false;
+  if (!AI.shoveFar) { if (canShove && dtm < 1.5 && nearFar && G.pressure < 0.9) AI.shoveFar = true; }
+  else if (!canShove || G.pressure >= 0.9) AI.shoveFar = false;
+
+  if (AI.aiming) {
+    const a = AI.aiming;
+    a.t += dt;
+    const k = Math.min(1, a.t / a.dur);
+    G.aim = { dx: a.vx / a.sp * a.len * easeOut(k), dy: a.vy / a.sp * a.len * easeOut(k), ai: true };
+    if (a.t >= a.dur) {
+      G.aim = null; AI.aiming = null;
+      flick(a.vx, a.vy);
+      AI.wait = G.timer < 3.5 || G.queue.length > 8 ? rand(0.1, 0.2) : rand(0.2, 0.38);
+    }
+    return;
+  }
+  AI.wait -= dt;
+  const ready = readyPassenger();
+  if (!ready || !boardingPhase() || AI.wait > 0 || G.lives <= 0) return;
+  let tx, ty, late = false;
+  if (AI.sloppy && !AI.lateDone && dtm < 1.25) {
+    // a deliberately late, weak flick: the classic "stuck in the door" moment
+    AI.lateDone = true; late = true; tx = DOOR_CX + rand(-6, 6); ty = DOOR_LINE - 4;
+  } else {
+    if (!AI.sloppy && dtm < 1.0) return;
+    if (AI.sloppy && (dtm < 1.25 || (G.queue.length === 1 && !AI.lateDone))) return;
+    const cell = aiPlan();
+    if (!cell) { AI.wait = 0.3; return; }
+    [tx, ty] = cell;
+  }
+  const dx = tx - READY_X, dy = ty - READY_Y, dist = Math.hypot(dx, dy);
+  const err = AI.sloppy && !late ? 3 : 1;
+  const ang = Math.atan2(dy, dx) + gauss() * (6 * Math.PI / 180) * err;
+  const sp = clamp(Math.sqrt(2 * FRICTION * dist) * (1 + gauss() * 0.08 * err), 120, MAX_SPEED);
+  AI.aiming = { vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, sp, len: dragFromSpeed(sp), t: 0, dur: G.timer < 3 && G.phase === "board" ? 0.12 : 0.22 };
+}
+
+// ---- update
+function update(dt) {
+  const s = T();
+  if (G.banner) { G.banner.t += dt; if (G.banner.t > BANNER_TIME) G.banner = null; }
+  // input -> shove state
+  const ptrShove = [...pointers.values()].some(q => q.role === "shove");
+  const ptrFar = [...pointers.values()].some(q => q.role === "far");
+  if (G.ai) aiUpdate(dt);
+  else {
+    if (keys.left) { G.kbAim = Math.max(-Math.PI + 0.35, G.kbAim - 1.4 * dt); G.kbShown = true; }
+    if (keys.right) { G.kbAim = Math.min(-0.35, G.kbAim + 1.4 * dt); G.kbShown = true; }
+  }
+  const wantNear = G.ai ? AI.shove : ptrShove || keys.shift;
+  const wantFar = G.farDoor && (G.ai ? AI.shoveFar : ptrFar || keys.shift);
+  const can = boardingPhase() && G.stamina > 0 && G.lives > 0;
+  const wasShoving = G.shoving || G.shovingFar;
+  G.shoving = can && wantNear; G.shovingFar = can && wantFar;
+  if (G.shoving || G.shovingFar) {
+    G.stamina = Math.max(0, G.stamina - (G.shoving && G.shovingFar ? 0.55 : 0.4) * dt);
+    if (!wasShoving) { Sfx.shove(); G.shoveSoundT = 0.45; if (!G.ai) { G.usedShove = true; G.hintShove = false; } }
+    G.shoveSoundT -= dt; if (G.shoveSoundT <= 0) { Sfx.shove(); G.shoveSoundT = 0.45; }
+  }
+  G.comp = clamp(G.comp + ((G.shoving || G.shovingFar) ? 4 : -1.6) * dt, 0, 1);
+
+  // queue shuffles forward
+  for (let i = 0; i < G.queue.length; i++) {
+    const p = G.queue[i], [tx, ty] = queueSlot(i);
+    const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+    const step = (i === 0 ? 520 : 300) * dt;
+    if (d <= step) { p.x = tx; p.y = ty; } else { p.x += dx / d * step; p.y += dy / d * step; p.walk += dt * 14; }
+  }
+  const pf = G.pendingFlick;
+  if (pf) { pf.t -= dt; if (pf.t <= 0 || G.ai) G.pendingFlick = null; else if (readyPassenger()) flick(pf.vx, pf.vy); }
+
+  // physics
+  const steps = Math.min(10, Math.max(1, Math.ceil(dt / SUB_DT - 1e-6)));
+  for (let i = 0; i < steps; i++) physicsStep(dt / steps);
+
+  // bookkeeping per passenger
+  for (const p of G.ps) {
+    if (p.state === "free") {
+      const was = p.inCar;
+      p.inCar = p.y < DOOR_Y0 + 2 && p.y > ROOF_Y && p.x > G.carL - 4 && p.x < G.carR + 4;
+      if (p.inCar && !was && p.fromQueue && !p.boarded && boardingPhase()) {
+        p.boarded = true; G.boardedCount++;
+        Sfx.board(G.boardedCount);
+        popup(s.plus + " +1", p.x, p.y - 30, "#2f7a52", 16, 0.8);
+      }
+      if (!p.inCar && p.y > DOOR_Y1 + 2) {
+        if (Math.hypot(p.vx, p.vy) < 25) p.restT += dt; else p.restT = 0;
+        if (p.restT > 0.45 && boardingPhase() && G.lives > 0) requeue(p);
+      }
+      if (G.farDoor && p.y < ROOF_Y - p.r * 0.3) {
+        p.state = "fall"; p.inCar = false; p.vy = -180; p.vx *= 0.3;
+        popup(s.offFar, p.x, 70, "#6b6f78", 15, 1.2);
+      }
+    } else if (p.state === "eject") {
+      p.et += dt;
+      const t = Math.min(p.et, p.eD);
+      p.x = p.ex + p.evx * t; p.y = p.ey + p.evy * t + 0.5 * EJECT_G * t * t; p.rot = p.spin * t / p.eD;
+      if (p.et >= p.eD) landOnCushion(p);
+    } else if (p.state === "fall") {
+      p.y += p.vy * dt; p.x += p.vx * dt;
+      if (p.y < -120) p.state = "gone";
+    } else if (p.state === "pinched") p.pinchT += dt;
+    p.wob = Math.max(0, p.wob - dt * 2.2);
+    p.blink -= dt; if (p.blink < -0.12) p.blink = rand(1.5, 4.5);
+  }
+  if (G.ps.some(p => p.state === "gone")) G.ps = G.ps.filter(p => p.state !== "gone");
+
+  // pressure
+  const pr = measurePressure();
+  G.pressure = pr;
+  G.pressureShown += (pr - G.pressureShown) * Math.min(1, dt * 8);
+  for (const p of G.ps) {
+    const lp = p.pAcc / p.r * 2.2;
+    p.lp += (lp - p.lp) * Math.min(1, dt * 7);
+    const tr = p.sxx + p.syy, df = (p.sxx - p.syy) / 2, l1 = tr / 2 + Math.sqrt(df * df + p.sxy * p.sxy);
+    const target = Math.min(0.3, l1 / p.r * 0.9);
+    p.sqS += (target - p.sqS) * Math.min(1, dt * 10);
+    if (l1 > 0.2) {
+      const a = 0.5 * Math.atan2(2 * p.sxy, p.sxx - p.syy);
+      let da = a - p.sqA; while (da > Math.PI / 2) da -= Math.PI; while (da < -Math.PI / 2) da += Math.PI;
+      p.sqA += da * Math.min(1, dt * 10);
+    }
+  }
+  const pressurePhase = boardingPhase() || G.phase === "settle" || G.phase === "pinch";
+  if (pressurePhase && G.lives > 0) G.maxPressure = Math.max(G.maxPressure, Math.min(1.5, G.pressureShown));
+  if (G.popGrace > 0) G.popGrace -= dt;
+  if (pressurePhase && G.lives > 0 && pr >= 1 && G.popGrace <= 0) {
+    G.redT += dt;
+    G.creakT -= dt; if (G.creakT <= 0) { Sfx.creak(); G.creakT = 0.2; }
+    if (G.redT >= 1) popWindow();
+  } else G.redT = Math.max(0, G.redT - dt * 2);
+
+  updatePhase(dt);
+
+  if (G.endT > 0 && G.phase !== "pinch") { G.endT -= dt; if (G.endT <= 0) gameOver(); }
+  updateEffects(dt);
+}
+
+function updatePhase(dt) {
+  const s = T();
+  // after the last life the run is over: hold the doors where they are until the result screen
+  if (G.lives <= 0 && (boardingPhase() || G.phase === "open")) return;
+  G.phaseT += dt;
+  const t = G.phaseT;
+  G.sway *= Math.exp(-dt * 3);
+  switch (G.phase) {
+    case "arrive":
+      G.carX = 560 * (1 - easeOut(Math.min(1, t / ARRIVE_TIME)));
+      G.sway = t < ARRIVE_TIME ? -(1 - t / ARRIVE_TIME) : G.sway;
+      if (t >= ARRIVE_TIME) { G.carX = 0; G.phase = "open"; G.phaseT = 0; Sfx.hiss(); G.doorsSolid = false; }
+      break;
+    case "open":
+      G.closeAmt = 1 - Math.min(1, t / 0.35);
+      if (t >= 0.35) { G.closeAmt = 0; G.phase = "board"; G.phaseT = 0; G.timer = G.timerMax; }
+      break;
+    case "board": {
+      G.timer -= dt;
+      if (G.timer <= G.tickNext && G.tickNext > 0) { Sfx.tick(); G.tickNext--; }
+      const waiting = G.ps.filter(p => p.fromQueue && !p.inCar && (p.state === "queue" || (p.state === "free" && p.y > DOOR_Y0 - 4))).length;
+      // a sloppy AI round keeps its last passenger for a late flick, so skip the dead time before it
+      const held = G.ai && AI.sloppy && !AI.lateDone && waiting === 1 && G.queue.length === 1;
+      if ((!waiting || held) && !G.earlyGo && G.timer > 1.6) { G.earlyGo = true; G.timer = 1.6; if (!held) popup(s.earlyGo, 225, 380, "#2f7a52", 17, 1.4); }
+      if (G.timer <= 0) { G.timer = 0; G.phase = "chime"; G.phaseT = 0; Sfx.chime(); }
+      break;
+    }
+    case "chime":
+      if (t >= CHIME_TIME) { G.phase = "closing"; G.phaseT = 0; Sfx.hiss(); }
+      break;
+    case "closing":
+      G.closeAmt = Math.min(1, t / CLOSE_TIME);
+      if (t >= CLOSE_TIME) { G.closeAmt = 1; resolveDoors(); }
+      break;
+    case "pinch":
+      if (t >= 1.3) finishPinch();
+      break;
+    case "settle":
+      if (t >= 0.9 && G.lives > 0) depart();
+      break;
+    case "depart":
+      G.carX = -620 * easeIn(Math.min(1, t / DEPART_ROLL));
+      G.sway = t < DEPART_ROLL ? (t / DEPART_ROLL) : 0;
+      if (t >= DEPART_TIME && G.lives > 0) {
+        G.stamina = Math.min(1, G.stamina + 0.5);
+        setupStation(G.station + 1);
+      }
+      break;
+  }
+}
+
+function updateEffects(dt) {
+  G.shake *= Math.exp(-dt * 9);
+  for (const q of G.particles) {
+    q.life += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += q.g * dt; q.rot += q.vr * dt;
+    if (q.type === "puff") { q.vx *= 0.9; q.vy *= 0.9; }
+    if (q.type === "confetti") { q.vx *= 0.98; q.vy = Math.min(q.vy, 160); }
+  }
+  G.particles = G.particles.filter(q => q.life < q.max);
+  for (const q of G.popups) { q.t += dt; q.y -= q.rise * dt; }
+  G.popups = G.popups.filter(q => q.t < q.life);
+  for (const q of G.stamps) q.t += dt;
+  G.stamps = G.stamps.filter(q => q.t < 1.7);
+  for (const c of G.cushions) { c.t += dt; if (c.landT >= 0) c.landT += dt; }
+  G.cushions = G.cushions.filter(c => c.landT < 1.6 && c.t < 6);
+  // sweat drops from very squashed riders
+  for (const p of G.ps) {
+    if (p.state === "free" && p.lp > 0.7 && Math.random() < dt * 1.5 && G.particles.length < 380) {
+      G.particles.push({ x: p.x + (Math.random() < 0.5 ? -1 : 1) * p.r * 0.6, y: p.y - p.r * 0.6, vx: rand(-30, 30), vy: -60, life: 0, max: 0.6, size: 3.5, color: "#7cc3ef", type: "drop", rot: 0, vr: 0, g: 300, car: p.inCar });
+    }
+  }
+}
+
+// ---- input
+function toWorld(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left - ox) / scale, y: (e.clientY - r.top - oy) / scale };
+}
+const inShoveZone = w => Math.abs(w.x - DOOR_CX) < 90 && w.y > DOOR_LINE - 95 && w.y < DOOR_LINE + 30;
+const inFarZone = w => G.farDoor && Math.abs(w.x - DOOR_CX) < 90 && w.y > 50 && w.y < FAR_LINE + 80;
+const humanActive = () => G.mode === "play" && !G.paused && !G.ai && G.lives > 0;
+// a tap (or Space / Enter) while the train pulls out skips the rest of the tally and brings in the next station
+function skipTally() {
+  if (G.phase !== "depart" || G.lives <= 0 || G.endT > 0 || G.phaseT >= DEPART_TIME) return false;
+  G.phaseT = DEPART_TIME;
+  for (const st of G.stamps) st.t = Math.max(st.t, 1.35);
+  for (const q of G.popups) q.t = Math.max(q.t, q.life - 0.33);
+  return true;
+}
+
+cv.addEventListener("pointerdown", e => {
+  Sfx.init();
+  if (!humanActive() || (e.pointerType === "mouse" && e.button !== 0)) return;
+  e.preventDefault();
+  if (skipTally()) return;
+  const w = toWorld(e);
+  let role = null;
+  if (inShoveZone(w)) role = "shove";
+  else if (inFarZone(w)) role = "far";
+  else if (w.y > DOOR_Y1 + 20) role = "flick";
+  if (!role) return;
+  pointers.set(e.pointerId, { role, sx: w.x, sy: w.y, x: w.x, y: w.y });
+  G.kbShown = false;
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+});
+cv.addEventListener("pointermove", e => {
+  const q = pointers.get(e.pointerId);
+  if (!q) return;
+  const w = toWorld(e); q.x = w.x; q.y = w.y;
+  if (q.role === "flick") {
+    const dx = q.x - q.sx, dy = q.y - q.sy, len = Math.hypot(dx, dy);
+    const k = len > MAX_DRAG ? MAX_DRAG / len : 1;
+    G.aim = len > 6 ? { dx: dx * k, dy: dy * k } : null;
+  }
+});
+function endPointer(e, cancel) {
+  const q = pointers.get(e.pointerId);
+  if (!q) return;
+  pointers.delete(e.pointerId);
+  if (q.role !== "flick") return;
+  G.aim = null;
+  if (cancel || !humanActive()) return;
+  const dx = q.x - q.sx, dy = q.y - q.sy, len = Math.hypot(dx, dy);
+  if (len < 14) return;
+  const sp = speedFromDrag(len);
+  flick(dx / len * sp, dy / len * sp);
+}
+cv.addEventListener("pointerup", e => endPointer(e, false));
+cv.addEventListener("pointercancel", e => endPointer(e, true));
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+window.addEventListener("keydown", e => {
+  Sfx.init();
+  const k = e.key;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // a focused overlay button (e.g. Restart reached with Tab) handles Space/Enter itself
+  if ((k === " " || k === "Enter") && e.target.closest && e.target.closest(".ov button")) return;
+  if (k === " " || k === "Enter" || k.startsWith("Arrow")) e.preventDefault();
+  if (k === "m" || k === "M") { toggleMute(); return; }
+  if (G.mode === "title") { if ((k === " " || k === "Enter") && !e.repeat) startGame(); return; }
+  if (G.mode === "over") { if ((k === " " || k === "Enter" || k === "r" || k === "R") && !e.repeat && overSettled()) startGame(); return; }
+  if (DEMO && G.ai) return;
+  if (k === "Escape" || k === "p" || k === "P") { if (G.paused) resume(); else pause(); return; }
+  if (G.paused) { if ((k === " " || k === "Enter") && !e.repeat) resume(); return; }
+  if (k === "r" || k === "R") { startGame(); return; }
+  if (k === "ArrowLeft") { keys.left = true; G.kbUsed = true; }
+  if (k === "ArrowRight") { keys.right = true; G.kbUsed = true; }
+  if (k === "Shift") keys.shift = true;
+  if ((k === " " || k === "Enter") && !e.repeat && humanActive()) {
+    if (skipTally()) return;
+    G.kbShown = true; G.kbUsed = true;
+    flick(Math.cos(G.kbAim) * KEY_SPEED, Math.sin(G.kbAim) * KEY_SPEED);
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft") keys.left = false;
+  if (e.key === "ArrowRight") keys.right = false;
+  if (e.key === "Shift") keys.shift = false;
+});
+
+// ignore retry input for a moment so a key mashed at the moment of death doesn't skip the result screen
+const overSettled = () => performance.now() - G.overAt > 600;
+function startGame() {
+  Sfx.init();
+  if (G.mode === "play" && !G.ai && !G.paused) Platform.gameplayStop();
+  ovTitle.hidden = true; ovOver.hidden = true; ovPause.hidden = true;
+  startRun(false);
+  G.mode = "play";
+  Platform.gameplayStart();
+  cv.focus({ preventScroll: true });
+}
+function pause() {
+  if (G.mode !== "play" || G.paused || G.ai) return;
+  G.paused = true; pointers.clear(); keys.left = keys.right = keys.shift = false; G.aim = null; G.pendingFlick = null;
+  ovPause.hidden = false;
+  Platform.gameplayStop();
+  setTimeout(() => { if (!ovPause.hidden) $("btnResume").focus({ preventScroll: true }); }, 30);
+}
+function resume() {
+  if (!G.paused) return;
+  G.paused = false; ovPause.hidden = true; lastNow = 0;
+  Platform.gameplayStart();
+  cv.focus({ preventScroll: true });
+}
+function toggleMute() { Sfx.init(); Sfx.setMuted(!Sfx.muted); updateMuteIcon(); }
+
+$("btnStart").addEventListener("click", startGame);
+$("btnRetry").addEventListener("click", () => { if (overSettled()) startGame(); });
+$("btnResume").addEventListener("click", resume);
+$("btnRestart").addEventListener("click", startGame);
+$("btnPause").addEventListener("click", () => { Sfx.init(); if (G.paused) resume(); else pause(); });
+$("btnMute").addEventListener("click", toggleMute);
+$("btnLang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; save(K_LANG, lang); applyLang(); });
+// keep keyboard focus on the game after a top-bar click during play
+$("bar").addEventListener("click", () => { if (G.mode === "play" && !G.paused) cv.focus({ preventScroll: true }); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+window.addEventListener("blur", pause);
+
+// ---- render
+let vw = 0, vh = 0, dpr = 1, scale = 1, ox = 0, oy = 0, xL = 0, xR = W, yT = 0, yB = H;
+function resize() {
+  vw = stage.clientWidth || innerWidth; vh = stage.clientHeight || innerHeight;
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+  scale = Math.min(vw / W, vh / H);
+  ox = (vw - W * scale) / 2; oy = (vh - H * scale) / 2;
+  xL = -ox / scale; xR = (vw - ox) / scale; yT = -oy / scale; yB = (vh - oy) / scale;
+  const bar = $("bar");
+  bar.style.right = (ox + 8) + "px"; bar.style.top = (Math.max(0, oy) + 8) + "px";
+}
+window.addEventListener("resize", resize);
+
+const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic","Meiryo",system-ui,sans-serif';
+function txt(str, x, y, size, color, align, weight) {
+  ctx.font = (weight || 900) + " " + size + "px " + FONT;
+  ctx.textAlign = align || "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = color; ctx.fillText(str, x, y);
+}
+function rrect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, Math.PI * 2); }
+// filled ellipse / rect / rounded rect; a colour of null keeps the current fill
+function dot(c, x, y, rx, ry) { if (c) ctx.fillStyle = c; ell(x, y, rx, ry === undefined ? rx : ry); ctx.fill(); }
+function box(c, x, y, w, h) { if (c) ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+function rbox(c, x, y, w, h, r) { if (c) ctx.fillStyle = c; rrect(x, y, w, h, r); ctx.fill(); }
+function tri(c, x0, y0, x1, y1, x2, y2) { if (c) ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.fill(); }
+
+function drawBackground(time) {
+  box("#8b8378", xL, yT, xR - xL, DOOR_Y1 - yT);
+  ctx.fillStyle = "#71695f";
+  for (let x = Math.floor(xL / 34) * 34; x < xR; x += 34) ctx.fillRect(x, 150, 15, 240);
+  ctx.fillStyle = "#9c948a";
+  for (let i = 0; i < 70; i++) { const x = xL + ((i * 97.3) % (xR - xL)), y = 100 + ((i * 53.7) % 330); ctx.fillRect(x, y, 3, 3); }
+  box("#c3c7cc", xL, 184, xR - xL, 7); ctx.fillRect(xL, 350, xR - xL, 7);
+  // platform
+  box("#ddd6c7", xL, DOOR_Y1, xR - xL, yB - DOOR_Y1);
+  ctx.strokeStyle = "#cfc7b6"; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let x = Math.floor(xL / 60) * 60; x < xR; x += 60) { ctx.moveTo(x, 474); ctx.lineTo(x, yB); }
+  for (let y = 534; y < yB; y += 60) { ctx.moveTo(xL, y); ctx.lineTo(xR, y); }
+  ctx.stroke();
+  box("#f4f1ea", xL, DOOR_Y1, xR - xL, 7);
+  box("#f2c230", xL, 456, xR - xL, 16);
+  ctx.fillStyle = "#d9a91c";
+  for (let x = Math.floor(xL / 8) * 8; x < xR; x += 8) { ctx.fillRect(x + 2, 459, 3, 3); ctx.fillRect(x + 6, 465, 3, 3); }
+  // boarding lanes
+  ctx.fillStyle = "#6fbf8e2a";
+  ctx.fillRect(110, 540, 92, yB - 540); ctx.fillRect(248, 540, 92, yB - 540);
+  ctx.strokeStyle = "#6fbf8e"; ctx.lineWidth = 3; ctx.setLineDash([14, 10]);
+  ctx.beginPath(); ctx.moveTo(110, 540); ctx.lineTo(110, yB); ctx.moveTo(202, 540); ctx.lineTo(202, yB);
+  ctx.moveTo(248, 540); ctx.lineTo(248, yB); ctx.moveTo(340, 540); ctx.lineTo(340, yB); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#6fbf8e";
+  for (const x of [156, 294]) { ctx.beginPath(); ctx.moveTo(x - 12, 534); ctx.lineTo(x + 12, 534); ctx.lineTo(x, 520); ctx.fill(); }
+  // ready spot ring
+  ctx.strokeStyle = "#ffffffaa"; ctx.lineWidth = 3;
+  ell(READY_X, READY_Y + 8, 32, 20); ctx.stroke();
+}
+
+function drawSignAndBoard(time) {
+  const s = T(), nm = STATION_NAMES[(G.station - 1) % STATION_NAMES.length];
+  // station name sign
+  rbox("#00000022", 14, 482, 100, 66, 8);
+  rbox("#ffffff", 12, 478, 100, 66, 8);
+  box("#6fbf8e", 12, 530, 100, 7);
+  txt(s.station(G.station), 62, 490, 10, "#6b6f78", "center", 800);
+  if (lang === "ja") { txt(nm[0], 62, 509, nm[0].length > 4 ? 15 : 19, "#2a2f3a"); txt(nm[1], 62, 524, 8, "#6b6f78", "center", 700); }
+  else { txt(nm[0], 62, 503, 10, "#6b6f78", "center", 700); txt(nm[1], 62, 519, nm[1].length > 11 ? 10 : 13, "#2a2f3a"); }
+  // departure board
+  rbox("#00000026", 340, 482, 98, 66, 8);
+  rbox("#262b36", 338, 478, 98, 66, 8);
+  const ph = G.phase;
+  if (ph === "board") {
+    txt(s.departIn, 387, 490, 9.5, "#f3c43a", "center", 800);
+    const urgent = G.timer < 3;
+    txt(G.timer.toFixed(1), 387, 512, 25, urgent && Math.sin(time * 18) > -0.3 ? "#ff6a5c" : "#ffb347");
+    const left = G.queue.length + G.ps.filter(p => p.state === "free" && p.fromQueue && !p.inCar).length;
+    txt(s.remain(left), 387, 534, 10, "#c9ced8", "center", 800);
+  } else if (ph === "chime" || ph === "closing" || ph === "pinch") {
+    if (Math.sin(time * 14) > -0.4) s.closing.split("\n").forEach((l, i) => txt(l, 387, 500 + i * 20, 13, "#ff6a5c"));
+  } else if (ph === "depart" && !G.ai && G.lives > 0) {
+    txt(s.departing, 387, 504, 15, "#ffb347");
+    txt(s.tapSkip, 387, 528, 9.5, "#c9ced8", "center", 800);
+  } else {
+    txt(ph === "arrive" || ph === "open" ? s.arriving : s.departing, 387, 511, 15, "#ffb347");
+  }
+}
+
+function drawOshiya(time) {
+  const shoving = G.shoving;
+  const bx = shoving ? 286 : 296, by = shoving ? 494 : 506;
+  dot("#00000022", bx + 2, by + 6, 19, 17);
+  dot("#2b3a66", bx, by, 18, 18);
+  box("#f3c43a", bx - 2, by + 2, 4, 12);
+  dot("#f2cfb2", bx, by - 6, 11, 11);
+  dot("#2b3a66", bx, by - 15, 12, 6); ctx.fillRect(bx - 12, by - 15, 24, 3);
+  box("#f3c43a", bx - 11, by - 13, 22, 2);
+  ctx.fillStyle = "#2a2f3a";
+  if (shoving) { ctx.fillRect(bx - 6, by - 6, 4, 1.8); ctx.fillRect(bx + 2, by - 6, 4, 1.8); }
+  else { dot(null, bx - 4, by - 5, 1.6, 1.6); dot(null, bx + 4, by - 5, 1.6, 1.6); }
+  if (!shoving) { glove(bx - 17, by + 6, 0, 0.7); glove(bx + 17, by + 6, 0, 0.7); }
+}
+function glove(x, y, rot, s) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#8d93a0"; ctx.lineWidth = 2;
+  rrect(-11, -10, 22, 22, 9); ctx.fill(); ctx.stroke();
+  dot(null, -12, 2, 5, 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-4, -9); ctx.lineTo(-4, -2); ctx.moveTo(3, -9); ctx.lineTo(3, -2); ctx.stroke();
+  ctx.restore();
+}
+function drawShoveHands(time) {
+  const pump = Math.sin(time * 28) * 4;
+  if (G.shoving) {
+    for (const sx of [-1, 1]) glove(DOOR_CX + sx * 20, DOOR_LINE + 24 + pump * (sx > 0 ? 1 : -1), Math.PI + sx * 0.15, 1.15);
+    ctx.strokeStyle = "#ffffffcc"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    for (let i = -2; i <= 2; i++) { const x = DOOR_CX + i * 16, y = DOOR_LINE + 52 + ((time * 160 + i * 13) % 26); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 12); ctx.stroke(); }
+  }
+  if (G.shovingFar) {
+    // kept just below the HUD band so the far-side gloves stay visible
+    for (const sx of [-1, 1]) glove(DOOR_CX + sx * 20, FAR_LINE + 2 - pump * (sx > 0 ? 1 : -1), sx * 0.15, 1.15);
+  }
+}
+
+function carPath(L, R, top, bot, b) {
+  ctx.beginPath();
+  ctx.moveTo(L, top); ctx.quadraticCurveTo((L + R) / 2, top - b * 2, R, top);
+  ctx.quadraticCurveTo(R + b * 1.6, (top + bot) / 2, R, bot);
+  ctx.lineTo(L, bot);
+  ctx.quadraticCurveTo(L - b * 1.6, (top + bot) / 2, L, top); ctx.closePath();
+}
+
+function drawCar(time) {
+  const L = G.carL, R = G.carR;
+  const warn = G.redT > 0 ? (Math.sin(time * 40) * 0.5 + 0.5) * G.redT : 0;
+  const b = clamp(G.pressureShown, 0, 1.4) * 6 + warn * 3;
+  // neighbouring cars (roofs) and gangways
+  ctx.fillStyle = "#c4c9cf";
+  ctx.fillRect(L - 12 - 26 - 640, ROOF_Y + 4, 640, DOOR_Y1 - ROOF_Y - 8);
+  ctx.fillRect(R + 12 + 26, ROOF_Y + 4, 640, DOOR_Y1 - ROOF_Y - 8);
+  ctx.fillStyle = "#adb3ba";
+  for (const x0 of [L - 38 - 600, R + 38 + 40]) for (let k = 0; k < 5; k++) rrect(x0 + k * 120, 230, 80, 60, 8), ctx.fill();
+  box("#6fbf8e", L - 38 - 640, DOOR_Y1 - 14, 640, 6); ctx.fillRect(R + 38, DOOR_Y1 - 14, 640, 6);
+  box("#5c6068", L - 38, 210, 26, 120); ctx.fillRect(R + 12, 210, 26, 120);
+  ctx.strokeStyle = "#474a50"; ctx.lineWidth = 2;
+  for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(L - 34 + k * 5, 212); ctx.lineTo(L - 34 + k * 5, 328); ctx.moveTo(R + 16 + k * 5, 212); ctx.lineTo(R + 16 + k * 5, 328); ctx.stroke(); }
+  // shell
+  carPath(L - 12, R + 12, ROOF_Y, DOOR_Y1, b);
+  ctx.fillStyle = "#e6e9ec"; ctx.fill(); ctx.strokeStyle = "#8e96a0"; ctx.lineWidth = 2; ctx.stroke();
+  box("#6fbf8e", L - 12, DOOR_Y1 - 6, R - L + 24, 4); ctx.fillRect(L - 12, ROOF_Y + 2, R - L + 24, 3);
+  // door sills cut through the walls
+  const sill = y => {
+    box("#b5bbc2", DOOR_CX - DOOR_HW, y, DOOR_HW * 2, 12);
+    ctx.fillStyle = "#9aa1a9"; for (let i = 0; i < 3; i++) ctx.fillRect(DOOR_CX - DOOR_HW, y + 2 + i * 4, DOOR_HW * 2, 1.5);
+    box("#3b414b", DOOR_CX - DOOR_HW - 4, y - 2, 5, 16); ctx.fillRect(DOOR_CX + DOOR_HW - 1, y - 2, 5, 16);
+  };
+  sill(DOOR_Y0);
+  if (G.farDoor) sill(ROOF_Y);
+  // windows along the far wall
+  for (let x = L + 14; x < R - 40; x += 66) {
+    if (G.farDoor && Math.abs(x + 22 - DOOR_CX) < DOOR_HW + 26) continue;
+    const brk = G.broken.some(bx => Math.abs(bx - (x + 22)) < 33);
+    ctx.fillStyle = brk ? "#3b4250" : warn > 0.3 ? "#ff9d94" : "#bfe1f2";
+    ctx.fillRect(x, ROOF_Y + 6 - b * 0.9, 44, 5);
+    if (brk) { ctx.strokeStyle = "#dff3ff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 10, ROOF_Y + 3); ctx.lineTo(x + 20, ROOF_Y + 12); ctx.lineTo(x + 30, ROOF_Y + 2); ctx.lineTo(x + 38, ROOF_Y + 11); ctx.stroke(); }
+  }
+  // floor
+  carPath(L, R, TOP_IN, DOOR_Y0, b * 0.7);
+  ctx.fillStyle = "#f6eedb"; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.strokeStyle = "#ece2c8"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); for (let y = 150; y < DOOR_Y0; y += 34) { ctx.moveTo(L, y); ctx.lineTo(R, y); } ctx.stroke();
+  ctx.fillStyle = "#ffe08a3a";
+  for (let i = -1; i < 6; i++) {
+    const x0 = L + i * 104 + ((time * 6) % 104) * 0;
+    ctx.beginPath(); ctx.moveTo(x0, TOP_IN); ctx.lineTo(x0 + 52, TOP_IN); ctx.lineTo(x0 + 52 - 150, DOOR_Y0); ctx.lineTo(x0 - 150, DOOR_Y0); ctx.fill();
+  }
+  // door wells
+  box("#e8dcc0", DOOR_CX - DOOR_HW, DOOR_Y0 - 30, DOOR_HW * 2, 30);
+  box("#f3c43a", DOOR_CX - DOOR_HW, DOOR_Y0 - 4, DOOR_HW * 2, 4);
+  if (G.farDoor) { box("#e8dcc0", DOOR_CX - DOOR_HW, TOP_IN, DOOR_HW * 2, 30); box("#f3c43a", DOOR_CX - DOOR_HW, TOP_IN, DOOR_HW * 2, 4); }
+  ctx.restore();
+  // benches
+  const bench = (x0, y0, x1, y1) => { rbox("#5f7fb8", x0, y0, x1 - x0, y1 - y0, 6); box("#7c98c9", x0 + 4, y0 + 4, x1 - x0 - 8, 4); };
+  if (G.farDoor) { bench(L, TOP_IN, DOOR_CX - BENCH_GAP, BENCH_TOP); bench(DOOR_CX + BENCH_GAP, TOP_IN, R, BENCH_TOP); }
+  else bench(L, TOP_IN, R, BENCH_TOP);
+  bench(L, BENCH_BOT, DOOR_CX - BENCH_GAP, DOOR_Y0); bench(DOOR_CX + BENCH_GAP, BENCH_BOT, R, DOOR_Y0);
+  const pr = G.pressureShown;
+  for (const s of G.seats) drawSeat(s, pr, time);
+  // door panels
+  drawPanels(DOOR_Y0, DOOR_LINE);
+  if (G.farDoor) drawPanels(ROOF_Y, FAR_LINE);
+}
+function drawPanels(y0, line) {
+  let g = DOOR_HW * (1 - easeOut(G.closeAmt));
+  for (const p of G.ps) if (p.state === "pinched" && p.pinchLine === line) g = Math.max(g, p.r * 0.1);
+  if (g >= DOOR_HW - 0.5) return;
+  ctx.fillStyle = "#d2d7dd"; ctx.strokeStyle = "#7d8590"; ctx.lineWidth = 1.5;
+  ctx.fillRect(DOOR_CX - DOOR_HW, y0, DOOR_HW - g, 12); ctx.strokeRect(DOOR_CX - DOOR_HW, y0, DOOR_HW - g, 12);
+  ctx.fillRect(DOOR_CX + g, y0, DOOR_HW - g, 12); ctx.strokeRect(DOOR_CX + g, y0, DOOR_HW - g, 12);
+  box("#2a2f3a", DOOR_CX - g - 3, y0, 3, 12); ctx.fillRect(DOOR_CX + g, y0, 3, 12);
+}
+function drawSeat(s, pr, time) {
+  const x = s.x, y = s.y;
+  dot(s.body, x, y + (s.top ? 4 : -4), 15, 12);
+  if (s.top) {
+    dot(s.skin, x, y - 1, 10, 10);
+    ctx.fillStyle = s.hair; ctx.beginPath(); ctx.arc(x, y - 2, 10.5, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+    ctx.fillStyle = "#2a2f3a";
+    if (pr > 0.6) { ctx.fillRect(x - 6, y - 1, 4, 1.6); ctx.fillRect(x + 2, y - 1, 4, 1.6); }
+    else { dot(null, x - 3.5, y, 1.4, 1.4); dot(null, x + 3.5, y, 1.4, 1.4); }
+    if (pr > 0.5) { dot("#7cc3ef", x + 9, y - 6 + ((time * 10 + s.ph) % 4), 1.8, 2.6); }
+  } else {
+    dot(s.hair, x, y + 1, 10, 10);
+  }
+}
+
+function drawStrapsAndLight(time) {
+  const L = G.carL, R = G.carR, sw = G.sway * 7 + Math.sin(time * 2) * 0.6;
+  ctx.save();
+  carPath(L, R, TOP_IN, DOOR_Y0, 0); ctx.clip();
+  ctx.strokeStyle = "#9aa3ad88"; ctx.lineWidth = 2;
+  for (const y of [166, 372]) {
+    ctx.beginPath(); ctx.moveTo(L, y - 8); ctx.lineTo(R, y - 8); ctx.stroke();
+    for (let x = L + 24; x < R - 10; x += 38) {
+      ctx.strokeStyle = "#8f98a3aa"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, y - 8); ctx.lineTo(x + sw, y - 2); ctx.stroke();
+      ctx.strokeStyle = "#ffffffcc"; ctx.lineWidth = 3; ell(x + sw * 1.2, y + 2, 5.5, 5.5); ctx.stroke();
+      ctx.strokeStyle = "#8f98a3"; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+  }
+  ctx.fillStyle = "#fff2c412";
+  for (let i = -1; i < 6; i++) { const x0 = L + i * 104; ctx.beginPath(); ctx.moveTo(x0, TOP_IN); ctx.lineTo(x0 + 52, TOP_IN); ctx.lineTo(x0 - 98, DOOR_Y0); ctx.lineTo(x0 - 150, DOOR_Y0); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawPerson(p, time) {
+  const r = p.r, k = p.kind;
+  const flying = p.state === "free" && Math.hypot(p.vx, p.vy) > 260;
+  const lp = p.state === "pinched" ? 1.2 : p.lp;
+  // backpacks sit behind the body
+  if (k === "backpack" || k === "hiker") {
+    rbox(p.bag, -r * (k === "hiker" ? 0.75 : 0.6), -r * (k === "hiker" ? 1.25 : 1.0), r * (k === "hiker" ? 1.5 : 1.2), r * (k === "hiker" ? 1.1 : 0.8), r * 0.25);
+    if (k === "hiker") { ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2.5; ctx.stroke(); box("#00000025", -r * 0.5, -r * 1.0, r, r * 0.12); }
+  }
+  dot(p.body, 0, 0, r, r * 0.98);
+  if (p.rigid) { ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2.6; ctx.stroke(); }
+  if (k === "suit" || k === "backpack") {
+    tri("#ffffff", -r * 0.3, r * 0.15, r * 0.3, r * 0.15, 0, r * 0.62);
+    ctx.fillStyle = p.tie; ctx.beginPath(); ctx.moveTo(0, r * 0.24); ctx.lineTo(r * 0.1, r * 0.4); ctx.lineTo(0, r * 0.72); ctx.lineTo(-r * 0.1, r * 0.4); ctx.fill();
+    if (k === "backpack") { box(p.bag, -r * 0.62, -r * 0.1, r * 0.13, r * 0.7); ctx.fillRect(r * 0.49, -r * 0.1, r * 0.13, r * 0.7); }
+  } else if (k === "student") {
+    ctx.fillStyle = "#e9c46a"; for (const yy of [0.32, 0.58]) { dot(null, 0, r * yy, r * 0.06, r * 0.06); }
+    box("#151820", -r * 0.28, r * 0.12, r * 0.56, r * 0.1);
+  } else if (k === "blazer") {
+    // school blazer: shirt, striped tie, gold crest on the chest pocket
+    tri("#ffffff", -r * 0.3, r * 0.15, r * 0.3, r * 0.15, 0, r * 0.62);
+    ctx.fillStyle = p.tie; ctx.beginPath(); ctx.moveTo(0, r * 0.24); ctx.lineTo(r * 0.11, r * 0.4); ctx.lineTo(0, r * 0.72); ctx.lineTo(-r * 0.11, r * 0.4); ctx.fill();
+    box("#e9c46a", -r * 0.08, r * 0.36, r * 0.16, r * 0.05); ctx.fillRect(-r * 0.06, r * 0.5, r * 0.12, r * 0.05);
+    dot("#e9c46a", -r * 0.55, r * 0.42, r * 0.11, r * 0.11);
+  } else if (k === "sumo") {
+    ctx.strokeStyle = "#ffffff66"; ctx.lineWidth = 2;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(i * r * 0.32, r * 0.55, r * 0.1, 0, Math.PI); ctx.stroke(); }
+    tri("#f2c7a5", -r * 0.25, r * 0.1, r * 0.25, r * 0.1, 0, r * 0.45);
+    box("#e3c35a", -r * 0.95, r * 0.28, r * 1.9, r * 0.12);
+  } else if (k === "suitcase") {
+    rbox(p.bag, r * 0.25, r * 0.05, r * 0.7, r * 0.8, r * 0.12);
+    ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2.2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.45, r * 0.05); ctx.lineTo(r * 0.45, -r * 0.08); ctx.lineTo(r * 0.75, -r * 0.08); ctx.lineTo(r * 0.75, r * 0.05); ctx.stroke();
+  }
+  // head
+  const hy = -r * (k === "sumo" ? 0.3 : 0.22), hr = r * (k === "sumo" ? 0.42 : 0.55);
+  dot(p.skin, 0, hy, hr, hr);
+  if (p.rigid) { ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = p.hair;
+  ctx.beginPath(); ctx.arc(0, hy - hr * 0.02, hr * 1.04, Math.PI * 1.02, Math.PI * 1.98); ctx.fill();
+  if (k === "sumo") { dot(null, 0, hy - hr * 1.1, hr * 0.3, hr * 0.22); }
+  if (k === "suitcase") { dot("#f0e2b6", 0, hy - hr * 0.55, hr * 1.35, hr * 0.42); ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2; ctx.stroke(); box("#d9534f", -hr * 0.7, hy - hr * 0.62, hr * 1.4, hr * 0.14); }
+  // face
+  const ey = hy + hr * 0.12, ex = hr * 0.36;
+  ctx.fillStyle = "#2a2f3a"; ctx.strokeStyle = "#2a2f3a"; ctx.lineWidth = Math.max(1.4, r * 0.07); ctx.lineCap = "round";
+  if (lp > 0.4 && p.state !== "eject") {
+    ctx.fillStyle = "#ff8f8f" + (lp > 0.8 ? "cc" : "88");
+    dot(null, -hr * 0.62, ey + hr * 0.3, hr * 0.2, hr * 0.12); dot(null, hr * 0.62, ey + hr * 0.3, hr * 0.2, hr * 0.12);
+  }
+  ctx.fillStyle = "#2a2f3a";
+  const my = ey + hr * 0.42;
+  if (p.state === "eject" || flying) {
+    dot(null, -ex, ey, hr * 0.12, hr * 0.12); dot(null, ex, ey, hr * 0.12, hr * 0.12);
+    dot(null, 0, my, hr * 0.14, hr * 0.17);
+  } else if (lp > 0.75) {
+    const e = hr * 0.16;
+    ctx.beginPath(); ctx.moveTo(-ex - e, ey - e); ctx.lineTo(-ex + e * 0.6, ey); ctx.lineTo(-ex - e, ey + e);
+    ctx.moveTo(ex + e, ey - e); ctx.lineTo(ex - e * 0.6, ey); ctx.lineTo(ex + e, ey + e); ctx.stroke();
+    ctx.beginPath(); for (let i = 0; i <= 4; i++) ctx.lineTo(-hr * 0.26 + i * hr * 0.13, my + (i % 2 ? -1 : 1) * hr * 0.06); ctx.stroke();
+  } else if (lp > 0.3) {
+    ctx.beginPath(); ctx.moveTo(-ex - hr * 0.13, ey); ctx.lineTo(-ex + hr * 0.13, ey); ctx.moveTo(ex - hr * 0.13, ey); ctx.lineTo(ex + hr * 0.13, ey); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-hr * 0.14, my); ctx.lineTo(hr * 0.14, my); ctx.stroke();
+  } else {
+    if (p.blink > 0) { dot(null, -ex, ey, hr * 0.09, hr * 0.11); dot(null, ex, ey, hr * 0.09, hr * 0.11); }
+    else { ctx.beginPath(); ctx.moveTo(-ex - hr * 0.1, ey); ctx.lineTo(-ex + hr * 0.1, ey); ctx.moveTo(ex - hr * 0.1, ey); ctx.lineTo(ex + hr * 0.1, ey); ctx.stroke(); }
+    ctx.beginPath();
+    if (p.sad) ctx.arc(0, my + hr * 0.14, hr * 0.15, Math.PI * 1.15, Math.PI * 1.85);
+    else ctx.arc(0, my - hr * 0.1, hr * 0.15, Math.PI * 0.2, Math.PI * 0.8);
+    ctx.stroke();
+  }
+  if (lp > 0.55 && p.state === "free") {
+    ctx.fillStyle = "#7cc3ef";
+    const sy = hy - hr * 0.5 + ((time * 1.6 + p.seed) % 1) * hr * 0.5;
+    ctx.beginPath(); ctx.moveTo(hr * 0.95, sy - hr * 0.25); ctx.quadraticCurveTo(hr * 1.15, sy + hr * 0.05, hr * 0.95, sy + hr * 0.12); ctx.quadraticCurveTo(hr * 0.75, sy + hr * 0.05, hr * 0.95, sy - hr * 0.25); ctx.fill();
+  }
+}
+
+// stuck in the door: the panels close on the rider's bag or coat hem (never on the rider), and the rider tugs at it.
+// Drawn around the rider, who stands just below the door line; (gx, gy) is the door gap relative to the rider.
+function drawPinched(p, time) {
+  const r = p.r, gx = DOOR_CX - p.x, gy = p.pinchLine - p.y;
+  const tug = (Math.sin(time * 18 + p.seed) * 0.5 + 0.5) * r * 0.12;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  if (p.pinchItem === "bag") {
+    // strap from the rider's hands through the gap, bag dangling on the far side of the doors
+    ctx.strokeStyle = "#2a2f3a"; ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.beginPath(); ctx.moveTo(gx * 0.3, -r * 0.7 + tug); ctx.lineTo(gx, gy); ctx.stroke();
+    ctx.save(); ctx.translate(gx, gy - 3); ctx.rotate(Math.sin(time * 9 + p.seed) * 0.14);
+    rbox(p.bag, -r * 0.6, -r * 0.9, r * 1.2, r * 0.88, r * 0.16);
+    ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2; ctx.stroke();
+    box("#00000030", -r * 0.6, -r * 0.55, r * 1.2, r * 0.08);
+    ctx.restore();
+  } else {
+    // coat tail running from the rider's back through the gap, flapping on the far side
+    const fl = Math.sin(time * 16 + p.seed) * r * 0.14;
+    ctx.fillStyle = p.body; ctx.strokeStyle = "#1e2230"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-r * 0.55, -r * 0.1 + tug); ctx.lineTo(gx - r * 0.1, gy); ctx.lineTo(gx + r * 0.1, gy); ctx.lineTo(r * 0.55, -r * 0.1 + tug); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(gx - r * 0.1, gy); ctx.lineTo(gx - r * 0.45 + fl, gy - r * 0.6); ctx.lineTo(gx + r * 0.4 + fl, gy - r * 0.52); ctx.lineTo(gx + r * 0.1, gy); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.save(); ctx.translate(0, tug); drawPerson(p, time); ctx.restore();
+  // both hands grip the strap / coat and pull
+  const hx = p.pinchItem === "bag" ? gx * 0.3 : 0, hy = -r * 0.72 + tug;
+  ctx.strokeStyle = "#2a2f3a55"; ctx.lineWidth = 1.5;
+  for (const sx of [-1, 1]) { dot(p.skin, hx + sx * r * 0.2, hy, r * 0.17, r * 0.15); ctx.stroke(); }
+}
+
+function drawPassenger(p, time) {
+  const inCarFrame = p.inCar || p.state === "pinched" || p.state === "eject" || p.state === "fall";
+  const x = p.x + (inCarFrame && p.state !== "eject" ? G.carX : 0);
+  let y = p.y;
+  const sp = Math.hypot(p.vx, p.vy);
+  ctx.save();
+  ctx.translate(x, y);
+  if (p.state !== "eject" && p.state !== "fall") { dot("#4a3d2a24", 2, p.r * 0.18, p.r * 1.02, p.r * 0.92); }
+  if (p.state === "pinched") {
+    drawPinched(p, time);
+    ctx.restore();
+    return;
+  }
+  if (p.state === "eject") {
+    // a little bigger mid-flight, as if high in the air
+    const k = 1 + 0.3 * Math.sin(Math.PI * Math.min(1, p.et / p.eD));
+    ctx.scale(k, k); ctx.rotate(p.rot);
+  }
+  // squash along the most compressed axis, stretch along fast motion, wobble after impacts
+  let sAxis = p.sqA, sAmt = p.sqS * (p.rigid ? 0.25 : 1);
+  if (sp > 220 && p.state === "free") { sAxis = Math.atan2(p.vy, p.vx) + Math.PI / 2; sAmt = Math.max(sAmt, Math.min(0.22, sp / 2600)); }
+  const wob = p.wob * Math.sin(time * 34 + p.seed) * 0.12;
+  let walk = 0;
+  if (p.state === "queue") walk = Math.sin(p.walk) * 0.05;
+  const sx = 1 - sAmt + wob + walk, sy = 1 + sAmt * 0.6 - wob - walk;
+  ctx.rotate(sAxis); ctx.scale(sx, sy); ctx.rotate(-sAxis);
+  if (p.state === "queue" && G.queue[0] === p && G.aim) {
+    const a = Math.atan2(G.aim.dy, G.aim.dx), k = Math.hypot(G.aim.dx, G.aim.dy) / MAX_DRAG;
+    ctx.rotate(a); ctx.scale(1 + k * 0.12, 1 - k * 0.12); ctx.rotate(-a);
+  }
+  drawPerson(p, time);
+  ctx.restore();
+}
+
+function drawAim(time) {
+  const p = G.queue[0];
+  if (!p || !boardingPhase() || G.lives <= 0) return;
+  let dx, dy, sp;
+  if (G.aim) { const len = Math.hypot(G.aim.dx, G.aim.dy); if (len < 2) return; dx = G.aim.dx / len; dy = G.aim.dy / len; sp = speedFromDrag(len); }
+  else if (G.kbShown && !G.ai) { dx = Math.cos(G.kbAim); dy = Math.sin(G.kbAim); sp = KEY_SPEED; }
+  else return;
+  const dist = sp * sp / (2 * FRICTION);
+  ctx.fillStyle = "#e2574c";
+  let ex = p.x, ey = p.y;
+  for (let d = p.r + 6; d < dist; d += 12) {
+    const x = p.x + dx * d, y = p.y + dy * d;
+    if (G.walls.some(R => x > R.x0 - 4 && x < R.x1 + 4 && y > R.y0 - 4 && y < R.y1 + 4)) break;
+    ctx.globalAlpha = 0.85 - 0.5 * d / dist;
+    dot(null, x, y, 3.2, 3.2);
+    ex = x; ey = y;
+  }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#e2574c"; ctx.lineWidth = 2.5; ell(ex, ey, p.r * 0.7, p.r * 0.7); ctx.stroke();
+  if (G.aim) {
+    const len = Math.hypot(G.aim.dx, G.aim.dy);
+    ctx.strokeStyle = "#2a2f3a55"; ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + G.aim.dx, p.y + G.aim.dy); ctx.stroke();
+    glove(p.x + G.aim.dx, p.y + G.aim.dy + 8, 0, 0.85);
+    box("#2a2f3a", p.x - 26, p.y + p.r + 6, 52, 6);
+    box("#e2574c", p.x - 26, p.y + p.r + 6, 52 * Math.min(1, len / MAX_DRAG), 6);
+  }
+}
+
+function heart(x, y, s, filled) {
+  ctx.beginPath(); ctx.moveTo(x, y + s * 0.35);
+  ctx.bezierCurveTo(x - s * 1.1, y - s * 0.35, x - s * 0.5, y - s * 1.05, x, y - s * 0.45);
+  ctx.bezierCurveTo(x + s * 0.5, y - s * 1.05, x + s * 1.1, y - s * 0.35, x, y + s * 0.35); ctx.closePath();
+  ctx.fillStyle = filled ? "#e2574c" : "#c9c3b5"; ctx.fill();
+}
+
+function drawHUD(time) {
+  const s = T();
+  box("#fbf6ea", xL, yT, xR - xL, 78 - yT);
+  box("#6fbf8e", xL, 74, xR - xL, 4);
+  txt(s.score, 18, 16, 10, "#7b7f88", "left", 800);
+  txt(String(G.score), 18, 38, 26, "#2a2f3a", "left");
+  for (let i = 0; i < 3; i++) heart(170 + i * 26, 30, 11, i < G.lives);
+  // pressure meter
+  const px = 18, pw = 238, py = 52, ph = 14, pv = clamp(G.pressureShown, 0, 1.3) / 1.3;
+  rbox("#e5dfd1", px, py, pw, ph, 7);
+  ctx.save(); rrect(px, py, pw, ph, 7); ctx.clip();
+  box("#f4c9c4", px + pw / 1.3, py, pw - pw / 1.3, ph);
+  const red = G.pressure >= 1;
+  ctx.fillStyle = red ? (Math.sin(time * 30) > 0 ? "#e2574c" : "#ff8a7a") : G.pressureShown > 0.7 ? "#f0a33a" : "#6fbf8e";
+  ctx.fillRect(px, py, pw * pv, ph);
+  ctx.restore();
+  box("#2a2f3a", px + pw / 1.3 - 1, py - 2, 2, ph + 4);
+  txt(s.pressure + " " + Math.round(G.pressureShown * 100) + "%", px + 6, py + ph / 2 + 0.5, 9.5, "#2a2f3a", "left", 900);
+  if (G.redT > 0) {
+    ctx.strokeStyle = "#e2574c"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(px + pw + 12, py + ph / 2, 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * G.redT); ctx.stroke();
+  }
+  // shove stamina
+  const sx = 296, sw = 136;
+  glove(sx - 8, py + 6, 0, 0.55);
+  rbox("#e5dfd1", sx + 4, py, sw, ph, 7);
+  if (G.stamina > 0.01) { rbox(G.shoving || G.shovingFar ? "#4a7fc1" : "#7fa6d9", sx + 4, py, Math.max(ph, sw * G.stamina), ph, 7); }
+  txt(s.stamina, sx + 10, py + ph / 2 + 0.5, 9.5, "#ffffff", "left", 900);
+}
+
+function drawBubble(str, x, y, color) {
+  ctx.font = "900 15px " + FONT;
+  const w = ctx.measureText(str).width + 24;
+  rbox("#00000025", x - w / 2 + 2, y - 15, w, 32, 16);
+  rbox(color || "#ffffff", x - w / 2, y - 17, w, 32, 16);
+  txt(str, x, y - 1, 15, "#2a2f3a");
+}
+
+function drawHints(time) {
+  if (G.ai || G.mode !== "play" || G.lives <= 0) return;
+  const s = T();
+  if (G.hintFlick && G.phase === "board" && readyPassenger() && !G.aim) {
+    if (!G.kbShown) {
+      const k = (time * 0.9) % 1, hy = READY_Y - k * 90;
+      ctx.globalAlpha = 1 - k * 0.6;
+      glove(READY_X + 30, hy + 20, -0.3, 0.9);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#e2574c"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.setLineDash([2, 10]);
+      ctx.beginPath(); ctx.moveTo(READY_X, READY_Y - 30); ctx.lineTo(READY_X, 380); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // below the first queue rows so it never hides a passenger at the first stations
+    drawBubble(G.kbUsed ? s.hintFlickKey : s.hintFlick, READY_X, 692);
+  }
+  if (G.hintShove && !G.usedShove && boardingPhase() && doorTime() < 3.4 && G.station <= 2) {
+    const pulse = (time * 2) % 1;
+    ctx.strokeStyle = "#4a7fc1"; ctx.lineWidth = 4; ctx.globalAlpha = 1 - pulse;
+    ell(DOOR_CX, DOOR_LINE, 30 + pulse * 40, 18 + pulse * 26); ctx.stroke(); ctx.globalAlpha = 1;
+    drawBubble(G.kbUsed ? s.hintShoveKey : s.hintShove, DOOR_CX, 370, "#dbe8ff");
+  }
+}
+
+function drawEffects(time) {
+  for (const q of G.particles) {
+    const a = 1 - q.life / q.max;
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.fillStyle = q.color;
+    if (q.type === "puff") { dot(null, q.x, q.y, q.size * (1.4 - a * 0.6), q.size * (1.4 - a * 0.6)); }
+    else if (q.type === "drop") { const dx = q.car ? G.carX : 0; dot(null, q.x + dx, q.y, q.size * 0.7, q.size); }
+    else if (q.type === "star") { ctx.save(); ctx.translate(q.x + G.carX, q.y); ctx.rotate(q.rot); ctx.fillRect(-q.size, -1.5, q.size * 2, 3); ctx.fillRect(-1.5, -q.size, 3, q.size * 2); ctx.restore(); }
+    else { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.fillRect(-q.size / 2, -q.size / 4, q.size, q.size / (q.type === "shard" ? 1.5 : 2)); ctx.restore(); }
+  }
+  ctx.globalAlpha = 1;
+  for (const q of G.popups) {
+    const a = Math.min(1, (q.life - q.t) * 3);
+    ctx.globalAlpha = a;
+    ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff"; ctx.lineJoin = "round";
+    ctx.font = "900 " + q.size + "px " + FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+  }
+  ctx.globalAlpha = 1;
+  for (const st of G.stamps) {
+    const t = st.t, k = t < 0.18 ? 2.2 - 1.2 * easeOut(t / 0.18) : 1, a = t > 1.35 ? Math.max(0, 1 - (t - 1.35) / 0.35) : 1;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(st.x, st.y); ctx.rotate(st.rot); ctx.scale(k, k);
+    ctx.font = "900 " + st.size + "px " + FONT;
+    const w = ctx.measureText(st.text).width + 30, h = st.size * 1.35 + (st.sub ? 22 : 0);
+    rbox("#fffdf6ee", -w / 2, -st.size * 0.68, w, h, 10);
+    ctx.strokeStyle = st.color; ctx.lineWidth = 5; ctx.stroke();
+    txt(st.text, 0, 0, st.size, st.color);
+    if (st.sub) txt(st.sub, 0, st.size * 0.72, 18, "#2a2f3a");
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBanner() {
+  const b = G.banner;
+  if (!b) return;
+  const s = T(), t = b.t;
+  const a = t < 0.3 ? t / 0.3 : t > BANNER_TIME - 0.5 ? Math.max(0, 1 - (t - (BANNER_TIME - 0.5)) / 0.5) : 1;
+  const nm = STATION_NAMES[(b.n - 1) % STATION_NAMES.length];
+  ctx.globalAlpha = a;
+  const y = 270 + (1 - Math.min(1, t / 0.3)) * 20;
+  rbox("#2a2f3ae0", 60, y - 44, 330, 70 + b.notes.length * 26, 14);
+  txt(s.station(b.n), 225, y - 24, 13, "#9fe0b8", "center", 900);
+  txt(lang === "ja" ? nm[0] : nm[1], 225, y + 2, 26, "#ffffff");
+  b.notes.forEach((n, i) => txt(s[n], 225, y + 34 + i * 26, 15, "#f3c43a"));
+  ctx.globalAlpha = 1;
+}
+
+// soft cushions on the platform for riders popped out of a window: pops in, squashes on landing, fades with its rider
+function drawCushions(time) {
+  for (const c of G.cushions) {
+    const ap = Math.min(1, c.t / 0.25);
+    let sx = easeOut(ap) * (1 + 0.18 * Math.sin(ap * Math.PI)), sy = sx;
+    if (c.landT >= 0) { const k = Math.exp(-c.landT * 5) * Math.cos(c.landT * 24) * 0.22; sx += k; sy -= k; }
+    ctx.save();
+    ctx.globalAlpha = c.landT > 1.2 ? Math.max(0, 1 - (c.landT - 1.2) / 0.4) : 1;
+    ctx.translate(c.x, c.y); ctx.scale(sx, sy);
+    const w = c.w, h = c.h;
+    rbox("#00000022", -w / 2 + 3, -h / 2 + 5, w, h, h * 0.42);
+    rbox("#f39bb8", -w / 2, -h / 2, w, h, h * 0.42);
+    rbox("#f9c3d5", -w / 2 + 6, -h / 2 + 4, w - 12, h * 0.4, h * 0.25);
+    ctx.strokeStyle = "#d9789a"; ctx.lineWidth = 2; rrect(-w / 2, -h / 2, w, h, h * 0.42); ctx.stroke();
+    ctx.fillStyle = "#d9789a";
+    for (const tx of [-0.25, 0, 0.25]) dot(null, tx * w, h * 0.08, 2.4, 2);
+    if (c.landT >= 0) {
+      // the rider sits on the cushion after a small bounce
+      const hop = c.landT < 0.35 ? Math.sin(c.landT / 0.35 * Math.PI) * 10 : 0;
+      ctx.save(); ctx.scale(1 / sx, 1 / sy); ctx.translate(0, -6 - hop);
+      drawPerson(c.rider, time);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+}
+
+function render(time) {
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+  const sh = G.shake > 0.2 ? G.shake : 0;
+  ctx.save();
+  if (sh) ctx.translate(rand(-sh, sh), rand(-sh, sh));
+  drawBackground(time);
+  drawSignAndBoard(time);
+  drawCushions(time);
+  ctx.save(); ctx.translate(G.carX, 0); drawCar(time); ctx.restore();
+  // riders inside first, then everyone on the platform in depth order
+  const list = G.ps.filter(p => p.state !== "eject");
+  list.sort((a, b) => (a.state === "pinched") - (b.state === "pinched") || a.y - b.y);
+  const inside = list.filter(p => p.inCar || p.state === "fall");
+  const outside = list.filter(p => !(p.inCar || p.state === "fall"));
+  for (const p of inside) drawPassenger(p, time);
+  ctx.save(); ctx.translate(G.carX, 0); drawStrapsAndLight(time); ctx.restore();
+  drawOshiya(time);
+  for (const p of outside) drawPassenger(p, time);
+  if (G.phase === "pinch") { ctx.save(); ctx.translate(G.carX, 0); drawPanels(DOOR_Y0, DOOR_LINE); if (G.farDoor) drawPanels(ROOF_Y, FAR_LINE); ctx.restore(); }
+  drawShoveHands(time);
+  drawAim(time);
+  drawBanner();
+  drawHints(time);
+  drawEffects(time);
+  ctx.restore();
+  drawHUD(time);
+  for (const p of G.ps) if (p.state === "eject") drawPassenger(p, time);
+}
+
+// ---- loop
+let lastNow = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = lastNow ? (now - lastNow) / 1000 : 1 / 60;
+  lastNow = now;
+  dt = clamp(dt, 0, 1 / 30);
+  const time = now / 1000;
+  if (!G.paused && G.mode !== "over") {
+    if (G.hitstop > 0) { G.hitstop -= dt; updateEffects(dt * 0.15); }
+    else update(dt);
+  } else if (G.mode === "over") updateEffects(dt);
+  render(time);
+}
+
+// ---- boot
+resize();
+applyLang();
+updateMuteIcon();
+startRun(true);
+if (DEMO) { ovTitle.hidden = true; G.mode = "play"; $("btnPause").hidden = true; }
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

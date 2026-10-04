@@ -1,0 +1,155 @@
+# QA for pull requests.
+#
+# Security notes (the repo is public, anyone can open a PR):
+# - Trigger is pull_request (never pull_request_target), so PRs from forks run with a
+#   read-only GITHUB_TOKEN and without any secrets.
+# - The workflow needs no secrets at all. BUTLER_API_KEY lives only in the itch-release
+#   environment, which this workflow never references.
+# - No ${{ github.event.* }} value is interpolated into a run: script. The changed files are
+#   read from git (the PR merge commit vs. its first parent) and every game folder name is
+#   validated before use.
+# - For a PR from a fork, this file and tools/ come from the PR itself, so a green "qa" on a
+#   stranger's PR proves nothing. Only PRs opened from kouhei's account are trusted.
+name: qa
+
+on:
+  # No paths filter on purpose: "qa" can be a required status check, and a workflow skipped by
+  # a paths filter never reports, which would block docs-only PRs forever. A PR that changes no
+  # game skips the dependency and browser installs and finishes quickly.
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    # The job name is the status check name ("qa") used by the ruleset.
+    name: qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v4
+        with:
+          # Depth 2 brings the merge commit and its parents, enough for the diff below.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Find game folders to test
+        id: games
+        run: |
+          set -euo pipefail
+          # The checkout is the PR merge commit: parent 1 is the base branch.
+          changed="$(git diff --name-only HEAD^1 HEAD)"
+          printf 'Changed files:\n%s\n\n' "$changed"
+
+          # Tool changes can break any game, so they re-test every game.
+          if printf '%s\n' "$changed" | grep -Eq '^(tools/|package(-lock)?\.json$|\.github/workflows/qa\.yml$)'; then
+            candidates="$(find games -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort || true)"
+          else
+            candidates="$(printf '%s\n' "$changed" | sed -nE 's#^(games/[^/]+)/.*#\1#p' | sort -u)"
+          fi
+
+          : > game-dirs.txt
+          bad=0
+          while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            # A deleted game has nothing left to test.
+            [ -d "$dir" ] || { echo "skip (removed): $dir"; continue; }
+            if ! printf '%s' "$dir" | grep -Eq '^games/w[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$'; then
+              echo "::error::Invalid game folder name. Expected games/wNN-<slug> (lowercase, digits, hyphens)."
+              bad=1
+              continue
+            fi
+            printf '%s\n' "$dir" >> game-dirs.txt
+          done <<< "$candidates"
+
+          # The template is what every new game starts from, so it must pass QA too.
+          if printf '%s\n' "$changed" | grep -Eq '^(template/|tools/|package(-lock)?\.json$|\.github/workflows/qa\.yml$)'; then
+            printf '%s\n' template >> game-dirs.txt
+          fi
+
+          count="$(wc -l < game-dirs.txt | tr -d ' ')"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Game folders to test ($count):"
+          cat game-dirs.txt
+          if [ "$bad" -ne 0 ]; then exit 1; fi
+
+      - name: Install dependencies
+        if: steps.games.outputs.count != '0'
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Install Chromium for Playwright
+        if: steps.games.outputs.count != '0'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run QA on each game
+        run: |
+          set -uo pipefail
+          mkdir -p qa-shots
+          status=0
+          {
+            echo "## QA"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -s game-dirs.txt ]; then
+            echo "No game folders changed." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          while IFS= read -r dir; do
+            name="$(basename "$dir")"
+            echo "::group::QA $name"
+            node tools/qa.mjs "$dir" --shots "qa-shots/$name" > "qa-shots/$name.txt" 2>&1
+            code=$?
+            cat "qa-shots/$name.txt"
+            echo "::endgroup::"
+            if [ "$code" -eq 0 ]; then result="PASSED"; else result="FAILED (exit $code)"; status=1; fi
+            {
+              echo "### $name: $result"
+              echo
+              echo '```text'
+              cat "qa-shots/$name.txt"
+              echo '```'
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          done < game-dirs.txt
+          exit "$status"
+
+      - name: Build the gallery site
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          node tools/hub.mjs
+          test -f site/index.html || { echo "::error::tools/hub.mjs did not produce site/index.html"; exit 1; }
+          echo "Site files: $(find site -type f | wc -l)"
+
+      - name: Upload QA screenshots and reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-shots
+          path: qa-shots/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload site preview
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview
+          path: site/
+          if-no-files-found: ignore
+          retention-days: 7

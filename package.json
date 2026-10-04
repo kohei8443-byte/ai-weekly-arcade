@@ -1,0 +1,21 @@
+{
+  "name": "ai-weekly-arcade",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIに毎週ゲームを作らせてみた: one small single-file HTML5 game per week, built by Claude and judged by kouhei.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "qa": "node tools/qa.mjs",
+    "capture": "node tools/capture.mjs",
+    "hub": "node tools/hub.mjs",
+    "qa:all": "node tools/qa-all.mjs",
+    "qa:template": "node tools/qa.mjs template"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

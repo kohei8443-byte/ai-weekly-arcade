@@ -1,0 +1,350 @@
+# Publish the gallery site after a merge to main.
+#
+#   build  -> builds site/ with tools/hub.mjs and uploads it as the Pages artifact
+#   pages  -> deploys that artifact to GitHub Pages (environment github-pages)
+#   itch   -> pushes the same files to itch.io with butler (environment itch-release,
+#             waits for kouhei to approve). Runs on pushes to main, and on a manual run
+#             only when "itch" is checked.
+#   media  -> records gameplay media with tools/capture.mjs for every game that has no
+#             release yet and attaches it to one draft GitHub Release per game. Runs on
+#             pushes to main, and on a manual run only when "media" is checked.
+#
+# Security notes (the repo is public):
+# - Only push/workflow_dispatch triggers, so code from forks never runs here.
+# - Every job also checks that the ref is main. The itch-release environment additionally
+#   allows only the main branch and needs kouhei's approval, also for manual runs.
+# - BUTLER_API_KEY exists only in the itch-release environment and is passed only to the
+#   single butler step. It is never printed.
+# - No ${{ github.event.* }} or ${{ inputs.* }} text is interpolated into run: scripts;
+#   inputs go through env: and are validated in the shell.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "games/**"
+      - "tools/hub.mjs"
+      - "tools/lib/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      itch:
+        description: "Also push the site to itch.io (waits for kouhei's approval in itch-release)"
+        type: boolean
+        default: false
+      media:
+        description: "Record media (mp4/gif/png) with tools/capture.mjs and attach it to a GitHub Release per game"
+        type: boolean
+        default: false
+      game:
+        description: "Only this game folder, e.g. w07-kaiten-sushi (empty = every game that has no release yet)"
+        type: string
+        default: ""
+      draft:
+        description: "Create new releases as drafts (publish them yourself later)"
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # hub.mjs uses only Node built-ins, so no npm install is needed here.
+      - name: Build the gallery site
+        run: |
+          set -euo pipefail
+          node tools/hub.mjs
+          test -f site/index.html || { echo "::error::tools/hub.mjs did not produce site/index.html"; exit 1; }
+          echo "Site files: $(find site -type f | wc -l)"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/
+          # The itch job downloads this artifact only after kouhei approves, which can be days
+          # later. The action's default retention is 1 day; a run can wait up to 35 days.
+          retention-days: 35
+
+  pages:
+    name: pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+  itch:
+    name: itch
+    needs: build
+    # Merges to main, or a manual run on main with "itch" checked. Either way the
+    # itch-release environment waits for kouhei's approval.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.itch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The environment has kouhei as required reviewer and holds BUTLER_API_KEY.
+    environment:
+      name: itch-release
+      url: https://${{ vars.ITCH_USER || 'kohei8443-byte' }}.itch.io/ai-weekly-arcade
+    concurrency:
+      group: itch-release
+      cancel-in-progress: false
+    permissions:
+      actions: read
+    steps:
+      # No checkout: this job only needs the site that the build job already made.
+      - name: Download the built site
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: pages-artifact
+
+      - name: Unpack the site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          tar -xf pages-artifact/artifact.tar -C site
+          test -f site/index.html || { echo "::error::site/index.html is missing in the artifact"; exit 1; }
+          echo "Site files: $(find site -type f | wc -l)"
+
+      - name: Install butler
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          mkdir -p butler-bin
+          unzip -q butler.zip -d butler-bin
+          chmod +x butler-bin/butler
+          butler-bin/butler -V
+
+      - name: Push to itch.io
+        env:
+          # Only this step can see the key. butler reads it from the environment.
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_USER: ${{ vars.ITCH_USER || 'kohei8443-byte' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUTLER_API_KEY:-}" ]; then
+            echo "::error::BUTLER_API_KEY is not set in the itch-release environment."
+            exit 1
+          fi
+          if ! printf '%s' "$ITCH_USER" | grep -Eq '^[A-Za-z0-9_-]+$'; then
+            echo "::error::ITCH_USER must be an itch.io user name (letters, digits, _ or -)."
+            exit 1
+          fi
+          butler-bin/butler push site "$ITCH_USER/ai-weekly-arcade:html5" --userversion "${GITHUB_SHA::7}" --if-changed
+
+  media:
+    name: media
+    # Merges to main record only games that have no release yet (usually the new one).
+    # A manual run needs "media" checked and can re-record one game.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.media)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    concurrency:
+      group: media
+      cancel-in-progress: false
+    env:
+      GAME_INPUT: ${{ inputs.game }}
+      # Merges always make drafts; a manual run follows the "draft" checkbox.
+      RELEASE_DRAFT: ${{ github.event_name == 'push' || inputs.draft }}
+      GH_REPO: ${{ github.repository }}
+      # Upper bound per run so one run cannot take hours. One game takes about 2 minutes,
+      # and 6 covers the games the kit starts with in a single run.
+      MAX_GAMES: "6"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Choose games
+        id: choose
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          : > media-games.txt
+          if [ -n "$GAME_INPUT" ]; then
+            if ! printf '%s' "$GAME_INPUT" | grep -Eq '^w[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$'; then
+              echo "::error::game must look like w07-kaiten-sushi"
+              exit 1
+            fi
+            if [ ! -f "games/$GAME_INPUT/index.html" ]; then
+              echo "::error::games/$GAME_INPUT/index.html does not exist on main"
+              exit 1
+            fi
+            printf '%s\n' "$GAME_INPUT" >> media-games.txt
+          else
+            # Tags of every release, drafts included.
+            gh release list --limit 500 --json tagName --jq '.[].tagName' > existing-tags.txt
+            for dir in games/*/; do
+              [ -d "$dir" ] || continue
+              name="$(basename "$dir")"
+              printf '%s' "$name" | grep -Eq '^w[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$' || continue
+              [ -f "games/$name/index.html" ] || continue
+              grep -Fxq "$name" existing-tags.txt && continue
+              printf '%s\n' "$name" >> media-games.txt
+            done
+          fi
+          if [ "$(wc -l < media-games.txt)" -gt "$MAX_GAMES" ]; then
+            echo "::warning::More than $MAX_GAMES games need media. Doing the first $MAX_GAMES now; the next run does the rest."
+            head -n "$MAX_GAMES" media-games.txt > media-games.tmp && mv media-games.tmp media-games.txt
+          fi
+          count="$(wc -l < media-games.txt | tr -d ' ')"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -eq 0 ]; then
+            echo "Every game already has a release. Nothing to record."
+          else
+            echo "Games:"
+            cat media-games.txt
+          fi
+
+      - name: Setup Node.js
+        if: steps.choose.outputs.count != '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        if: steps.choose.outputs.count != '0'
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Install Chromium and ffmpeg
+        if: steps.choose.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          if ! command -v ffmpeg > /dev/null; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+
+      # Recording runs without any token in its environment.
+      - name: Record media
+        if: steps.choose.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            echo "::group::$name"
+            out="media/$name"
+            mkdir -p "$out"
+            node tools/capture.mjs "games/$name" "$out"
+
+            # Release notes come from meta.json on main (trusted), written by Node, not by the shell.
+            # shellcheck disable=SC2016 # the single quotes keep JS template literals away from the shell
+            GAME="$name" node --input-type=module -e '
+              import fs from "node:fs";
+              const name = process.env.GAME;
+              const m = JSON.parse(fs.readFileSync(`games/${name}/meta.json`, "utf8"));
+              const [owner, repo] = (process.env.GH_REPO || "/").split("/");
+              const lines = [
+                `## ${m.title_ja} / ${m.title_en}`,
+                "",
+                m.tagline_ja,
+                "",
+                m.tagline_en,
+                "",
+                "### 遊び方 / How to play",
+                "",
+                m.how_to_play_ja,
+                "",
+                m.how_to_play_en,
+                "",
+                `遊ぶ / Play: https://${owner}.github.io/${repo}/${name}/`,
+                "",
+                `ギャラリー / Gallery: https://${owner}.github.io/${repo}/`,
+                "",
+                "コードはAI（Claude）、絵と音はコードで生成、判断するのは人間（kouhei）",
+                "",
+                "Code by AI (Claude). Art and sound are generated by code. A human (kouhei) makes the calls.",
+                ""
+              ];
+              fs.mkdirSync("release-text", { recursive: true });
+              fs.writeFileSync(`release-text/${name}.md`, lines.join("\n"));
+              fs.writeFileSync(`release-text/${name}.title`, `${name}: ${m.title_ja} / ${m.title_en}`);
+            '
+            echo "::endgroup::"
+          done < media-games.txt
+
+      - name: Create or update releases
+        if: steps.choose.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          draft_args=()
+          if [ "$RELEASE_DRAFT" = "true" ]; then draft_args=(--draft); fi
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            # Prefix asset names with the game folder so downloads stay recognisable (w07-x-vertical.mp4).
+            mkdir -p "release-assets/$name"
+            assets=()
+            while IFS= read -r f; do
+              dest="release-assets/$name/$name-$(basename "$f")"
+              cp "$f" "$dest"
+              assets+=("$dest")
+            done < <(find "media/$name" -maxdepth 1 -type f \( -name '*.mp4' -o -name '*.gif' -o -name '*.png' \) | sort)
+            if [ "${#assets[@]}" -eq 0 ]; then
+              echo "::error::tools/capture.mjs produced no mp4/gif/png in media/$name"
+              exit 1
+            fi
+            printf 'Asset: %s\n' "${assets[@]}"
+            if gh release view "$name" > /dev/null 2>&1; then
+              # Re-recording a game that already has a release (manual run with "game" set).
+              gh release upload "$name" "${assets[@]}" --clobber
+            else
+              gh release create "$name" \
+                --target "$GITHUB_SHA" \
+                --title "$(cat "release-text/$name.title")" \
+                --notes-file "release-text/$name.md" \
+                "${draft_args[@]}" \
+                "${assets[@]}"
+            fi
+          done < media-games.txt
+
+      - name: Keep media as a workflow artifact too
+        if: ${{ !cancelled() && steps.choose.outcome == 'success' && steps.choose.outputs.count != '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: media
+          path: media/
+          if-no-files-found: ignore
+          retention-days: 14

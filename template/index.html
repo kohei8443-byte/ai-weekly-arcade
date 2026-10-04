@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101433">
+<title>タイミングストップ</title>
+<style>
+/* Starter game for AI Weekly Arcade. One portrait play area (canvas + DOM overlays), centred on wide screens.
+   Rules every game keeps: single file, no network, [hidden] rule below, ja/en strings, ?demo=1 attract AI,
+   window.Platform adapter, localStorage only inside try/catch, data-qa attributes for tools/qa.mjs. */
+:root {
+  --bg: #101433;
+  --bg-deep: #080a1f;
+  --ink: #f6efe0;
+  --dim: #9aa0cf;
+  --accent: #ffd36e;
+  --accent-shadow: #c99a2e;
+  --good: #7fe3c4;
+  --bad: #ff7a6b;
+  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg-deep); color: var(--ink); font-family: var(--font); overflow: hidden; overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+#app {
+  position: relative; height: 100%; aspect-ratio: 9 / 16; max-width: 100%; margin: 0 auto; overflow: hidden;
+  background: var(--bg); touch-action: none; box-shadow: 0 0 60px #00000080;
+}
+canvas { display: block; width: 100%; height: 100%; outline: none; }
+.hud {
+  position: absolute; inset: 0 0 auto 0; display: flex; justify-content: space-between; align-items: flex-start;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 0; pointer-events: none;
+}
+.score { font-weight: 900; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.best { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--dim); margin-top: 44px; text-align: right; }
+.best b { display: block; font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tools { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; display: flex; gap: 6px; z-index: 5; }
+.tool {
+  font: 700 12px/1 var(--font); color: var(--dim); background: #080a1f99; min-width: 36px; height: 32px;
+  border: 1px solid #ffffff2a; border-radius: 999px; padding: 0 10px; cursor: pointer;
+}
+.panel {
+  position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 0 16px; text-align: center; background: radial-gradient(ellipse at 50% 45%, #080a1f99 0%, #080a1fe0 75%);
+}
+.kicker { font-size: 12px; font-weight: 700; letter-spacing: .3em; color: var(--good); }
+h1 { margin: 0; font-size: clamp(38px, 11vw, 60px); line-height: 1.1; font-weight: 900; text-wrap: balance; }
+.how { margin: 0; max-width: 21em; font-size: 15px; line-height: 1.8; font-weight: 700; color: var(--dim); }
+.how em { font-style: normal; color: var(--ink); }
+.btn {
+  font: 900 20px/1 var(--font); color: var(--bg-deep); background: var(--accent); border: 0; border-radius: 999px;
+  padding: 16px 40px; cursor: pointer; box-shadow: 0 6px 0 var(--accent-shadow); letter-spacing: .04em;
+}
+.btn:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--accent-shadow); }
+.btn:focus-visible, .tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hint { font-size: 12px; color: var(--dim); }
+.big { font-size: 84px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.newbest { font-size: 15px; font-weight: 900; letter-spacing: .12em; color: var(--bad); }
+.credit {
+  position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+  font-size: 11px; line-height: 1.5; color: #9aa0cfcc; letter-spacing: .08em;
+}
+/* small title shown only in ?demo=1 (recordings) */
+.brand {
+  position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center;
+  font-size: 13px; font-weight: 900; letter-spacing: .18em; color: #f6efe0b0; pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="c" tabindex="-1"></canvas>
+
+  <div class="hud" id="hud" hidden>
+    <div class="score" id="score" data-qa="score">0</div>
+    <div class="best"><span data-s="best"></span><b id="best">0</b></div>
+  </div>
+
+  <section class="panel" id="title">
+    <div class="kicker" id="kicker"></div>
+    <h1 data-s="title"></h1>
+    <p class="how" data-h="how"></p>
+    <button class="btn" id="start" type="button" data-qa="start" data-s="start"></button>
+    <div class="hint" data-s="controls"></div>
+    <div class="credit" data-s="credit"></div>
+  </section>
+
+  <section class="panel" id="pause" hidden>
+    <div class="kicker" data-s="paused"></div>
+    <button class="btn" id="resume" type="button" data-qa="resume" data-s="resume"></button>
+    <div class="hint" data-s="resumeHint"></div>
+  </section>
+
+  <section class="panel" id="over" hidden>
+    <div class="kicker" data-s="over"></div>
+    <div class="big" id="final">0</div>
+    <div class="newbest" id="newbest" data-s="newBest" hidden></div>
+    <button class="btn" id="retry" type="button" data-qa="retry" data-s="retry"></button>
+    <div class="hint" data-s="retryHint"></div>
+  </section>
+
+  <div class="brand" id="brand" hidden></div>
+
+  <div class="tools" id="tools">
+    <button class="tool" id="pauseBtn" type="button" data-qa="pause" hidden>II</button>
+    <button class="tool" id="mute" type="button" data-qa="mute"></button>
+    <button class="tool" id="lang" type="button" data-qa="lang"></button>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ===== game identity (TODO(game): change for each week) =====
+  const GAME = { slug: 'timing-stop', week: 1 };
+  const KEY = name => `${GAME.slug}-${name}`; // localStorage keys start with "<slug>-"
+
+  // ===== portal adapter: a portal build can replace window.Platform before this script runs =====
+  window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+  const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* adapter errors never break the game */ } };
+
+  // ===== strings (every visible text lives here, ja and en) =====
+  const STRINGS = {
+    ja: {
+      docTitle: 'タイミングストップ', title: 'タイミングストップ',
+      how: '動く玉が<em>光るゾーン</em>に入ったら<em>タップ</em>。<br>3回はずすとおしまい。',
+      start: 'スタート', controls: 'タップ / クリック / スペースキー',
+      best: 'ベスト', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'EN', pauseLabel: '一時停止',
+      paused: '一時停止中', resume: 'つづける', resumeHint: 'スペースキーでも再開',
+      over: 'GAME OVER', newBest: 'ベスト更新！', retry: 'もう一回', retryHint: 'スペースキーでもリトライ',
+      perfect: 'PERFECT', good: 'GOOD', miss: 'MISS',
+      credit: 'Made with Claude', canvas: 'ゲーム画面'
+    },
+    en: {
+      docTitle: 'Timing Stop', title: 'Timing Stop',
+      how: '<em>Tap</em> when the ball is inside the <em>glowing zone</em>.<br>Miss three times and it is over.',
+      start: 'START', controls: 'Tap / Click / Space',
+      best: 'BEST', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'JA', pauseLabel: 'Pause',
+      paused: 'PAUSED', resume: 'RESUME', resumeHint: 'or press Space',
+      over: 'GAME OVER', newBest: 'NEW BEST!', retry: 'RETRY', retryHint: 'or press Space',
+      perfect: 'PERFECT', good: 'GOOD', miss: 'MISS',
+      credit: 'Made with Claude', canvas: 'Game screen'
+    }
+  };
+
+  // ===== URL options: ?demo=1 (AI plays, for recordings), ?seed=123 (fixed run), ?lang=en =====
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.get('demo') === '1';
+  const SEED_PARAM = params.has('seed') ? (Number(params.get('seed')) >>> 0) : null;
+
+  // ===== seeded RNG: gameplay randomness goes through rng() so a seed replays the same run =====
+  function mulberry32(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let rng = mulberry32(1);
+  const newSeed = () => (SEED_PARAM !== null ? SEED_PARAM : (Math.random() * 2 ** 32) >>> 0);
+
+  // ===== storage: optional, the game must work when localStorage throws (iframes, private mode) =====
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(KEY(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(KEY(k), JSON.stringify(v)); } catch (e) { /* ignore */ } }
+  };
+  let best = Number(store.get('best', 0)) || 0;
+  let soundOn = store.get('sound', true) !== false;
+  let lang = params.get('lang') || store.get('lang', null);
+  if (lang !== 'ja' && lang !== 'en') lang = /^ja\b/i.test(navigator.language || 'ja') ? 'ja' : 'en';
+  let S = STRINGS[lang];
+
+  const $ = id => document.getElementById(id);
+  const cv = $('c');
+  const ctx = cv.getContext('2d');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif';
+  const TAU = Math.PI * 2;
+
+  function applyLang() {
+    S = STRINGS[lang];
+    document.documentElement.lang = lang;
+    document.title = S.docTitle;
+    for (const el of document.querySelectorAll('[data-s]')) el.textContent = S[el.dataset.s];
+    for (const el of document.querySelectorAll('[data-h]')) el.innerHTML = S[el.dataset.h];
+    $('kicker').textContent = `AI WEEKLY ARCADE #${String(GAME.week).padStart(2, '0')}`;
+    $('brand').textContent = `${S.title} #${String(GAME.week).padStart(2, '0')}`;
+    $('lang').textContent = S.lang;
+    $('pauseBtn').setAttribute('aria-label', S.pauseLabel);
+    cv.setAttribute('aria-label', S.canvas);
+    updateHud();
+  }
+
+  // ===== sound: tiny WebAudio synth, unlocked by the first user gesture, silent in attract/demo =====
+  let actx = null;
+  function unlockAudio() {
+    if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; }
+  }
+  function tone(freq, dur = 0.1, type = 'sine', vol = 0.12, slide = 0, delay = 0) {
+    if (!soundOn || !actx || mode !== 'play') return;
+    try {
+      const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+    } catch (e) { /* audio is optional */ }
+  }
+  const note = n => 440 * Math.pow(2, n / 12);
+  const sfx = {
+    hit: n => tone(note(n % 12), 0.12, 'triangle', 0.12),
+    perfect: () => { tone(note(7), 0.1, 'square', 0.05); tone(note(14), 0.16, 'square', 0.045, 0, 0.07); },
+    miss: () => tone(220, 0.25, 'sawtooth', 0.07, -120),
+    over: () => { tone(300, 0.5, 'sawtooth', 0.07, -220); tone(90, 0.4, 'sine', 0.16, -40); },
+    newBest: () => [0, 4, 7, 12].forEach((n, i) => tone(note(n), 0.2, 'triangle', 0.08, 0, i * 0.08))
+  };
+
+  // ===== canvas: logical width is always 360; logical height follows the element (about 640 on phones) =====
+  const VW = 360;
+  let VH = 640, scale = 1, BAR_Y = 400;
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(r.width * dpr));
+    cv.height = Math.max(1, Math.round(r.height * dpr));
+    scale = cv.width / VW;
+    VH = cv.height / scale;
+    BAR_Y = Math.round(VH * 0.62);
+  }
+
+  // ===== game state (TODO(game): replace the placeholder game below) =====
+  // mode: 'attract' (AI behind the title), 'demo' (?demo=1), 'play' (human)
+  // state: 'play' | 'dead' | 'over'
+  let mode = DEMO ? 'demo' : 'attract';
+  let state = 'play', paused = false;
+  let score, lives, x, dir, speed, zone, zoneW, particles, popups, shake, flash, deadTimer, time = 0, seed;
+  let ai = { wait: 0 };
+
+  function reset() {
+    seed = newSeed();
+    rng = mulberry32(seed);
+    score = 0; lives = 3; x = 0.1; dir = 1; speed = 0.55; zoneW = 0.26;
+    zone = 0.5; particles = []; popups = []; shake = 0; flash = 0; deadTimer = 0;
+    state = 'play';
+    newZone();
+    updateHud();
+  }
+
+  function newZone() {
+    zone = zoneW / 2 + 0.05 + rng() * (0.9 - zoneW);
+    ai.wait = 0.15 + rng() * 0.25;
+  }
+
+  const BAR_X = 30, BAR_W = 300;
+
+  function act() {
+    if (state !== 'play' || paused) return;
+    const d = Math.abs(x - zone);
+    const px = BAR_X + x * BAR_W;
+    if (d <= zoneW / 2) {
+      const perfect = d <= zoneW / 8;
+      score += perfect ? 2 : 1;
+      speed = Math.min(1.6, speed * 1.06);
+      zoneW = Math.max(0.08, zoneW * 0.95);
+      burst(px, BAR_Y, perfect ? '#ffd36e' : '#7fe3c4', perfect ? 26 : 12);
+      popups.push({ x: px, y: BAR_Y - 30, text: perfect ? S.perfect : S.good, t: 0, color: perfect ? '#ffd36e' : '#7fe3c4' });
+      if (perfect) { flash = 0.15; sfx.perfect(); if (mode === 'play' && score % 10 < 2) platform('happytime'); } else sfx.hit(score);
+      newZone();
+    } else {
+      lives--;
+      if (!reduceMotion) shake = 10;
+      burst(px, BAR_Y, '#ff7a6b', 14);
+      popups.push({ x: px, y: BAR_Y - 30, text: S.miss, t: 0, color: '#ff7a6b' });
+      sfx.miss();
+      if (lives <= 0) die();
+    }
+    updateHud();
+  }
+
+  function die() {
+    state = 'dead';
+    deadTimer = mode === 'play' ? 0.6 : 1.2;
+    sfx.over();
+    if (mode === 'play') platform('gameplayStop');
+  }
+
+  function burst(px, py, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, s = 60 + Math.random() * 220;
+      particles.push({ x: px, y: py, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.4 + Math.random() * 0.4, color });
+    }
+  }
+
+  // ===== AI for attract and ?demo=1: taps when the ball is near the zone centre, misses now and then =====
+  function aiThink(dt) {
+    if (state !== 'play') return;
+    ai.wait -= dt;
+    if (ai.wait > 0) return;
+    const next = x + dir * speed * dt;
+    const crossing = (x - zone) * (next - zone) <= 0;   // the ball passes the zone centre this frame
+    const sloppy = rng() < 0.004;                       // rare deliberate miss so the demo also shows failure
+    if (crossing || Math.abs(x - zone) < zoneW * 0.1 || sloppy) act();
+  }
+
+  // ===== update / draw =====
+  function step(dt) {
+    time += dt;
+    if (state === 'play') {
+      x += dir * speed * dt;
+      if (x > 1) { x = 2 - x; dir = -1; }
+      if (x < 0) { x = -x; dir = 1; }
+      if (mode !== 'play') aiThink(dt);
+    } else if (state === 'dead') {
+      deadTimer -= dt;
+      if (deadTimer <= 0) { if (mode === 'play') showGameOver(); else reset(); }
+    }
+    for (const p of particles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; }
+    particles = particles.filter(p => p.t < p.life);
+    for (const u of popups) u.t += dt;
+    popups = popups.filter(u => u.t < 0.8);
+    shake = Math.max(0, shake - dt * 40);
+    flash = Math.max(0, flash - dt);
+  }
+
+  function draw() {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, VH);
+    g.addColorStop(0, '#080a1f'); g.addColorStop(1, '#1b2160');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+    // soft background rings
+    for (let i = 0; i < 5; i++) {
+      ctx.strokeStyle = `rgba(154,160,207,${0.06 + i * 0.015})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(VW / 2, BAR_Y, 60 + i * 50 + Math.sin(time * 1.5 + i) * 6, 0, TAU); ctx.stroke();
+    }
+    // bar, zone, ball
+    ctx.fillStyle = '#ffffff14'; roundRect(BAR_X, BAR_Y - 14, BAR_W, 28, 14); ctx.fill();
+    const zx = BAR_X + (zone - zoneW / 2) * BAR_W, zw = zoneW * BAR_W;
+    ctx.fillStyle = `rgba(127,227,196,${0.35 + 0.15 * Math.sin(time * 6)})`; roundRect(zx, BAR_Y - 14, zw, 28, 14); ctx.fill();
+    ctx.fillStyle = 'rgba(255,211,110,.55)'; roundRect(BAR_X + (zone - zoneW / 8) * BAR_W, BAR_Y - 14, zoneW / 4 * BAR_W, 28, 6); ctx.fill();
+    if (state === 'play') {
+      ctx.save(); ctx.shadowColor = '#ffd36e'; ctx.shadowBlur = 18; ctx.fillStyle = '#fff8e6';
+      ctx.beginPath(); ctx.arc(BAR_X + x * BAR_W, BAR_Y, 11, 0, TAU); ctx.fill(); ctx.restore();
+    }
+    // lives
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < lives ? '#ff7a6b' : '#ffffff22';
+      ctx.beginPath(); ctx.arc(VW / 2 - 30 + i * 30, BAR_Y + 60, 8, 0, TAU); ctx.fill();
+    }
+    for (const p of particles) {
+      ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    for (const u of popups) {
+      ctx.globalAlpha = 1 - u.t / 0.8; ctx.fillStyle = u.color;
+      ctx.font = `900 20px ${FONT}`; ctx.fillText(u.text, u.x, u.y - u.t * 40);
+    }
+    ctx.globalAlpha = 1;
+    if (flash > 0) { ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.fillStyle = `rgba(255,248,230,${flash})`; ctx.fillRect(0, 0, VW, VH); }
+  }
+
+  function roundRect(rx, ry, rw, rh, r) {
+    ctx.beginPath();
+    ctx.moveTo(rx + r, ry); ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, r); ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, r);
+    ctx.arcTo(rx, ry + rh, rx, ry, r); ctx.arcTo(rx, ry, rx + rw, ry, r); ctx.closePath();
+  }
+
+  function updateHud() {
+    if (score === undefined) return;
+    $('score').textContent = score;
+    $('best').textContent = best;
+    $('mute').textContent = soundOn ? S.soundOn : S.soundOff;
+    $('mute').setAttribute('aria-pressed', String(!soundOn));
+  }
+
+  // ===== flow =====
+  function startGame() {
+    unlockAudio();
+    mode = 'play'; paused = false;
+    $('title').hidden = true; $('over').hidden = true; $('pause').hidden = true;
+    $('hud').hidden = false; $('pauseBtn').hidden = false;
+    reset();
+    cv.focus({ preventScroll: true });
+    platform('gameplayStart');
+  }
+
+  function showGameOver() {
+    state = 'over';
+    const isBest = score > best;
+    if (isBest) { best = score; store.set('best', best); }
+    $('final').textContent = score;
+    $('newbest').hidden = !isBest || score === 0;
+    $('over').hidden = false; $('pauseBtn').hidden = true;
+    $('retry').focus({ preventScroll: true });
+    if (isBest && score > 0) { sfx.newBest(); platform('happytime'); }
+    platform('gameOver', score);
+    updateHud();
+  }
+
+  function pauseGame() {
+    if (mode !== 'play' || paused || state !== 'play') return;
+    paused = true;
+    $('pause').hidden = false; $('pauseBtn').hidden = true;
+    $('resume').focus({ preventScroll: true });
+    platform('gameplayStop');
+  }
+
+  function resumeGame() {
+    if (!paused) return;
+    paused = false; last = performance.now();
+    $('pause').hidden = true; $('pauseBtn').hidden = false;
+    cv.focus({ preventScroll: true });
+    platform('gameplayStart');
+  }
+
+  // ===== input =====
+  addEventListener('pointerdown', unlockAudio, true);
+  addEventListener('keydown', unlockAudio, true);
+  $('app').addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    e.preventDefault();
+    if (mode === 'play' && state === 'play' && !paused) act();
+    else if (!$('title').hidden) startGame();
+  });
+  addEventListener('keydown', e => {
+    if (e.code === 'Escape' || e.code === 'KeyP') { if (paused) resumeGame(); else pauseGame(); return; }
+    if (e.code !== 'Space' && e.code !== 'Enter') return;
+    e.preventDefault();
+    if (e.repeat) return;
+    if (paused) resumeGame();
+    else if (mode === 'play' && state === 'play') act();
+    else if (!$('over').hidden || !$('title').hidden) startGame();
+  });
+  $('start').addEventListener('click', startGame);
+  $('retry').addEventListener('click', startGame);
+  $('resume').addEventListener('click', resumeGame);
+  $('pauseBtn').addEventListener('click', e => { e.currentTarget.blur(); pauseGame(); });
+  $('mute').addEventListener('click', e => { e.currentTarget.blur(); soundOn = !soundOn; store.set('sound', soundOn); updateHud(); });
+  $('lang').addEventListener('click', e => {
+    e.currentTarget.blur();
+    lang = lang === 'ja' ? 'en' : 'ja'; store.set('lang', lang);
+    applyLang();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+  addEventListener('blur', pauseGame);
+  addEventListener('resize', resize);
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ===== main loop =====
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 1 / 30); last = now;
+    if (!paused) step(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ===== debug hook for tools (qa, bots, capture). Read-only use outside the game. =====
+  window.__game = {
+    get state() { return state === 'over' ? 'over' : paused ? 'paused' : state; },
+    get mode() { return mode; },
+    get score() { return score; },
+    get seed() { return seed; },
+    step(dt = 1 / 60) { step(dt); },
+    render() { draw(); },
+    act
+  };
+
+  // ===== boot =====
+  resize();
+  reset();
+  applyLang();
+  if (DEMO) { $('title').hidden = true; $('hud').hidden = false; $('tools').hidden = true; $('brand').hidden = false; }
+  requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>

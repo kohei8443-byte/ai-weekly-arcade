@@ -1,0 +1,15 @@
+{
+  "slug": "timing-stop",
+  "week": 1,
+  "title_ja": "タイミングストップ",
+  "title_en": "Timing Stop",
+  "tagline_ja": "光るゾーンで玉を止める、ワンタップのタイミングゲーム。",
+  "tagline_en": "Stop the ball in the glowing zone. A one-tap timing game.",
+  "how_to_play_ja": "左右に動く玉が光るゾーンに入ったらタップ（またはスペース）します。ゾーンの真ん中なら PERFECT で2点です。成功するたびに玉は速く、ゾーンは狭くなります。3回はずすとゲームオーバーです。",
+  "how_to_play_en": "Tap (or press Space) when the moving ball is inside the glowing zone. Hit the centre for a PERFECT worth 2 points. Each hit speeds the ball up and shrinks the zone. Miss three times and the game ends.",
+  "controls": ["tap/click", "space", "enter", "esc/p to pause"],
+  "genre": "one-button timing",
+  "tags": ["one-button", "timing", "casual", "mobile-friendly", "high-score"],
+  "session_length_sec": 45,
+  "video_hook_ja": "真ん中で止めるだけ。なのに5回目から急に指が震える。"
+}

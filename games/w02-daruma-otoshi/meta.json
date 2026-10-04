@@ -1,0 +1,32 @@
+{
+  "slug": "daruma-otoshi",
+  "week": 2,
+  "title_ja": "だるま落とし",
+  "title_en": "Daruma Knock",
+  "tagline_ja": "長押し、離して、カーン! 傾くだるまを叩く向きで立て直せ。",
+  "tagline_en": "Hold, release, KNOCK! Steer a wobbling daruma tower by choosing which side you strike from.",
+  "how_to_play_ja": "画面を長押しするとパワーメーターが往復します。いちばん下の段の種類(漆・白木・ゴムなど)ごとに決まった緑の帯で指を離すと、その段が飛んでいきます。帯の真ん中(金色)ならPERFECT。画面の左半分で離すと左から、右半分なら右から叩き、叩いた側へ塔が傾きます。傾きと反対側から叩いて立て直し、崩れるまでに何枚落とせるか挑戦しよう。キーボードは←/→(またはSpace)を押し続けて離す。Rでリスタート、P/Escで一時停止、Mで消音。",
+  "how_to_play_en": "Press and hold to charge a power meter that sweeps up and down. Release inside the green band for the bottom disc's type to knock it out; the gold center is a PERFECT. Releasing on the left half strikes from the left, the right half from the right, and the tower leans toward the side you hit. Strike from the side opposite the lean to straighten it, and knock out as many discs as you can before it topples. Keyboard: hold and release Left/Right arrow (Space strikes from the last side); R restarts, P/Esc pauses, M mutes.",
+  "controls": [
+    "press-and-hold / release (touch or mouse)",
+    "left half / right half picks strike side",
+    "hold Left / Right arrow (or A / D)",
+    "space (strike from the last side)",
+    "R restart",
+    "P / Esc pause",
+    "M mute"
+  ],
+  "genre": "Timing / power-meter dexterity with a balance twist",
+  "tags": [
+    "one-button",
+    "timing",
+    "japanese",
+    "balance",
+    "arcade",
+    "casual",
+    "mobile-friendly",
+    "physics"
+  ],
+  "session_length_sec": 60,
+  "video_hook_ja": "傾くだるまを叩く向きで立て直す、だるま落とし上級編"
+}
