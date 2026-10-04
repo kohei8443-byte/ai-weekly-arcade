@@ -3,765 +3,1859 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070920">
-<title>軌道ホッパー</title>
+<title>軌道ホッパー / Orbit Hopper</title>
 <style>
-/* Layout: one portrait play area (canvas + DOM overlays), centred on wide screens. Night-sky palette. */
-:root {
-  --sky: #0e1233;
-  --sky-deep: #070920;
-  --ink: #f6efe0;
-  --dim: #8f95c7;
-  --coral: #ff7a6b;
-  --butter: #ffd36e;
-  --mint: #7fe3c4;
-  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-  color-scheme: dark;
-}
-[hidden] { display: none !important; }
-html, body { height: 100%; margin: 0; }
-body {
-  background: radial-gradient(ellipse at 50% 30%, #141a4a 0%, var(--sky-deep) 70%) var(--sky-deep);
-  color: var(--ink); font-family: var(--font); overflow: hidden; overscroll-behavior: none;
-  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent; touch-action: none;
-}
-#app {
-  position: relative; height: 100%; aspect-ratio: 10 / 16; max-width: 100%; margin: 0 auto;
-  background: var(--sky); overflow: hidden; touch-action: none; box-shadow: 0 0 60px #00000080;
-  container-type: inline-size;
-}
-canvas { display: block; width: 100%; height: 100%; outline: none; }
-.hud {
-  position: absolute; inset: 0 0 auto 0; display: flex; justify-content: space-between; align-items: flex-start;
-  padding: calc(14px + env(safe-area-inset-top)) 16px 0; pointer-events: none;
-}
-.score { font-weight: 900; font-size: 46px; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 2px 0 #07092099; }
-.combo { font-size: 13px; font-weight: 700; color: var(--mint); letter-spacing: .06em; margin-top: 6px; min-height: 1em; }
-.best { font-size: 12px; letter-spacing: .08em; color: var(--dim); text-align: right; margin-top: 40px; font-weight: 700; }
-.best b { display: block; color: var(--butter); font-size: 18px; font-variant-numeric: tabular-nums; }
-.tools {
-  position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; display: flex; gap: 6px; z-index: 5;
-}
-.tool {
-  font: 700 12px/1 var(--font); color: var(--dim); background: #07092099; min-width: 34px; height: 30px;
-  border: 1px solid #ffffff2a; border-radius: 999px; padding: 0 10px; cursor: pointer;
-}
-.tool:hover { color: var(--ink); }
-.tool:focus-visible, .btn:focus-visible { outline: 2px solid var(--butter); outline-offset: 3px; }
-.panel {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 18px; padding: 0 16px; text-align: center; z-index: 4;
-  background: radial-gradient(ellipse at 50% 45%, #07092099 0%, #070920e0 72%);
-}
-.panel h1 {
-  font-weight: 900; margin: 0; line-height: 1.08; letter-spacing: .02em;
-  font-size: clamp(30px, 11vw, 52px); font-size: clamp(28px, 11.5cqw, 56px); /* sized by the play area, not the window */
-  text-wrap: balance; color: var(--ink); text-shadow: 0 0 24px #ff7a6b66, 0 4px 0 #07092099;
-}
-.panel h1 span { color: var(--butter); }
-.kicker { font-size: 12px; font-weight: 700; letter-spacing: .3em; color: var(--mint); }
-.how { font-size: 15px; line-height: 1.8; color: var(--dim); max-width: 21em; margin: 0; font-weight: 700; text-wrap: balance; }
-.how em { font-style: normal; color: var(--ink); }
-.btn {
-  font: 900 20px/1 var(--font); color: var(--sky-deep); background: var(--butter); letter-spacing: .04em;
-  border: 0; border-radius: 999px; padding: 16px 40px; cursor: pointer; box-shadow: 0 6px 0 #c99a2e;
-  transition: transform .08s;
-}
-.btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #c99a2e; }
-.result-num { font-weight: 900; font-size: 88px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
-.result-sub { font-size: 14px; color: var(--dim); font-weight: 700; }
-.result-sub b { color: var(--butter); }
-.newbest { color: var(--coral); font-size: 15px; font-weight: 900; letter-spacing: .12em; }
-.hint { font-size: 12px; color: var(--dim); }
-.credit { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom)); left: 0; right: 0; font-size: 11px; color: #8f95c7aa; letter-spacing: .08em; }
-.tip {
-  position: absolute; left: 16px; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom)); text-align: center;
-  font-size: 15px; font-weight: 900; color: var(--butter); pointer-events: none; text-shadow: 0 2px 0 #070920; text-wrap: balance;
-  animation: bob 1.1s ease-in-out infinite alternate;
-}
-.brand {
-  position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center;
-  font-size: 13px; font-weight: 900; letter-spacing: .18em; color: #f6efe0b0; pointer-events: none;
-}
-.brand span { color: var(--butter); }
-@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-5px); } }
-@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .tip { animation: none; } }
-/* short windows (landscape laptops, small embeds): tighten the menus so nothing collides */
-@media (max-height: 560px) {
-  .panel { gap: 12px; }
-  .how { font-size: 13px; line-height: 1.6; }
-  .btn { font-size: 18px; padding: 13px 34px; }
-  .result-num { font-size: 64px; }
-  .score { font-size: 38px; }
-  .credit { bottom: calc(8px + env(safe-area-inset-bottom)); }
-  .tip { bottom: calc(16px + env(safe-area-inset-bottom)); font-size: 13px; }
-}
+/* Orbit Hopper (w01), AI Weekly Arcade, pixel house style (see STYLE.md and QUALITY_BAR.md).
+   Everything the player sees is drawn into one pixel buffer on the canvas. The DOM only holds
+   transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#262b52}
+body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
+#wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#cv{position:absolute;left:0;top:0;display:block;touch-action:none;image-rendering:pixelated}
+#ui{position:absolute;left:0;top:0;pointer-events:none}
+.ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+/* every control is drawn in pixels on the canvas; these buttons are invisible hit areas on top of the drawings */
+#ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+#ui button:focus{outline:none}
+#ui button:focus-visible{outline:2px dashed #f6e2a6;outline-offset:1px}
 </style>
 </head>
 <body>
-<div id="app">
-  <canvas id="c" tabindex="-1"></canvas>
-  <div class="hud" id="hud" hidden>
-    <div>
-      <div class="score" id="score">0</div>
-      <div class="combo" id="combo"></div>
-    </div>
-    <div class="best" id="bestBox"><span data-s="best"></span><b id="best">0</b></div>
-  </div>
-  <div class="tip" id="tip" hidden data-s="tip"></div>
-  <div class="brand" id="brand" hidden></div>
-
-  <div class="panel" id="title">
-    <div class="kicker" data-s="kicker"></div>
-    <h1 id="logo"></h1>
-    <p class="how" id="how"></p>
-    <button class="btn" id="start" type="button" data-s="start"></button>
-    <div class="hint" data-s="controls"></div>
-    <div class="credit">Made with Claude</div>
-  </div>
-
-  <div class="panel" id="pause" hidden>
-    <div class="kicker" data-s="paused"></div>
-    <button class="btn" id="resume" type="button" data-s="resume"></button>
-    <div class="hint" data-s="resumeHint"></div>
-  </div>
-
-  <div class="panel" id="over" hidden>
-    <div class="kicker" data-s="overKicker"></div>
-    <div class="result-num" id="final">0</div>
-    <div class="newbest" id="newbest" hidden data-s="newBest"></div>
-    <div class="result-sub" id="resultSub"></div>
-    <button class="btn" id="retry" type="button" data-s="retry"></button>
-    <div class="hint" data-s="retryHint"></div>
-  </div>
-
-  <div class="tools" id="tools">
-    <button class="tool" id="pauseBtn" type="button" hidden>II</button>
-    <button class="tool" id="mute" type="button"></button>
-    <button class="tool" id="lang" type="button"></button>
-  </div>
+<div id="wrap">
+<canvas id="cv"></canvas>
+<div id="ui">
+  <section id="ovTitle" class="ov">
+    <button id="btnStart" type="button" data-qa="start" data-s="start"></button>
+    <button id="btnLang" type="button" data-qa="lang"></button>
+  </section>
+  <section id="ovPause" class="ov" hidden>
+    <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
+    <button id="btnRestart" type="button" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-s="toTitle"></button>
+  </section>
+  <section id="ovOver" class="ov" hidden>
+    <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
+    <button id="btnToTitle" type="button" data-s="toTitle"></button>
+  </section>
+  <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
+  <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
 </div>
-
+</div>
 <script>
-(() => {
-  "use strict";
+(function () {
+"use strict";
 
-  // Portal SDK adapter: a portal build can replace this object before the game script runs.
-  window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
-  const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
+// Portal SDK adapter: a portal build can replace this object before the game script runs.
+window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
 
-  // ---- strings ----
-  const STRINGS = {
-    ja: {
-      docTitle: '軌道ホッパー', logo: '軌道<span>ホッパー</span>',
-      how: '<em>タップ</em>で飛び出して次の惑星の軌道へ。<br>真ん中を通せば <em>PERFECT</em>！',
-      start: 'スタート', controls: 'タップ / クリック / スペースキー',
-      best: 'ベスト', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'EN', pauseLabel: '一時停止',
-      paused: '一時停止中', resume: 'つづける', resumeHint: 'スペースキーでも再開',
-      newBest: 'ベスト更新！', resultSub: (b, p) => `ベスト <b>${b}</b> ・ PERFECT <b>${p}</b> 回`,
-      retry: 'もう一回', retryHint: 'スペースキーでもリトライ',
-      tip: '線が次の惑星を指したらタップ！', combo: n => `PERFECT 連続 ${n}`,
-      canvas: 'ゲーム画面', brand: '軌道<span>ホッパー</span> #01',
-      kicker: 'WEEKLY MINI GAME #01', overKicker: 'LOST IN SPACE'
-    },
-    en: {
-      docTitle: 'Orbit Hopper', logo: 'Orbit <span>Hopper</span>',
-      how: '<em>Tap</em> to fling off and catch the next orbit.<br>Thread the centre for a <em>PERFECT</em>!',
-      start: 'START', controls: 'Tap / Click / Space',
-      best: 'BEST', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'JA', pauseLabel: 'Pause',
-      paused: 'PAUSED', resume: 'RESUME', resumeHint: 'or press Space',
-      newBest: 'NEW BEST!', resultSub: (b, p) => `Best <b>${b}</b> · PERFECT <b>${p}</b>`,
-      retry: 'RETRY', retryHint: 'or press Space',
-      tip: 'Tap when the line points at the next planet!', combo: n => `PERFECT STREAK ${n}`,
-      canvas: 'Game screen', brand: 'ORBIT <span>HOPPER</span> #01',
-      kicker: 'WEEKLY MINI GAME #01', overKicker: 'LOST IN SPACE'
-    }
+// ==== PIXEL KIT START ====
+// The pixel house style (STYLE.md) as reusable code. Nothing in this block knows about the game: the game
+// passes its core size, sprites, glyph tables, strings and sounds. Copy it unchanged into every game; the
+// only allowed edit is swapping up to ~6 palette hues for the theme. tools/qa.mjs relies on TXT and auPeak.
+
+// ---------- palette: 24 colours, one letter each (a game may swap up to ~6 hues) ----------
+const PAL = {
+  k: "#2b1b17", n: "#262b52", b: "#3d5a98", s: "#8db7dc", p: "#d4e6ea", w: "#fbf6ea", m: "#e2d3b6", c: "#aebfd2",
+  r: "#d6402b", R: "#8a2232", h: "#ef9a86", f: "#b9a6ff", F: "#6b56b8", o: "#dba268", O: "#a5653a", D: "#6a3b22",
+  y: "#ecc659", Y: "#b4832d", g: "#2f7f8a", G: "#16183a", l: "#7fe3c4", a: "#ef8834", e: "#87838e", q: "#f6e2a6"
+};
+
+// ---------- small helpers ----------
+const fl = Math.floor;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
+const newCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+// seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
+function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+// ---------- storage: one JSON record under "<prefix>save"; never throws, keeps working in memory when blocked ----------
+function makeStore(prefix) {
+  const KEY = prefix + "save"; let data = {};
+  try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
+  return {
+    get(k, d) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : d; },
+    set(k, v) { data[k] = v; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } }
   };
+}
 
-  const cv = document.getElementById('c');
-  const ctx = cv.getContext('2d');
-  const $ = id => document.getElementById(id);
-  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const COLORS = ['#ff7a6b', '#ffd36e', '#7fe3c4', '#b9a6ff', '#7cc4ff'];
-  const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif';
-  const TAU = Math.PI * 2;
-  const DEMO = /(?:^|[?&])demo=1(?:&|$)/.test(location.search);
+// ---------- pixel buffer: one small canvas, integer upscale, never stretched ----------
+const PX = { B: newCanvas(1, 1), K: 1, LW: 1, LH: 1, dpr: 1, TOP: 0, cx0: 0, cy0: 0 };
+let g = PX.B.getContext("2d");
+// Fit a cw x ch core scene at the largest integer scale; extra space shows more world around it.
+// Landscape screens may crop `tops` rows of sky when that buys a bigger scale and okTop(sideBay) agrees.
+function pixResize(cv, cssW, cssH, cw, ch, tops, okTop) {
+  const dpr = PX.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
+  let best = null;
+  for (const top of devW > devH * 1.15 ? tops : [0]) {
+    const k = Math.max(1, fl(Math.min(devW / cw, devH / (ch - top))));
+    if (top && okTop && !okTop(fl((Math.ceil(devW / k) - cw) / 2))) continue;
+    if (!best || k > best.k) best = { k, top };
+  }
+  PX.K = best.k; PX.TOP = best.top; PX.LW = Math.ceil(devW / PX.K); PX.LH = Math.ceil(devH / PX.K);
+  PX.B.width = PX.LW; PX.B.height = PX.LH; g = PX.B.getContext("2d"); g.imageSmoothingEnabled = false;
+  cv.width = PX.LW * PX.K; cv.height = PX.LH * PX.K;
+  PX.cx0 = fl((PX.LW - cw) / 2); PX.cy0 = fl((PX.LH - (ch - PX.TOP)) * 0.6) - PX.TOP;
+  const w = PX.LW * PX.K / dpr, h = PX.LH * PX.K / dpr;
+  return { w, h, left: fl((cssW - w) / 2), top: fl((cssH - h) / 2) };
+}
+// one drawImage per frame; zoom = { x, y, s } is a short camera punch toward buffer point (x, y)
+function pixBlit(ctx, zoom) {
+  const K = PX.K, W = PX.LW * K, H = PX.LH * K;
+  TXT.last = TXT.seen; TXT.seen = []; // the strings of the frame just drawn (window.__game.texts())
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+  if (!zoom || zoom.s <= 1.001) { ctx.drawImage(PX.B, 0, 0, W, H); return; }
+  ctx.drawImage(PX.B, Math.round(zoom.x * K * (1 - zoom.s)), Math.round(zoom.y * K * (1 - zoom.s)), Math.round(W * zoom.s), Math.round(H * zoom.s));
+}
+// place a transparent DOM hit area over something drawn at buffer rect (x, y, w, h)
+function place(el, x, y, w, h) {
+  const u = PX.K / PX.dpr;
+  el.style.left = x * u + "px"; el.style.top = y * u + "px"; el.style.width = w * u + "px"; el.style.height = h * u + "px";
+}
 
-  // ---- storage (optional: the game works when it throws) ----
-  // Keys are namespaced: itch.io serves every HTML game from one shared origin.
-  const KEY = 'claude-weekly.orbit-hopper.';
-  const store = {
-    get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} }
+// ---------- primitives: integer rectangles and spans from the palette ----------
+function R(x, y, w, h, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
+function P(x, y, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), 1, 1); }
+function line(x0, y0, x1, y1, c, t) { // Bresenham with a square brush of t px
+  t = t || 1; x0 = fl(x0); y0 = fl(y0); x1 = fl(x1); y1 = fl(y1);
+  const o = t >> 1, dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let e = dx + dy; g.fillStyle = PAL[c];
+  for (let i = 0; i < 400; i++) {
+    g.fillRect(x0 - o, y0 - o, t, t);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * e;
+    if (e2 >= dy) { e += dy; x0 += sx; }
+    if (e2 <= dx) { e += dx; y0 += sy; }
+  }
+}
+const hw = (rx, ry, dy) => Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / (ry + 0.5)) ** 2)));
+// filled ellipse / ring from horizontal spans; part: 0 all, -1 top half, 1 bottom half
+function ell(cx, cy, rx, ry, c, part) {
+  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
+  for (let dy = -ry; dy <= ry; dy++) { if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue; const w = hw(rx, ry, dy); g.fillRect(cx - w, cy + dy, 2 * w + 1, 1); }
+}
+function ring(cx, cy, rxo, ryo, rxi, ryi, c, part) {
+  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
+  for (let dy = -ryo; dy <= ryo; dy++) {
+    if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue;
+    const wo = hw(rxo, ryo, dy);
+    if (Math.abs(dy) > ryi) { g.fillRect(cx - wo, cy + dy, 2 * wo + 1, 1); continue; }
+    const wi = hw(rxi, ryi, dy);
+    g.fillRect(cx - wo, cy + dy, wo - wi, 1); g.fillRect(cx + wi + 1, cy + dy, wo - wi, 1);
+  }
+}
+// scanline polygon fill; c may be a function (y) -> palette letter or pattern for per-row cel shading
+function poly(pts, c) {
+  let y0 = 1e9, y1 = -1e9;
+  for (const p of pts) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  for (let y = fl(y0); y <= Math.ceil(y1); y++) {
+    const sy = y + 0.5, xs = [];
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) xs.push(a.x + (sy - a.y) / (b.y - a.y) * (b.x - a.x)); }
+    xs.sort((a, b) => a - b);
+    for (let j = 0; j + 1 < xs.length; j += 2) {
+      const xa = Math.round(xs[j]), xb = Math.round(xs[j + 1]);
+      if (xb > xa) { const v = typeof c === "function" ? c(y) : c; g.fillStyle = typeof v === "string" ? PAL[v] : v; g.fillRect(xa, y, xb - xa, 1); }
+    }
+  }
+}
+// ordered dithering: 4x4 Bayer tile of two palette colours (null = transparent), level 0..16 = share of b
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], patCache = {};
+function pat(a, b, lv) {
+  const key = a + b + lv;
+  if (!patCache[key]) {
+    const t = newCanvas(4, 4), x = t.getContext("2d");
+    for (let i = 0; i < 16; i++) { const col = BAYER[i] < lv ? b : a; if (col) { x.fillStyle = PAL[col]; x.fillRect(i % 4, i >> 2, 1, 1); } }
+    patCache[key] = g.createPattern(t, "repeat");
+  }
+  return patCache[key];
+}
+function D(x, y, w, h, a, b, lv) { g.fillStyle = pat(a, b, lv); g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
+function band(x, y, w, h, a, b) { for (let i = 0; i < h; i++) D(x, y + i, w, 1, a, b, Math.round((i + 0.5) / h * 16)); }
+
+// ---------- sprites: char maps ("..kffk..", one palette letter per pixel) baked once into canvases ----------
+function mk(rows, swap) {
+  const c = newCanvas(Math.max(...rows.map(r => r.length)), rows.length), x = c.getContext("2d");
+  rows.forEach((r, y) => { for (let i = 0; i < r.length; i++) { let ch = r[i]; if (swap && swap[ch]) ch = swap[ch]; if (ch !== "." && PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, y, 1, 1); } } });
+  return c;
+}
+function spr(c, x, y, flip, sx, sy) {
+  sx = sx || 1; sy = sy || sx;
+  const w = c.width * sx, h = c.height * sy;
+  if (!flip) { g.drawImage(c, fl(x), fl(y), w, h); return; }
+  g.save(); g.translate(fl(x) + w, fl(y)); g.scale(-1, 1); g.drawImage(c, 0, 0, w, h); g.restore();
+}
+function outline(src, col) { // 1 px border (8 neighbours) in one colour
+  const c = newCanvas(src.width + 2, src.height + 2), x = c.getContext("2d"), m = newCanvas(src.width, src.height), mx = m.getContext("2d");
+  mx.drawImage(src, 0, 0); mx.globalCompositeOperation = "source-in"; mx.fillStyle = PAL[col]; mx.fillRect(0, 0, m.width, m.height);
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) x.drawImage(m, i, j);
+  x.drawImage(src, 1, 1);
+  return c;
+}
+
+// ---------- type: 3x5 bitmap font (Latin, digits) and crisp system text (Japanese, >= 12 buffer px) ----------
+// each glyph: width digit, then one base-32 digit per row (bit = pixel, MSB left); a 6th row is a descender
+const GL = {
+  "0": "375557", "1": "326227", "2": "371747", "3": "371317", "4": "355711", "5": "374717", "6": "374757", "7": "371222", "8": "375757", "9": "375717",
+  A: "325755", B: "365656", C: "334443", D: "365556", E: "374647", F: "374644", G: "334553", H: "355755", I: "372227", J: "311152",
+  K: "355655", L: "344447", M: "5hrlhh", N: "49db99", O: "325552", P: "365644", Q: "325563", R: "365655", S: "334216", T: "372222",
+  U: "355557", V: "355552", W: "5hhlla", X: "355255", Y: "355222", Z: "371247",
+  a: "303553", b: "346556", c: "303443", d: "313553", e: "303563", f: "312722", g: "3035316", h: "346555", i: "110111", j: "2101112",
+  k: "345665", l: "222221", m: "50qlll", n: "306555", o: "302552", p: "3065644", q: "3035311", r: "305644", s: "303616", t: "327221",
+  u: "305553", v: "305552", w: "50hlla", x: "305225", y: "3055316", z: "307127",
+  " ": "200000", "!": "111101", "?": "361202", ".": "100001", ",": "100011", ":": "101010", "/": "311244", "-": "300700", "+": "302720",
+  "×": "305250", "=": "307070", "'": "111000", "~": "405a00", "♩": "311176", "(": "212221", ")": "221112", ">": "342124"
+};
+// TXT: every string drawn this frame and the smallest text size drawn so far, in buffer px of font size
+// (a 5 px Latin cap reads like a 7 px font). tools/qa.mjs turns it into CSS px with view().K / view().dpr.
+const TXT = { min: Infinity, seen: [], last: [] };
+function noteText(str, em) { if (em < TXT.min) TXT.min = em; if (TXT.seen.length < 300) TXT.seen.push(String(str)); }
+const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",Meiryo,system-ui,sans-serif';
+const isLatin = s => [...s].every(ch => GL[ch]);
+const tcache = new Map();
+function cached(key, make) { let c = tcache.get(key); if (!c) { if (tcache.size > 600) tcache.clear(); c = make(); tcache.set(key, c); } return c; }
+function bitmapText(str, col) {
+  const gl = [...str].map(ch => GL[ch]); let w = -1;
+  gl.forEach(q => { w += +q[0] + 1; });
+  const c = newCanvas(w, 6), x = c.getContext("2d"); x.fillStyle = PAL[col];
+  let px = 0;
+  gl.forEach(q => { const gw = +q[0]; for (let r = 1; r < q.length; r++) { const bits = parseInt(q[r], 32); for (let i = 0; i < gw; i++) if (bits & (1 << (gw - 1 - i))) x.fillRect(px + i, r - 1, 1, 1); } px += gw + 1; });
+  return c;
+}
+const tcv = newCanvas(8, 8), tctx = tcv.getContext("2d", { willReadFrequently: true });
+function crispText(str, px, col) { // never below 12 buffer px: smaller kanji turn to mush
+  px = Math.max(12, px);
+  const thr = px <= 12 ? 120 : 100, font = `${px <= 12 ? 700 : 800} ${px}px ${FONT}`;
+  tctx.font = font;
+  const w = Math.ceil(tctx.measureText(str).width) + 2, h = Math.ceil(px * 1.4) + 2;
+  tcv.width = w; tcv.height = h;
+  tctx.font = font; tctx.textBaseline = "middle"; tctx.fillStyle = "#000"; tctx.fillText(str, 1, Math.round(h / 2));
+  const d = tctx.getImageData(0, 0, w, h).data;
+  let top = h, bot = -1;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) { top = Math.min(top, j); bot = j; }
+  if (bot < 0) return newCanvas(1, 1);
+  const c = newCanvas(w, bot - top + 1), x = c.getContext("2d"); x.fillStyle = PAL[col];
+  for (let j = top; j <= bot; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) x.fillRect(i, j - top, 1, 1);
+  return c;
+}
+// o: { c colour, o outline colour, sc integer scale for Latin (baked before the 1 px outline), px size for other text, a "l"|"c"|"r" }
+function textCanvas(str, o) {
+  const col = o.c || "k", ol = o.o || "", lat = isLatin(str), sc = lat ? (o.sc || 1) : 1, px = Math.max(12, o.px || 12);
+  return cached(str + "|" + col + ol + (lat ? "x" + sc : px), () => {
+    let c = lat ? bitmapText(str, col) : crispText(str, px, col);
+    if (sc > 1) { const s = newCanvas(c.width * sc, c.height * sc), x = s.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, s.width, s.height); c = s; }
+    return ol ? outline(c, ol) : c;
+  });
+}
+function txt(str, x, y, o) {
+  o = o || {}; let maxW = 0;
+  String(str).split("\n").forEach((ln, i) => {
+    const c = textCanvas(ln, o), w = c.width, lx = o.a === "l" ? x : o.a === "r" ? x - w : x - fl(w / 2);
+    noteText(ln, isLatin(ln) ? 5 * (o.sc || 1) / 0.7 : Math.max(12, o.px || 12));
+    spr(c, lx, y + i * (o.lh || (c.height + 2))); maxW = Math.max(maxW, w);
+  });
+  return maxW;
+}
+const textW = (str, o) => textCanvas(str, o || {}).width;
+// big chunky Latin: glyphs scaled by sx/sy with a 1 px (unscaled) outline, optional second ring ol2
+function bigText(str, x, y, sc, fill, ol, sx, sy, ol2) {
+  sx = sx || sc; sy = sy || sc;
+  const f = textCanvas(str, { c: fill }), w = f.width * sx, x0 = fl(x - w / 2);
+  noteText(str, (isLatin(str) ? 5 / 0.7 : 12) * Math.min(sx, sy));
+  if (ol2) { const o = textCanvas(str, { c: ol2 }); for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const m = Math.abs(dx) + Math.abs(dy); if (m > 1 && m < 4) spr(o, x0 + dx, y + dy, false, sx, sy); } }
+  if (ol) { const o = textCanvas(str, { c: ol }); for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) spr(o, x0 + dx, y + dy, false, sx, sy); }
+  spr(f, x0, y, false, sx, sy);
+  return w;
+}
+// signature words from hand-placed glyph grids ("#" = ink). They are pictures, so call noteText(word, 12)
+// when you draw one; the tools read the demo title label from TXT.
+// kanaArt: bold 2 px strokes, ring outline(s), glyph cut points for stamping the word in letter by letter.
+function kanaArt(table, str, fill, ol, ol2) {
+  return cached("K" + str + fill + ol + (ol2 || ""), () => {
+    const gl = [...str].map(ch => table[ch]), gw = q => Math.max(...q.map(r => r.length));
+    const c = newCanvas(gl.reduce((a, q) => a + gw(q) + 1, 0), 15), x = c.getContext("2d"), cuts = [];
+    x.fillStyle = PAL[fill]; let px = 0;
+    gl.forEach((q, i) => {
+      const jy = [1, 0, 2, 0, 1, 2][i % 6]; // hand-lettered bounce: each glyph sits at its own height
+      q.forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j, y + jy, 1, 1); });
+      px += gw(q) + 1; cuts.push(px + 1);
+    });
+    const o = ol2 ? outline(outline(c, ol), ol2) : outline(c, ol); o.cuts = ol2 ? cuts.map(v => v + 1) : cuts;
+    return o;
+  });
+}
+// inkArt: 1 px strokes inked twice 1 px apart (flat brush) over a carved shadow; draw it at x2
+function inkArt(table, str, jys, ink, shade) {
+  return cached("I" + str + (ink || "k") + (shade || "D"), () => {
+    const chars = [...str], gw = ch => Math.max(...table[ch].map(r => r.length)), H = Math.max(...chars.map(ch => table[ch].length)) + 3;
+    const c = newCanvas(chars.reduce((a, ch) => a + gw(ch) + 1, 0) + 2, H), x = c.getContext("2d");
+    const pass = (col, ox, oy) => { x.fillStyle = PAL[col]; let px = 0; chars.forEach((ch, i) => { const jy = jys ? jys[i % jys.length] : 0; table[ch].forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j + ox, y + jy + oy, 1, 1); }); px += gw(ch) + 1; }); };
+    pass(shade || "D", 1, 1); pass(shade || "D", 2, 1); pass(ink || "k", 0, 0); pass(ink || "k", 1, 0);
+    return c;
+  });
+}
+
+// ---------- UI pieces: wooden tags, noren windows, small wood icons ----------
+function nr(x, y, w, h, c, n) { R(x + n, y, w - 2 * n, h, c); R(x, y + n, w, h - 2 * n, c); if (n > 1) R(x + 1, y + 1, w - 2, h - 2, c); }
+function tag(x, y, w, h, label, big) { // cut corners on the left, a string hole, an uneven right edge
+  for (let j = 0; j < h; j++) {
+    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j)), rj = (j % 5 === 2) ? 1 : 0;
+    R(x + cut, y + j, w - cut - rj, 1, "k");
+    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - cut - rj - 2, 1, j === 1 ? "q" : j >= h - 3 ? "O" : "o");
+  }
+  R(x + 4, y + fl(h / 2) - 1, 2, 2, "D");
+  const tc = textCanvas(label, { c: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
+  spr(tc, fl(x + 4 + (w - 4 - tc.width) / 2), fl(y + (h - tc.height) / 2));
+}
+function win(x, y, w, h) { // indigo window: notched corners, ink / cream / ink border, dithered cloth
+  nr(x, y, w, h, "k", 2); nr(x + 1, y + 1, w - 2, h - 2, "q", 2); nr(x + 2, y + 2, w - 4, h - 4, "k", 1);
+  R(x + 3, y + 3, w - 6, h - 6, "n"); D(x + 3, y + 3, w - 6, h - 6, "n", "b", 1);
+}
+function icon(x, y, w, h, kind) { // low-contrast dark-wood system icon
+  nr(x, y, w, h, "k", 1); R(x + 1, y + 1, w - 2, h - 2, "D"); R(x + 1, y + h - 2, w - 2, 1, "k");
+  const cx = x + fl(w / 2), cy = y + fl(h / 2) - 1;
+  if (kind === "pause") { R(cx - 3, cy - 3, 2, 7, "o"); R(cx + 1, cy - 3, 2, 7, "o"); }
+  else if (kind === "sound" || kind === "mute") {
+    R(cx - 5, cy - 1, 2, 3, "o"); R(cx - 3, cy - 2, 1, 5, "o"); R(cx - 2, cy - 3, 1, 7, "o");
+    if (kind === "sound") { R(cx, cy - 1, 1, 3, "o"); R(cx + 2, cy - 2, 1, 5, "o"); R(cx + 4, cy - 3, 1, 7, "o"); }
+    else for (let i = 0; i < 5; i++) { P(cx + i, cy - 2 + i, "h"); P(cx + 4 - i, cy - 2 + i, "h"); }
+  } else { const t = textCanvas(kind, { c: "o", px: 12, sc: 2 }); noteText(kind, isLatin(kind) ? 10 / 0.7 : 12); spr(t, cx - fl(t.width / 2), cy - fl(t.height / 2) + 1); }
+}
+const POINTER = [".kkkk", "kwwwwkkkkkk", "kwwwwwwwwwwk", "kwwwwkkkkkk", "kwwwwwwk", "kwwwwkk", "kwwwwwwk", ".kkkkkk"];
+const FINGER = ["..kk.....", ".kwwk....", ".kwwk....", ".kwwkkk..", ".kwwkwwkk", "kkwwkwwkwk", "kwkwwwwwwk", "kwwwwwwwwk", ".kwwwwwwk.", "..kwwwwk..", "...kkkk..."];
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch, particle pool ----------
+const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
+function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
+function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
+function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms }; }
+function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
+const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
+function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
+function shakeOffset(maxPx) {
+  const a = Juice.trauma * Juice.trauma * maxPx * (Juice.reduce ? 0.3 : 1);
+  return a < 0.5 ? { x: 0, y: 0 } : { x: Math.round(vnoise(Juice.t * 24) * a), y: Math.round(vnoise(Juice.t * 24 + 57.3) * a) };
+}
+function zoomNow(now) {
+  const z = Juice.zoom; if (!z) return null;
+  const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
+  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
+}
+const PARTS = [], PART_MAX = 300;
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "w", kind: "dot", s: 1 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random() * 0.8), life = 0.45 + Math.random() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 300, life, max: life }, o)); } }
+function partsStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i]; p.life -= dt;
+    if (p.life <= 0) { PARTS.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.kind === "steam") p.vx += Math.sin(p.life * 4 + p.y) * 6 * dt;
+  }
+}
+function partsDraw(now) {
+  for (const p of PARTS) {
+    const a = p.life / p.max, x = fl(p.x), y = fl(p.y);
+    if (p.kind === "steam") { const s = a > 0.6 ? 3 : a > 0.3 ? 2 : 1; if (a > 0.45) R(x, y, s, s, p.col); else D(x, y, s, s, null, p.col, 8); }
+    else if (p.kind === "spr") { if (a > 0.3 || (fl(now / 50) & 1)) spr(p.spr, x - (p.spr.width >> 1), y - (p.spr.height >> 1)); }
+    else if (p.kind === "drop") R(x, y, 1, 2, p.col);
+    else R(x, y, p.s, p.s, p.col);
+  }
+}
+
+// ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
+const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
+function auBuild(ctx) {
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
+  const master = ctx.createGain(); master.gain.value = AU.muted ? 0 : AU.vol;
+  master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
+  const sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
+  const music = ctx.createGain(); music.gain.value = 0.75; music.connect(master);
+  // one shared echo send, so dry voices sit in a small room: music fully, sfx at a lower level
+  const echo = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), sendS = ctx.createGain();
+  echo.delayTime.value = 0.15; fb.gain.value = 0.3; wet.gain.value = 0.16; sendS.gain.value = 0.45;
+  echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(sendS); sendS.connect(echo);
+  const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
+}
+function auInit() {
+  if (AU.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  try { auBuild(new AC()); } catch (e) { AU.ctx = null; return false; }
+  try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) { /* not supported */ }
+  return true;
+}
+function auResume() { if (AU.ctx && AU.ctx.state !== "running" && AU.ctx.state !== "closed") AU.ctx.resume().catch(() => {}); }
+const audioOn = () => !!AU.ctx && (AU.ctx.state === "running" || AU.offline);
+// unlock on every kind of first gesture (iOS needs touchend/click), and again whenever the tab comes back
+function auUnlock() {
+  const f = () => { if (auInit()) auResume(); };
+  for (const t of ["pointerdown", "pointerup", "touchend", "click", "keydown", "mousedown"]) document.addEventListener(t, f, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
+}
+function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
+function auDuck(node, depth, back) { if (!node || !AU.ctx) return; const t = AU.ctx.currentTime, gn = node.gain; gn.cancelScheduledValues(t); gn.setTargetAtTime(depth, t, 0.02); gn.setTargetAtTime(1, t + 0.2, back || 0.4); }
+const cents = c => Math.pow(2, c / 1200);
+function vary(c, gv) { return { f: cents((Math.random() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (Math.random() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// one oscillator voice: starts and ends at silence, always has stop() scheduled; square/saw go through a lowpass
+function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
+  const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
+  gn.gain.value = 0; // silent until its envelope starts (the default gain of 1 would leak a click)
+  o.type = type; o.frequency.setValueAtTime(f0, when);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
+  gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + (att || 0.004)); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  let head = o;
+  if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
+  head.connect(gn); gn.connect(dest || AU.sfx);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
+  const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
+  gn.gain.value = 0;
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when);
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
+  f.Q.value = q; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + 0.002); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
+  s.start(when, Math.random() * 0.5); s.stop(when + dur + 0.05);
+}
+// Fire some voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak
+// sample (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+async function auPeak(fire, sec) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
+  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
+  auBuild(oc); AU.master.gain.value = AU.vol; AU.offline = true;
+  try { fire(); } finally { Object.assign(AU, keep); AU.offline = false; }
+  const d = (await oc.startRendering()).getChannelData(0); let p = 0;
+  for (let i = 0; i < d.length; i++) p = Math.max(p, Math.abs(d[i]));
+  return p;
+}
+
+// ---------- tap hint: an animated finger at the input target, per player (not per run) ----------
+// shown until the first success; comes back after two quick deaths (< 5 s); works when storage is blocked
+function makeHint(store, key) {
+  let quick = 0;
+  return {
+    active: false,
+    begin() { this.active = !store.get(key, false) || quick >= 2; },
+    success() { if (this.active) { this.active = false; quick = 0; store.set(key, true); } },
+    runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
   };
-  let best = Math.max(0, Math.floor(Number(store.get('best', 0)) || 0));
-  let soundOn = store.get('sound', true) !== false;
-  let lang = store.get('lang', null);
-  if (lang !== 'ja' && lang !== 'en') lang = /^ja\b/i.test(navigator.language || 'ja') ? 'ja' : 'en';
-  let S = STRINGS[lang];
+}
+let FINGER_C = null;
+function drawTapHint(x, y, k) { // (x, y) = fingertip; k = 0 when a tap would succeed now .. 1 far from it
+  if (!FINGER_C) FINGER_C = mk(FINGER);
+  const lift = Math.round(clamp(k, 0, 1) * 6);
+  if (k < 0.3) { const r = 4 + fl((0.3 - k) * 40); ring(x, y + 1, r + 1, fl(r / 2) + 1, r, fl(r / 2), "w"); }
+  spr(FINGER_C, x - 3, y - FINGER_C.height - lift + 1);
+}
+// ==== PIXEL KIT END ====
 
-  function applyLang() {
-    S = STRINGS[lang];
-    document.documentElement.lang = lang;
-    document.title = S.docTitle;
-    for (const el of document.querySelectorAll('[data-s]')) el.textContent = S[el.dataset.s];
-    $('logo').innerHTML = S.logo;
-    $('how').innerHTML = S.how;
-    $('brand').innerHTML = S.brand;
-    $('lang').textContent = S.lang;
-    $('pauseBtn').setAttribute('aria-label', S.pauseLabel);
-    cv.setAttribute('aria-label', S.canvas);
-    updateHud();
+// =====================================================================================================
+// Orbit Hopper (w01), pixel remaster. GAME-SPECIFIC sections are this game's own; KEEP sections follow the
+// template's required systems (QUALITY_BAR.md, CLAUDE.md section 4). window.__game at the end is the test
+// contract (tools/README.md). Every rule is a function of the run clock, so a run replays the same at any
+// frame rate: orbits, drifting planets and rocks are closed-form, and a flight is solved once at launch.
+// =====================================================================================================
+
+// ---------- GAME-SPECIFIC: identity, scene size, tuning ----------
+const SLUG = "orbit-hopper", WEEK = 1;
+const CW = 180, CH = 320;          // the core 9:16 scene in buffer px (STYLE.md 2)
+const DEMO = /[?&]demo=1(&|$)/.test(location.search);
+const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+Juice.reduce = reduceMotion;
+const store = makeStore(SLUG + "-");
+const TAU = Math.PI * 2;
+
+const XMIN = DEMO ? 22 : 4, XMAX = CW - XMIN; // the nebula walls of the star chart (a 5 px fog band): a star that flies into them is lost (the clip's field is narrower)
+const DEMO_CORE = [144, 256];      // a portrait ?demo=1 frames a tighter core: a 720 px wide buffer gets 5x pixels (not 4x), 1080 px gets 7x
+const DEAD_IN = DEMO ? 38 : 16;    // a lost star is shown at least this far inside the core scene, never cut by the frame (the clip keeps it off the Shorts button rail)
+const FREEZE = 450;                // ms failure freeze in play (the cause stays on screen)
+const RESCUE_GAP = 7;              // a miss this close to a ring is caught by a buddy moon, if one is left
+const MAX_MOONS = 2;
+const FLY_MAX = 1.25, FH = 1 / 240; // longest flight (s) and the flight solver step (s)
+const SLOW_D = 36, SLOW_K = 0.3;   // a big leap runs its last 36 px at 30 % speed: rule-level slow motion
+const EDGE_REL = 0.8;              // a catch beyond 80 % of the ring radius is a graze (near miss that made it)
+const HOLD = { perfect: 60, giant: 130, other: 0 }; // ms the star sits still after a catch (real hitstop, in the rules)
+const REACT = 220;                 // AI reaction after a catch (ms)
+const AI_GRID = 6;                 // ms between launch moments the AI considers
+const BUF = 110;                   // an early tap is kept this long and fires at the first moment that lands (bar 1.5.6)
+const HOLD_FIRST = 700, HOLD_EARLY = 350, HOLD_HOPS = 5; // the opening is kinder: the very first tap is kept up to 700 ms, then 350 ms fading to BUF by hop 5
+const LATE = 90, LATE_HOPS = 10;  // a tap this soon after the last landing moment still launches at that moment (bar 1.5.6): below hop 10, below hop 20 in the first 3 runs
+const AIM_LEAD = 200;              // the lit aim cue opens this early, so a person who reacts to it (150 ms or more) lands; the early-tap buffer keeps the tap
+const AI_JITTER = 55;              // autoplay timing error (ms, one sigma) so it plays like a person
+const DEMO_SKIP = 12;              // the demo starts at the 12 s row of the phase table
+// Phase table as data (bar 1.5.2): 0-8 s big slow planets only; 8-25 s denser, small fast planets;
+// 25-45 s the twist (drifting planets, flip planets); 45-65 s rocks; 65 s speed up; 85 s guarded planets (two rocks
+// circle just outside the ring); 105 s smaller rings and PERFECT cores; then a steady climb, never a plateau.
+const PHASES = [
+  { at: 0, R: 30, w: 2.1, speed: 200, gap: [72, 82], decay: 3.0, perf: 0.36, fast: 0, drift: 0, rev: 0, rock: 0 },
+  { at: 8, R: 27, w: 2.4, speed: 215, gap: [78, 90], decay: 2.6, perf: 0.34, fast: 0.3, drift: 0, rev: 0, rock: 0 },
+  { at: 25, R: 26, w: 2.55, speed: 225, gap: [80, 94], decay: 2.4, perf: 0.32, fast: 0.2, drift: 0.3, rev: 0.2, rock: 0 },
+  { at: 45, R: 25, w: 2.75, speed: 235, gap: [84, 96], decay: 2.2, perf: 0.3, fast: 0.2, drift: 0.3, rev: 0.25, rock: 0.35 },
+  { at: 65, R: 24, w: 2.95, speed: 245, gap: [86, 98], decay: 2.0, perf: 0.29, fast: 0.25, drift: 0.35, rev: 0.25, rock: 0.5, note: "n_faster" },
+  { at: 85, R: 24, w: 3.05, speed: 250, gap: [86, 98], decay: 1.9, perf: 0.28, fast: 0.25, drift: 0.3, rev: 0.25, rock: 0.4, guard: 0.45, note: "n_guard" },
+  { at: 105, R: 22, w: 3.35, speed: 255, gap: [88, 100], decay: 1.7, perf: 0.22, fast: 0.3, drift: 0.3, rev: 0.3, rock: 0.45, guard: 0.5, note: "n_tight" }
+];
+function phaseAt(sec) {
+  let i = 0; for (let j = 0; j < PHASES.length; j++) if (sec >= PHASES[j].at) i = j;
+  const p = PHASES[i], ex = Math.max(0, sec - 105);
+  return Object.assign({ i, guard: 0 }, p, ex ? { w: p.w + ex * 0.045, R: Math.max(17, Math.round(p.R - ex * 0.1)), decay: Math.max(1.2, p.decay - ex * 0.02), speed: p.speed + ex * 0.5 } : {});
+}
+// the big leap (the peak moment): a ringed giant far above, at planet 5 and then every 10th in play
+const GIANT_AT = { play: i => i % 10 === 5, demo: i => i === 2 || (i > 20 && i % 9 === 6), attract: i => i % 8 === 7 };
+// ?demo=1 is a 30 s clip that holds the whole story, scripted by elapsed run time (never by luck):
+// a PERFECT at once, the big leap (planet 2, landed inside 3 s), a graze, a moon rescue, then a near miss that ends the run.
+const DEMO_SCRIPT = [{ at: 0, act: "perfect" }, { at: 3800, act: "edge" }, { at: 11500, act: "rescue" }, { at: 19000, act: "fail" }];
+const RANKS = [0, 30, 80, 160, 280, 450];
+const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
+
+// ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
+const STRINGS = {
+  ja: {
+    title: "軌道ホッパー", titleEn: "ORBIT HOPPER", start: "スタート", how1: "タップで とびだす!", how2: "つぎの 軌道に のろう",
+    lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
+    perfect: "ど真ん中!", bigPerf: "大ジャンプ ど真ん中!", nice: "ナイス", edge: "ギリギリ!", rescue: "たすかった!", leap: "大ジャンプ!", close: "おしい!", miss: "ミス", crash: "ドカン!", fall: "おちる!",
+    skip: "とばし! ×2", flip: "くるっと はんてん", subMiss: "あと {n}",
+    n_fast: "小さな星は はやい", n_drift: "星が うごきだした", n_rev: "はんてん星に 注意", n_rock: "いんせきに 注意", n_faster: "スピードアップ", n_guard: "いんせきが まわる星", n_tight: "ど真ん中が せまい",
+    n_leap: "大ジャンプ!", n_best: "ベストの空を こえた!", n_moon: "おとも星 +1", n_lost: "{n}コンボ 消えた", combo: "コンボ",
+    causeMiss: "あと {n} で とどかず", causeFar: "宇宙の かなたへ", causeAway: "むきが ちがった", causeOut: "星雲に のまれた", causeRock: "いんせきに ぶつかった", causeDecay: "軌道が つきた",
+    advEarly: "もう少し 早く", advLate: "もう少し おそく", advDecay: "はやめに タップ",
+    over: "おしまい", rPerf: "ど真ん中", rCombo: "最大コンボ", rHops: "とんだ星", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
+    g_score: "{n}点を めざそう", g_combo: "{n}コンボに ちょうせん", g_perf: "ど真ん中を {n}回 ねらう", g_leap: "大ジャンプで ど真ん中", g_hops: "{n}個目の 星まで とぼう",
+    ranks: ["ほしくず", "ながれ星", "すいせい", "わくせい", "たいよう", "ぎんが"], best: "ベスト", space: "スペース", credit: "Made with Claude"
+  },
+  en: {
+    title: "ORBIT HOPPER", titleEn: "ORBIT HOPPER", start: "START", how1: "TAP TO FLING OFF!", how2: "CATCH THE NEXT ORBIT",
+    lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
+    perfect: "PERFECT!", bigPerf: "BIG LEAP PERFECT!", nice: "NICE", edge: "CLOSE ONE!", rescue: "SAVED!", leap: "BIG LEAP!", close: "SO CLOSE!", miss: "MISS", crash: "CRASH!", fall: "FALLING!",
+    skip: "SKIP! x2", flip: "SPIN FLIPPED", subMiss: "{n} SHORT",
+    n_fast: "SMALL ONES SPIN FAST", n_drift: "PLANETS DRIFT!", n_rev: "FLIP PLANETS AHEAD", n_rock: "WATCH THE ROCKS", n_faster: "SPEED UP", n_guard: "GUARDED PLANETS", n_tight: "SMALLER CORES",
+    n_leap: "BIG LEAP!", n_best: "PAST YOUR BEST!", n_moon: "MOON +1", n_lost: "{n} COMBO LOST", combo: "COMBO",
+    causeMiss: "{n} PX SHORT", causeFar: "LOST IN SPACE", causeAway: "WRONG WAY", causeOut: "SWALLOWED BY FOG", causeRock: "HIT A ROCK", causeDecay: "ORBIT RAN OUT",
+    advEarly: "A BIT EARLIER", advLate: "A BIT LATER", advDecay: "TAP SOONER",
+    over: "GAME OVER", rPerf: "PERFECT", rCombo: "MAX COMBO", rHops: "PLANETS", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
+    g_score: "AIM FOR {n}", g_combo: "TRY A {n} COMBO", g_perf: "GO FOR {n} PERFECTS", g_leap: "PERFECT A BIG LEAP", g_hops: "FLY TO PLANET {n}",
+    ranks: ["STARDUST", "METEOR", "COMET", "PLANET", "SUN", "GALAXY"], best: "BEST", space: "SPACE", credit: "Made with Claude"
   }
+};
+let lang = store.get("lang", null);
+if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
+const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; return n == null || typeof v !== "string" ? v : v.replace("{n}", n); };
 
-  // ---- canvas sizing ----
-  // W/H are world units. Small or short play areas zoom the world out so it is always at least 360x640,
-  // otherwise the next planet could sit above the top edge on a landscape laptop.
-  let W = 400, H = 640, DPR = 1;
-  function resize() {
-    const r = cv.getBoundingClientRect();
-    const cssW = Math.max(1, r.width), cssH = Math.max(1, r.height);
-    const zoom = Math.min(1, cssW / 360, cssH / 640);
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = cssW / zoom; H = cssH / zoom;
-    cv.width = Math.round(cssW * DPR); cv.height = Math.round(cssH * DPR);
-    ctx.setTransform(DPR * zoom, 0, 0, DPR * zoom, 0, 0);
-    if (planets) for (const p of planets) p.x = Math.max(p.R + 8, Math.min(W - p.R - 8, p.x));
-  }
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const wrap = $("wrap"), cv = $("cv"), uiEl = $("ui"), ctx = cv.getContext("2d");
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
 
-  // ---- sound (WebAudio synthesis, unlocked by the first gesture) ----
-  // Created/resumed on activation-triggering events only (pointerup, touchend, click, keydown, mousedown):
-  // a touch pointerdown does not count, and a context made there stays suspended on phones.
-  let actx = null;
-  function unlockAudio() {
-    if (document.hidden) return;
-    try {
-      if (!actx) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        actx = new AC();
+// ---------- GAME-SPECIFIC: sprites (char maps, one palette letter per pixel) ----------
+// the hopper: a little star with a red scarf; poses (normal, squash on a catch, stretch on launch), not tweens
+const STAR_N = [ // 15 x 15: big enough to read the face and the poses on a phone and in a Shorts clip
+  ".......k.......", "......kqk......", "......kqk......", ".....kqyyk.....", ".....kyyyk.....",
+  "kkkkkkyyykkkkkk", "kqqqqyyyyyyyyYk", ".kqyyyyyyyyyYk.", "..kyyyyyyyyyk..", "...kyyyyyyyk...",
+  "..kyyyyyyyyYk..", "..kyyyYkkyyyYk.", ".kyyyYk..kyyYk.", ".kyyYk....kyYYk", "kkkkk......kkkk"
+];
+const STAR_SQ = [
+  "........k........", ".......kqk.......", "......kyyyk......", "kkkkkkkyyykkkkkkk", "kqqqqyyyyyyyyyyYk", ".kqyyyyyyyyyyyYk.",
+  "..kyyyyyyyyyyyk..", "..kyyyyyyyyyyYk..", ".kyyyyYkkkyyyyYk.", "kyyyYkk...kkyyYYk", "kkkkk.......kkkkk"
+];
+const STAR_ST = [
+  ".....k.....", "....kqk....", "....kqk....", "....kyk....", "...kyyyk...", "...kyyyk...", "kkkkyyykkkk", "kqqyyyyyyYk", ".kqyyyyyyk.",
+  ".kyyyyyyyk.", "..kyyyyyk..", "..kyyyyyk..", "..kyyyyYk..", "..kyykyYk..", ".kyyk.kyYk.", ".kyk...kYk.", ".kk.....kk."
+];
+const FACES = { // 7x3, drawn over the body
+  normal: ["..k.k..", "..k.k..", "......."], blink: [".......", ".kk.kk.", "......."], focus: [".k...k.", "..k.k..", "......."],
+  fly: ["..k.k..", "..k.k..", "...k..."], happy: ["..k.k..", ".k.k.k.", "...h..."], scared: [".kk.kk.", ".kk.kk.", "...k..."],
+  dead: ["k.k.k.k", ".k...k.", "k.k.k.k"]
+};
+const FACE_AT = { n: [4, 7], sq: [5, 5], st: [2, 8] };
+const SWEAT = [".k.", "ksk", "ksk", ".k."];
+const MOON = [".kkk.", "kwffk", "kfffk", "kfFfk", ".kkk."];
+const ROCKS = [
+  ["...kkkk..", "..kccek..", ".kceeeek.", "kceeeeeek", "keeekeeek", "keeeeekk.", ".kkeeek..", "...kkk..."],
+  ["..kkk....", ".kccekk..", "kceeeeek.", "keeekeeek", ".keeeeeek", ".kkeeeek.", "...kkkk.."]
+];
+const BURST = [
+  "......q......", "......q......", "..q...w...q..", "...w..w..w...", "....w.w.w....", ".....www.....",
+  "qqwwwwqwwwwqq", ".....www.....", "....w.w.w....", "...w..w..w...", "..q...w...q..", "......q......", "......q......"
+];
+const SPARK = ["..k..", ".kqk.", "kqyqk", ".kqk.", "..k.."];
+const MEDAL = ["rR...Rr", ".rR.Rr.", "..kkk..", ".kyqyk.", "kyyqyyk", "kyyyyYk", ".kyyYk.", "..kkk.."]; // a gold medal on a red ribbon (the rank), drawn at 2x
+// title lettering: hand-placed 1 px glyphs (drawn through kanaArt with two rings, at 2x)
+const KURUMA = ["..#...", "#####.", "..#...", "#####.", "#.#.#.", "#####.", "#.#.#.", "#####.", "..#...", "######", "..#...", "..#...", "..#..."];
+const KYUU = ["..#....", "..#....", "#####..", "..#.#..", "..#.#..", "..#.#..", ".#..#..", ".#..#..", ".#..#..", "#...#..", "#...#.#", "....#.#", "....###"];
+const GLYPH = {
+  "軌": KURUMA.map((r, i) => r + "." + KYUU[i]),
+  "道": ["#....#...#...", ".#....#.#....", "....#########", "##......#....", ".#...#######.", ".#...#.....#.", ".#...#######.",
+    ".#...#.....#.", ".#...#######.", ".#...#.....#.", ".##..#######.", "#..#.........", "....#########"],
+  "ホ": [".....#.....", ".....#.....", "###########", ".....#.....", ".....#.....", "..#..#..#..", "..#..#..#..",
+    ".#...#...#.", ".#...#...#.", "#....#....#", ".....#.....", "...###.....", "..........."],
+  "ッ": [".........", ".........", ".........", ".........", ".........", "#...#..#.", ".#...#.#.", ".#...#.#.",
+    "......#..", "......#..", ".....#...", "...##....", "........."],
+  "パ": ["..........#..", "...#..#..#.#.", "...#..#...#..", "...#...#.....", "..#....#.....", "..#.....#....", "..#.....#....",
+    ".#.......#...", ".#.......#...", "#.........#..", "#..........#.", "............#", "............."],
+  "ー": ["...........", "...........", "...........", "...........", "...........", "...........", "###########",
+    "...........", "...........", "...........", "...........", "...........", "..........."]
+};
+const SP = {};
+function buildSprites() {
+  SP.n = mk(STAR_N); SP.sq = mk(STAR_SQ); SP.st = mk(STAR_ST);
+  SP.face = {}; for (const k in FACES) SP.face[k] = mk(FACES[k]);
+  SP.sweat = mk(SWEAT); SP.moon = mk(MOON); SP.rock = ROCKS.map(r => mk(r)); SP.rockHot = ROCKS.map(r => mk(r, { e: "r", c: "h" }));
+  SP.burst = mk(BURST); SP.burstL = mk(BURST, { w: "l", q: "y" }); SP.spark = mk(SPARK); SP.sparkL = mk(SPARK, { q: "w", y: "l" });
+  SP.pointer = mk(POINTER); SP.medal = mk(MEDAL);
+}
+// planets: baked once per style and size (cel shading in rows, bands or craters, a ring for the giant)
+const PSTY = { // dark, base, light, detail, kind
+  teal: ["b", "g", "l", "s", "band"], lilac: ["F", "f", "w", "F", "band"], coral: ["R", "h", "q", "r", "crater"], sand: ["O", "o", "q", "D", "crater"],
+  fire: ["R", "r", "a", "y", "crater"], swirl: ["n", "F", "f", "l", "swirl"], gold: ["Y", "y", "q", "a", "band"]
+};
+const STY_N = ["teal", "lilac", "coral", "sand"];
+function planetSprite(style, r, ringed) {
+  return cached("PL" + style + r + (ringed ? "r" : ""), () => {
+    const rw = ringed ? Math.round(r * 1.85) : 0, ry = Math.max(2, Math.round(r * 0.42));
+    const W = 2 * Math.max(r + 2, rw + 2) + 1, H = 2 * r + 5, c = newCanvas(W, H), keep = g;
+    g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+    const cx = fl(W / 2), cy = fl(H / 2), [d, b, l, x, kind] = PSTY[style];
+    if (ringed) { ring(cx, cy, rw + 1, ry + 1, rw - 3, ry - 2, "k", -1); ring(cx, cy, rw, ry, rw - 2, ry - 1, "c", -1); }
+    ell(cx, cy, r + 1, r + 1, "k"); ell(cx, cy, r, r, d); ell(cx - 1, cy - 1, r - 1, r - 1, b);
+    if (kind === "band") for (const f of [-0.5, 0.05, 0.45]) { const dy = Math.round(f * r), w = hw(r - 2, r - 2, dy + 1); if (w > 0) R(cx - 1 - w, cy + dy, 2 * w, f > 0 ? 2 : 1, x); }
+    if (kind === "crater") { // round pits with a dark rim on top and a lit lip below; small planets get two well spaced pits
+      const pits = r < 10 ? [[0.32, 0.12, 0.24], [-0.38, 0.42, 0.14]] : [[0.3, 0.2, 0.24], [-0.38, 0.38, 0.15], [0.08, -0.5, 0.13]];
+      for (const [fx0, fy0, sz] of pits) {
+        const cr = Math.max(1, Math.round(r * sz)), px0 = cx + Math.round(fx0 * r), py0 = cy + Math.round(fy0 * r);
+        if (cr < 2) { P(px0, py0, x); P(px0 + 1, py0, x); P(px0, py0 + 1, l); continue; }
+        ell(px0, py0, cr, cr, x); ell(px0, py0 + 1, cr - 1, cr - 1, b); R(px0 - cr + 1, py0 + cr, 2 * cr - 1, 1, l);
       }
-      if (actx.state !== 'running') { const pr = actx.resume(); if (pr && pr.catch) pr.catch(() => {}); }
-    } catch (e) {}
-  }
-  function suspendAudio() {
-    try { if (actx && actx.state === 'running') { const pr = actx.suspend(); if (pr && pr.catch) pr.catch(() => {}); } } catch (e) {}
-  }
-  function beep(freq, dur = 0.08, type = 'sine', vol = 0.12, slide = 0, delay = 0) {
-    if (!soundOn || !actx || actx.state !== 'running' || mode === 'attract') return;
-    try {
-      const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
-      o.type = type; o.frequency.setValueAtTime(freq, t);
-      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
-    } catch (e) {}
-  }
-  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
-  const note = n => 440 * Math.pow(2, n / 12);
-  const sfx = {
-    launch: () => beep(520, 0.1, 'triangle', 0.08, 300),
-    capture: hops => beep(note(PENTA[hops % PENTA.length] - 5), 0.14, 'sine', 0.16),
-    perfect: c => {
-      const base = PENTA[Math.min(c, PENTA.length - 3)];
-      beep(note(base), 0.1, 'square', 0.05); beep(note(base + 7), 0.16, 'square', 0.045, 0, 0.07);
-      if (c >= 3) beep(note(base + 12), 0.2, 'triangle', 0.07, 0, 0.14);
-    },
-    milestone: () => [0, 4, 7, 12].forEach((n, i) => beep(note(n + 3), 0.18, 'triangle', 0.08, 0, i * 0.07)),
-    die: () => { beep(300, 0.55, 'sawtooth', 0.07, -240); beep(90, 0.4, 'sine', 0.18, -40); },
-    newBest: () => [0, 4, 7, 12, 16].forEach((n, i) => beep(note(n), 0.22, 'triangle', 0.08, 0, i * 0.09))
+    }
+    if (kind === "swirl") for (let i = 0; i < r * 5; i++) { const a = i * 0.32, rr = i / (r * 5) * (r - 2); P(cx + Math.round(Math.cos(a) * rr), cy + Math.round(Math.sin(a) * rr * 0.8), x); }
+    ell(cx - Math.round(r * 0.4), cy - Math.round(r * 0.45), Math.max(1, Math.round(r * 0.22)), Math.max(1, Math.round(r * 0.15)), l);
+    if (ringed) { ring(cx, cy, rw + 1, ry + 1, rw - 3, ry - 2, "k", 1); ring(cx, cy, rw, ry, rw - 2, ry - 1, "c", 1); R(cx - rw + 2, cy + 1, 2 * rw - 3, 1, "e"); }
+    g = keep;
+    return c;
+  });
+}
+
+// ---------- state ----------
+// title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
+let overPress = false, state = "title", run = null, fx = null, runCount = 0, manual = false, simT = 0, pfPlaying = false, overShownAt = 0, autopilot = false;
+const T = () => manual ? simT : performance.now();
+const hint = makeHint(store, "hintDone");
+const isTitle = () => state === "title" || state === "title-dying";
+const isDying = () => state === "dying" || state === "demo-dying" || state === "title-dying";
+const isOver = () => state === "over" || state === "demo-over";
+function pfStart() { if (!pfPlaying) { pfPlaying = true; platform("gameplayStart"); } }
+function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop"); } }
+const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its one-shot sounds to itself
+const vTop = () => Math.max(0, -PX.cy0);          // first visible core row (landscape crops the top)
+const vBot = () => PX.LH - PX.cy0;                // first core row below the screen
+const bay = () => PX.cx0 >= 100;                  // landscape: the score satellite floats in the side bay
+const freezeMs = () => run && run.mode === "play" ? FREEZE : 650;
+
+function newFx() { return { vt: 0, launchT: -1e9, landT: -1e9, happyT: -1e9, tapT: -1e9, call: null, note: null, scoreT: -1e9, disp: 0, lost: null, impact: null, trail: [], camY: 0, warnT: 0, rescue: null, recoil: null, pauseT: 0, fellT: 0, multT: -1e9 }; }
+function newRun(mode, seed) {
+  run = {
+    mode, ai: mode !== "play", seed, rnd: seeded(seed), rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
+    offset: T(), holdAt: null, pauseClock: 0, startAt: T(),
+    score: 0, hops: 0, combo: 0, maxCombo: 0, perfects: 0, streak: 0, skips: 0, leaps: 0, leapPerf: 0, rescues: 0, moons: mode === "demo" ? 0 : 1,
+    planets: [], rocks: [], seen: {}, phase: -1, orbit: null, fly: null, plan: null, queued: null, dead: null, result: null,
+    bestHop: mode === "play" ? (Number(store.get("bestHop", 0)) || 0) : 0, crossed: false, tut: 0,
+    script: mode === "demo" ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : []
   };
+  fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
+  const runs = Number(store.get("runs", 0)) || 0;
+  run.tut = mode === "play" ? (runs === 0 ? 1 : runs === 1 ? 0.6 : 0) : 0;
+  run.aid = mode === "play" && runs < 5;
+  run.firstRuns = runs < 3; // runs 3 to 5 still light the next ring for the first two hops
+  genUpTo(4, 0);
+  // warm start: the star begins `lead` ms before its best launch angle, so the first tap pays off at once
+  const p0 = run.planets[0], lead = mode === "play" ? (runCount > 1 ? 560 : 900) : 380;
+  const o = { p: p0, a0: 0, dir: 1, t0: 0, hold: 0, w: p0.w, tEnd: 1e9, speed: p0.speed };
+  let bestA = 0, bestRel = 9;
+  for (let i = 0; i < 90; i++) { o.a0 = i / 90 * TAU; const f = solveFlight(o, 0, 0); if (f.kind === "cap" && f.q.idx === 1 && f.rel < bestRel) { bestRel = f.rel; bestA = o.a0; } }
+  startOrbit(p0, bestA - p0.w * lead / 1000, 1, 0, 0);
+  fx.camY = camTarget();
+  if (mode === "play") hint.begin();
+  musicLevel(mode === "attract" ? "title" : "play");
+}
+const clockNow = () => {
+  if (!run) return 0;
+  if (isDying() || isOver()) return run.dead.c;
+  if (state === "paused") return run.pauseClock;
+  return (run.holdAt == null ? T() : run.holdAt) - run.offset;
+};
 
-  // ---- background stars (parallax) ----
-  const stars = Array.from({ length: 140 }, () => ({
-    x: Math.random(), y: Math.random() * 3000, z: 0.15 + Math.random() * 0.6, tw: Math.random() * TAU
-  }));
-
-  // ---- difficulty: everything ramps with hops (planets reached), capped so launch windows stay >= ~0.11 s ----
-  const RAMP_HOPS = 45;
-  const level = hops => Math.min(hops, RAMP_HOPS) / RAMP_HOPS;
-  const orbitRadius = L => 78 - L * 24;                       // capture radius 78 -> 54
-  const angularSpeed = (L, R) => (2.1 + L * 0.9) * Math.pow(65 / R, 0.25);
-  const launchSpeed = L => 560 + L * 160;
-  const gapFor = L => 195 + Math.random() * 70 + L * 45;
-  const PERFECT_ZONE = 0.4;                                   // fraction of R counted as PERFECT
-
-  // ---- game state ----
-  // mode: 'attract' (AI behind the title), 'demo' (?demo=1 AI), 'play' (human)
-  // state: 'orbit' | 'fly' | 'dead' | 'over'
-  let mode = DEMO ? 'demo' : 'attract';
-  let state = 'orbit', paused = false;
-  let planets = null, player, camY, score, hops, combo, perfects, particles, popups, rings;
-  let shake, flash, hitStop, flyTime, orbitTime, trail, time = 0, deadTimer, squash, tipShown;
-  let ai = { style: 'perfect' };
-
-  function makePlanet(y, i) {
-    const L = level(i);
-    const R = orbitRadius(L);
-    const margin = R + 12;
-    const driftChance = i > 8 ? Math.min(0.15 + L * 0.4, 0.5) : 0;
-    return {
-      x: margin + Math.random() * Math.max(10, W - margin * 2),
-      y, R,
-      body: R * (0.36 + Math.random() * 0.1),
-      color: COLORS[i % COLORS.length],
-      ring: Math.random() < 0.35,
-      drift: Math.random() < driftChance ? (Math.random() < 0.5 ? -1 : 1) * (25 + L * 30) : 0,
-      idx: i, pulse: 0
-    };
-  }
-
-  // Shared by the real step and the AI's prediction so they agree exactly.
-  function driftStep(p, dt) {
-    if (!p.drift) return;
-    p.x += p.drift * dt;
-    const lo = p.R + 8, hi = W - p.R - 8;
-    if (p.x < lo || p.x > hi) { p.drift *= -1; p.x = Math.max(lo, Math.min(hi, p.x)); }
-  }
-
-  function reset() {
-    planets = [];
-    let y = H * 0.72;
-    for (let i = 0; i < 8; i++) {
-      const p = makePlanet(y, i);
-      if (i === 0) { p.x = W / 2; p.drift = 0; }
-      planets.push(p);
-      y -= gapFor(level(i + 1));
-    }
-    const p0 = planets[0];
-    player = { x: 0, y: 0, vx: 0, vy: 0, planet: p0, from: p0, a: Math.PI, dir: 1, w: angularSpeed(0, p0.R) };
-    camY = p0.y - H * 0.68;
-    score = 0; hops = 0; combo = 0; perfects = 0; particles = []; popups = []; rings = [];
-    shake = 0; flash = 0; hitStop = 0; flyTime = 0; orbitTime = 0; trail = []; deadTimer = 0; squash = 0;
-    state = 'orbit'; tipShown = true;
-    pickAiStyle();
-    placeOnOrbit();
-    if (mode !== 'play') warmStart();
-    updateHud();
-  }
-
-  // Demo/attract: begin just before a good launch angle so a recorded clip opens with action, not a 3 s wait.
-  function warmStart() {
-    const start = player.a;
-    let bestA = null, bestRel = Infinity;
-    for (let i = 0; i < 72; i++) {
-      player.a = start + player.dir * i * TAU / 72;
-      const hit = predictLaunch(0);
-      if (hit && hit.rel < bestRel) { bestRel = hit.rel; bestA = player.a; }
-    }
-    player.a = bestA == null ? start : bestA - player.dir * player.w * 0.6;
-    placeOnOrbit();
-  }
-
-  function placeOnOrbit() {
-    const p = player.planet;
-    player.x = p.x + Math.cos(player.a) * p.R;
-    player.y = p.y + Math.sin(player.a) * p.R;
-  }
-
-  function spawnAhead() {
-    let top = planets[planets.length - 1];
-    while (top.y - camY > -H * 1.2) {
-      const p = makePlanet(top.y - gapFor(level(top.idx + 1)), top.idx + 1);
-      planets.push(p); top = p;
-    }
-    planets = planets.filter(p => p.y - camY < H + 200 || p === player.planet || p === player.from);
-  }
-
-  function launch() {
-    if (state !== 'orbit' || paused) return;
-    const speed = launchSpeed(level(hops));
-    const tx = -Math.sin(player.a) * player.dir, ty = Math.cos(player.a) * player.dir;
-    player.vx = tx * speed; player.vy = ty * speed;
-    player.from = player.planet;
-    state = 'fly'; flyTime = 0;
-    burst(player.x, player.y, '#fff8e6', 6, 120);
-    sfx.launch();
-    updateHud();
-  }
-
-  function capture(p) {
-    const dx = player.x - p.x, dy = player.y - p.y;
-    const v = Math.hypot(player.vx, player.vy);
-    // perpendicular distance of the flight line from the planet's centre
-    const impact = Math.abs(dx * player.vy - dy * player.vx) / v;
-    const perfect = impact < p.R * PERFECT_ZONE;
-    player.planet = p;
-    player.a = Math.atan2(dy, dx);
-    player.dir = (dx * player.vy - dy * player.vx) > 0 ? 1 : -1;
-    hops = p.idx;
-    player.w = angularSpeed(level(hops), p.R);
-    state = 'orbit'; orbitTime = 0;
-    score += 1;
-    if (perfect) { combo++; perfects++; score += combo; } else combo = 0;
-    p.pulse = 1; squash = 1;
-    rings.push({ x: p.x, y: p.y, r: p.R, t: 0, color: perfect ? '#ffd36e' : p.color });
-    burst(player.x, player.y, perfect ? '#ffd36e' : p.color, perfect ? 28 : 12);
-    popups.push({ x: player.x, y: player.y, text: perfect ? (combo > 1 ? `PERFECT ×${combo}` : 'PERFECT') : '+1', t: 0, perfect });
-    if (perfect) {
-      hitStop = 0.07; flash = 0.18;
-      if (!reduceMotion) shake = Math.max(shake, 3 + Math.min(combo, 6));
-      sfx.perfect(combo);
-      if (combo % 5 === 0) { sfx.milestone(); burst(player.x, player.y, '#7fe3c4', 36, 320); if (mode === 'play') platform('happytime'); }
-    } else sfx.capture(hops);
-    if (hops >= 2) tipShown = false;
-    pickAiStyle();
-    updateHud();
-  }
-
-  function die() {
-    state = 'dead'; deadTimer = mode === 'play' ? 0.65 : 1.0;
-    if (!reduceMotion) shake = 14;
-    flash = 0.25;
-    burst(player.x, player.y, '#ff7a6b', 34, 280);
-    sfx.die();
-    if (mode === 'play') platform('gameplayStop');
-    updateHud();
-  }
-
-  let overAt = 0;
-  function showGameOver() {
-    state = 'over'; overAt = performance.now();
-    const isBest = score > best;
-    if (isBest) { best = score; store.set('best', best); }
-    $('final').textContent = score;
-    $('resultSub').innerHTML = S.resultSub(best, perfects);
-    $('newbest').hidden = !isBest || score === 0;
-    $('over').hidden = false; $('pauseBtn').hidden = true; $('tip').hidden = true;
-    $('retry').focus({ preventScroll: true });
-    if (isBest && score > 0) { sfx.newBest(); platform('happytime'); }
-    platform('gameOver', score);
-    updateHud();
-  }
-
-  function burst(x, y, color, n, power = 240) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * TAU, s = 60 + Math.random() * power;
-      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.45 + Math.random() * 0.5, t: 0, color, size: 2 + Math.random() * 3 });
+// ---------- GAME-SPECIFIC: world. Planets, rocks and orbits are closed-form functions of the run clock (ms) ----------
+function genUpTo(n, c) { while (run.planets.length <= n) genPlanet(run.planets.length, c); }
+function genPlanet(i, c) {
+  const rnd = run.rnd, ph = phaseAt(c / 1000 + (run.mode === "demo" ? DEMO_SKIP : 0));
+  if (ph.i > run.phase) { if (run.phase >= 0 && ph.note) notice(ph.note); run.phase = ph.i; }
+  const prev = run.planets[i - 1], giant = i > 0 && GIANT_AT[run.mode](i);
+  let type = "norm";
+  const v = rnd();
+  if (giant) type = "giant";
+  else if (i >= 3 && !(prev && prev.giant)) { let acc = 0; for (const k of ["fast", "drift", "rev"]) { acc += ph[k]; if (v < acc) { type = k; break; } } }
+  let rr = giant ? 40 : type === "fast" ? Math.round(ph.R * 0.78) : ph.R;
+  if (i === 1) rr = Math.max(rr, 33); // the first catches are generous
+  else if (i <= 3 && !giant) rr = Math.max(rr, 31);
+  const br = giant ? 14 : Math.max(5, Math.round(rr * (type === "fast" ? 0.32 : 0.27)));
+  const A = type === "drift" ? 12 + Math.round(rnd() * 10) : 0;
+  let x = 90, y = 0;
+  if (i > 0) {
+    const gap = giant ? 124 : Math.max(prev.R + rr + 12, i === 1 ? 70 : ph.gap[0] + rnd() * (ph.gap[1] - ph.gap[0]));
+    y = Math.round(prev.y - gap);
+    if (!giant) {
+      const lo = XMIN + 1 + rr + A, hi = XMAX - 1 - rr - A;
+      for (let k = 0; k < 6; k++) { x = lo + rnd() * (hi - lo); const dx = Math.abs(x - prev.x0); if (dx > 14 && dx < 92) break; }
+      x = Math.round(x);
     }
   }
-
-  function updateHud() {
-    if (!player) return;
-    $('score').textContent = score;
-    $('best').textContent = best;
-    $('combo').textContent = combo > 1 ? S.combo(combo) : '';
-    $('mute').textContent = soundOn ? S.soundOn : S.soundOff;
-    $('mute').setAttribute('aria-pressed', String(!soundOn));
-    $('tip').hidden = !(tipShown && mode !== 'attract' && state === 'orbit' && !paused);
+  let style = giant ? "gold" : type === "fast" ? "fire" : type === "rev" ? "swirl" : STY_N[fl(rnd() * 4)];
+  if (prev && style === prev.style && type === "norm") style = STY_N[(STY_N.indexOf(style) + 1) % 4];
+  const p = {
+    idx: i, x0: x, y, R: rr, br, type, giant, rev: type === "rev", A, om: A ? 1.1 + rnd() * 0.5 : 0, ph: A ? rnd() * TAU : 0,
+    w: ph.w * Math.pow(27 / rr, 0.3) * (type === "fast" ? 1.3 : 1) * (giant ? 0.7 : 1), revs: giant ? 3 : ph.decay + (i === 0 ? 1.2 : 0),
+    perf: giant ? 0.28 : ph.perf, speed: ph.speed, style
+  };
+  run.planets.push(p);
+  if (i >= 3 && !giant && !prev.giant && rnd() < ph.rock) {
+    run.rocks.push({ y: Math.round((prev.y + y) / 2 + (rnd() - 0.5) * 8), x0: rnd() * 260, vx: (rnd() < 0.5 ? -1 : 1) * (14 + rnd() * 12), r: 4, v: rnd() < 0.5 ? 0 : 1 });
+    if (!run.seen.rock) { run.seen.rock = 1; notice("n_rock"); }
   }
+  if (ph.guard && i >= 3 && !giant && rnd() < ph.guard) { // a guarded planet: two rocks circle just outside its ring, so the way in has to be timed
+    const gw = (rnd() < 0.5 ? -1 : 1) * (1.2 + rnd() * 0.5), g0 = rnd() * TAU;
+    for (let k = 0; k < 2; k++) run.rocks.push({ orb: p, rad: p.R + 12, w: gw, ph: g0 + k * Math.PI, y: p.y, r: 4, v: k });
+  }
+  if (type !== "norm" && type !== "giant" && !run.seen[type]) { run.seen[type] = 1; notice({ fast: "n_fast", drift: "n_drift", rev: "n_rev" }[type]); }
+}
+const centerAt = (p, c) => ({ x: p.A ? p.x0 + p.A * Math.sin(p.om * c / 1000 + p.ph) : p.x0, y: p.y });
+function rockAt(rk, c) {
+  if (rk.orb) { const cc = centerAt(rk.orb, c), a = rk.ph + rk.w * c / 1000; return { x: cc.x + Math.cos(a) * rk.rad, y: cc.y + Math.sin(a) * rk.rad }; }
+  return { x: -40 + ((((rk.x0 + rk.vx * c / 1000) % 260) + 260) % 260), y: rk.y };
+}
+const orbitA = (o, c) => o.a0 + o.dir * o.w * Math.max(0, c - o.t0 - o.hold) / 1000;
+function orbitPos(o, c) { const a = orbitA(o, c), cc = centerAt(o.p, c); return { x: cc.x + Math.cos(a) * o.p.R, y: cc.y + Math.sin(a) * o.p.R, a }; }
+const revsLeft = (o, c) => Math.max(0, (o.tEnd - Math.max(c, o.t0 + o.hold)) / 1000 * o.w / TAU);
+const charging = () => !!(run && run.orbit && !run.fly && !run.dead && run.planets[run.orbit.p.idx + 1] && run.planets[run.orbit.p.idx + 1].giant);
+const multOf = n => n >= 20 ? 4 : n >= 12 ? 3 : n >= 5 ? 2 : 1;
 
-  // ---- AI: predicts the flight for a launch t0 seconds from now and fires at the best moment ----
-  function predictLaunch(t0) {
-    const cur = player.planet;
-    const sims = [];
-    for (const p of planets) if (p.idx >= cur.idx && p.idx <= cur.idx + 3) {
-      const s = { x: p.x, y: p.y, R: p.R, drift: p.drift, idx: p.idx, ref: p };
-      driftStep(s, t0);
-      sims.push(s);
+function startOrbit(p, a, dir, t0, hold) {
+  run.orbit = { p, a0: a, dir, t0, hold, w: p.w, speed: p.speed, tEnd: t0 + hold + p.revs * TAU / p.w * 1000 };
+  run.fly = null; run.plan = null; run.queued = null; fx.warnN = 0;
+  const nx = run.planets[p.idx + 1];
+  if (nx && nx.giant && run.mode !== "attract") { notice("n_leap"); if (loud()) sfx.charge(); }
+  if (run.ai || autopilot) planAI(run.orbit, t0 + hold + REACT + (run.mode === "attract" ? 120 : 0));
+}
+
+// The flight is a straight line at the launch speed, solved once at launch on a fixed 1/240 s grid against
+// the next planets (which may drift) and the rocks. The real flight replays this solution, so what happens is
+// fixed the moment the player taps, whatever the frame rate. A big leap slows its last 36 px (slow motion).
+function solveFlight(o, tl, moons, noBounce) {
+  const p = o.p, a = orbitA(o, tl), c0 = centerAt(p, tl);
+  const x0 = c0.x + Math.cos(a) * p.R, y0 = c0.y + Math.sin(a) * p.R;
+  const ux = -Math.sin(a) * o.dir, uy = Math.cos(a) * o.dir, spd = o.speed;
+  const nx = run.planets[p.idx + 1], leap = !!(nx && nx.giant);
+  const cs = [];
+  for (let i = p.idx + 1; i <= p.idx + (leap ? 1 : 3) && i < run.planets.length; i++) cs.push({ q: run.planets[i], g: 1e9, gt: 0, mx: 0, my: 0, cx: 0, cy: 0, last: 1e9 });
+  const rocks = leap ? [] : run.rocks.filter(r => r.orb !== p && r.y < p.y + 20 && r.y > p.y - 330);
+  // first two runs only: a buddy moon kicks a star back off the fog wall once (the flight folds at the wall)
+  const canBounce = !noBounce && moons > 0 && !leap && run.mode === "play" && run.tut > 0;
+  let r = null, tau = 0, x = x0, y = y0, bw = null, ex = ux;
+  const fold = v => bw == null ? v : bw === XMIN ? (v < XMIN ? 2 * XMIN - v : v) : (v > XMAX ? 2 * XMAX - v : v);
+  for (let k = 1; ; k++) {
+    tau = k * FH;
+    if (tau > FLY_MAX) { tau = FLY_MAX; r = { kind: "miss" }; break; }
+    const t = tl + tau * 1000;
+    x = x0 + ux * spd * tau; y = y0 + uy * spd * tau;
+    if (canBounce && bw == null && (x < XMIN || x > XMAX)) { bw = x < XMIN ? XMIN : XMAX; ex = -ux; for (const cd of cs) cd.last = 1e9; }
+    x = fold(x);
+    if (x < XMIN || x > XMAX) { r = { kind: "out" }; break; }
+    let inc = true;
+    for (const cd of cs) {
+      const cc = centerAt(cd.q, t), dx = x - cc.x, dy = y - cc.y, d = Math.hypot(dx, dy);
+      if (d < cd.q.R) { r = { kind: "cap", q: cd.q, rel: Math.abs(dx * uy - dy * ex) / cd.q.R, cx: cc.x, cy: cc.y }; break; }
+      if (d - cd.q.R < cd.g) { cd.g = d - cd.q.R; cd.gt = tau; cd.mx = x; cd.my = y; cd.cx = cc.x; cd.cy = cc.y; }
+      if (d < cd.last && (cd.q.idx <= p.idx + 2 || d - cd.q.R < 30)) inc = false; // a far planet only matters once the star nears it
+      cd.last = d;
     }
-    const c = sims.find(s => s.ref === cur);
-    if (!c) return null;
-    const a = player.a + player.dir * player.w * t0;
-    let x = c.x + Math.cos(a) * c.R, y = c.y + Math.sin(a) * c.R;
-    const speed = launchSpeed(level(hops));
-    const vx = -Math.sin(a) * player.dir * speed, vy = Math.cos(a) * player.dir * speed;
-    let cam = camY;
-    const camTarget = cur.y - H * 0.68, h = 1 / 60;
-    for (let t = 0; t < 2.2; t += h) {
-      for (const s of sims) driftStep(s, h);
-      x += vx * h; y += vy * h;
-      for (const s of sims) {
-        if (s.idx <= cur.idx) continue;
-        const dx = x - s.x, dy = y - s.y;
-        if (Math.hypot(dx, dy) < s.R) return { planet: s.ref, rel: Math.abs(dx * vy - dy * vx) / speed / s.R };
+    if (r) break;
+    for (const rk of rocks) { const rp = rockAt(rk, t); if (Math.hypot(x - rp.x, y - rp.y) < rk.r + 1.5) { r = { kind: "rock", rock: rk }; break; } }
+    if (r) break;
+    if (k > 2 && inc && cs.every(cd => tau - cd.gt >= 0.08 || (cd.q.idx > p.idx + 2 && cd.g > 30))) { r = { kind: "miss", away: tau < 0.2 }; break; }
+  }
+  // a fling that points away from every planet still flies for a moment, so the player sees it go wrong
+  if (r.away) for (let k = Math.round(tau / FH) + 1; k * FH <= 0.42; k++) {
+    const nx2 = x0 + ux * spd * k * FH; if (nx2 < XMIN || nx2 > XMAX) break;
+    tau = k * FH; x = nx2; y = y0 + uy * spd * tau;
+  }
+  // the nearest ring among the next two planets: the honest "N short" marker, and the moon rescue
+  let near = null;
+  for (const cd of cs) if (cd.q.idx <= p.idx + 2 && cd.g < 1e8 && (!near || cd.g < near.g)) near = cd;
+  if (near) {
+    const d = Math.hypot(near.mx - near.cx, near.my - near.cy) || 1;
+    near = { q: near.q, g: near.g, gt: near.gt, mx: near.mx, my: near.my, cx: near.cx, cy: near.cy, rx: near.cx + (near.mx - near.cx) / d * near.q.R, ry: near.cy + (near.my - near.cy) / d * near.q.R };
+  }
+  // a near miss ends right after the closest pass, so the missed ring is still in view (the outcome is already known)
+  if (r.kind === "miss" && !r.away && near && near.g <= 30 && near.gt + (DEMO ? 0.06 : 0.1) < tau) { tau = near.gt + (DEMO ? 0.06 : 0.1); x = fold(x0 + ux * spd * tau); y = y0 + uy * spd * tau; }
+  if (bw != null && r.kind !== "cap") return solveFlight(o, tl, moons, true); // the moon only kicks a star back when that saves it
+  const sB = bw == null ? 1e9 : Math.abs((bw - x0) / (ux || 1e-9)), bounced = sB < spd * tau;
+  Object.assign(r, { tl, x0, y0, ux, uy, spd, tau, x, y, near, leap, o, bw: bounced ? bw : null, lux: bounced ? -ux : ux });
+  if (r.kind === "miss" && near && near.g <= (run.mode === "play" && run.tut > 0 ? 2 * RESCUE_GAP : RESCUE_GAP) && moons - (bounced ? 1 : 0) > 0) Object.assign(r, { kind: "rescue", q: near.q, tau: near.gt, x: near.rx, y: near.ry, cx: near.cx, cy: near.cy, rel: 1 });
+  // slow motion by rule: a big leap runs its last 36 px slowly; a failed fling slows over its last third (at most 30 px)
+  const s = spd * r.tau, lost = r.kind === "miss" || r.kind === "out";
+  r.sEnd = s; r.slowK = leap ? SLOW_K : 0.45;
+  r.s1 = leap ? Math.max(0, s - SLOW_D) : lost ? Math.max(s * 0.67, s - 30) : s;
+  r.tEnd = tl + (r.s1 / spd + (s - r.s1) / (spd * r.slowK)) * 1000;
+  r.bT = bounced ? tl + (sB <= r.s1 ? sB / spd : r.s1 / spd + (sB - r.s1) / (spd * r.slowK)) * 1000 : null;
+  return r;
+}
+function flyPos(f, c) {
+  const dt = Math.max(0, (c - f.tl) / 1000), t1 = f.s1 / f.spd;
+  const s = Math.min(f.sEnd, dt <= t1 ? f.spd * dt : f.s1 + (dt - t1) * f.spd * f.slowK);
+  let x = f.x0 + f.ux * s;
+  if (f.bw != null && (f.bw === XMIN ? x < XMIN : x > XMAX)) x = 2 * f.bw - x; // folded off the fog wall by a moon
+  return { x, y: f.y0 + f.uy * s };
+}
+function starPos(c) {
+  if (run.dead) return { x: run.dead.x, y: run.dead.y };
+  if (run.fly) { const q = flyPos(run.fly, c); if (run.fly.kind === "out") q.x = clamp(q.x, DEAD_IN, CW - DEAD_IN); return q; } // the fog grabs a star at its rim
+  return orbitPos(run.orbit, c);
+}
+
+// ---------- GAME-SPECIFIC: rules ----------
+function launch(tl, pre) { // the core verb: let go of the orbit now
+  const o = run.orbit;
+  if (!o || run.fly || run.dead || tl >= o.tEnd) return false;
+  const f = pre || solveFlight(o, tl, run.moons);
+  run.fly = f; run.plan = null; run.queued = null;
+  fx.launchT = fx.vt; fx.recoil = { p: o.p, t: fx.vt };
+  for (let i = 0; i < 5; i++) addPart({ x: f.x0, y: f.y0, vx: -f.ux * (30 + Math.random() * 40) + (Math.random() - 0.5) * 30, vy: -f.uy * (30 + Math.random() * 40) + (Math.random() - 0.5) * 30, life: 0.3, max: 0.3, col: "q" });
+  if (loud()) sfx.launch(f.leap);
+  if (f.leap) musicLevel("leap");
+  return true;
+}
+// the same input window for everyone (player, autoplay and the demo AI): a launch that would not land
+// waits for the first moment within bufferMs() that does, so a slightly early tap still counts
+function bufferMs() { // the player's early-tap window, shrinking by hops (not by clock); a kept tap is drawn as a lit ring
+  if (run.mode !== "play") return BUF;
+  return run.hops === 0 ? HOLD_FIRST : Math.round(lerp(HOLD_EARLY, BUF, clamp((run.hops - 1) / (HOLD_HOPS - 1), 0, 1)));
+}
+function landingAfter(o, tc, ms) {
+  const end = Math.min(tc + ms, o.tEnd - 1); let first = null;
+  for (let t = Math.ceil(tc / AI_GRID) * AI_GRID; t <= end; t += AI_GRID) {
+    if (t <= tc) continue;
+    const f = solveFlight(o, t, 0);
+    if (f.kind !== "cap") { if (first != null) break; continue; }
+    if (first == null) first = t;
+    if (f.rel < EDGE_REL) return t; // inside the window, not on its rim
+  }
+  return first;
+}
+function landingBefore(o, tc, ms) { // the latest moment in the last `ms` that would have landed
+  for (let t = tc - AI_GRID; t >= tc - ms && t >= o.t0 + o.hold; t -= AI_GRID) if (solveFlight(o, t, 0).kind === "cap") return t;
+  return null;
+}
+function tryLaunch(tc) {
+  const o = run.orbit;
+  if (!o || run.fly || run.dead || run.queued || tc >= o.tEnd) return false;
+  if (solveFlight(o, tc, 0).kind !== "cap") {
+    // a slightly late tap: the star lets go from where it was at the last landing moment, starting now (it steps back a few px)
+    const lt = run.mode === "play" && run.hops < (run.firstRuns ? 2 * LATE_HOPS : LATE_HOPS) ? landingBefore(o, tc, LATE) : null;
+    if (lt != null) { const o2 = Object.assign({}, o, { a0: orbitA(o, lt), t0: tc, hold: 0 }), f = solveFlight(o2, tc, run.moons); if (f.kind === "cap" || f.kind === "rescue") return launch(tc, f); }
+    const t = landingAfter(o, tc, bufferMs()); if (t != null) { run.queued = { at: t, from: tc }; if (loud()) sfx.windup(); return true; }
+  }
+  return launch(tc);
+}
+function bounceFx(f) { // first two runs: the moon spends itself to kick the star back off the fog
+  f.bounced = true; run.moons = Math.max(0, run.moons - 1); run.rescues++;
+  const y = Math.round(f.y0 + f.uy * Math.abs((f.bw - f.x0) / f.ux)), x = f.bw === XMIN ? XMIN + 3 : XMAX - 3;
+  call("rescue", "f", T(), "", true); fx.rescue = null;
+  burst(x, y, 12, 70, { col: "f", s: 2 }); burst(x, y, 3, 90, { kind: "spr", spr: SP.sparkL });
+  nudge(f.bw === XMIN ? -1 : 1, 0, 1, 160, T());
+  if (loud()) sfx.rescue();
+}
+function arrive(f) {
+  if (f.kind === "cap" || f.kind === "rescue") land(f);
+  else if (f.kind === "home") homeLand(f);
+  else if (f.kind === "out" && run.mode === "play" && run.tut > 0 && run.moons > 0 && !f.leap) sendHome(f);
+  else kill(f.kind, f.tEnd, f);
+}
+// first two runs: a fling into the fog is pulled back to the orbit it left by the buddy moon (the moon is spent, the combo ends)
+function sendHome(f) {
+  const p = f.o.p, tc = f.tEnd, from = flyPos(f, tc); from.x = clamp(from.x, DEAD_IN, CW - DEAD_IN);
+  const cc = centerAt(p, tc), a = Math.atan2(from.y - cc.y, from.x - cc.x), tx = cc.x + Math.cos(a) * p.R, ty = cc.y + Math.sin(a) * p.R;
+  const dx = tx - from.x, dy = ty - from.y, L = Math.max(1, Math.hypot(dx, dy)), spd = 170;
+  run.moons--; run.rescues++; run.combo = 0; run.streak = 0;
+  run.fly = { kind: "home", tl: tc, x0: from.x, y0: from.y, ux: dx / L, uy: dy / L, lux: dx / L, spd, sEnd: L, s1: L, slowK: 1, tEnd: tc + L / spd * 1000, o: { p }, q: p, dir: f.o.dir, bw: null, near: null, leap: false };
+  call("rescue", "f", T(), "", true); fx.rescue = { x: from.x, y: from.y, cx: tx, cy: ty, t: fx.vt };
+  burst(from.x, from.y, 12, 70, { col: "f", s: 2 }); nudge(-Math.sign(f.ux) || 1, 0, 1, 160, T());
+  if (loud()) sfx.rescue();
+}
+function homeLand(f) {
+  const p = f.q, cc = centerAt(p, f.tEnd), x = f.x0 + f.ux * f.sEnd, y = f.y0 + f.uy * f.sEnd;
+  startOrbit(p, Math.atan2(y - cc.y, x - cc.x), f.dir, f.tEnd, 0);
+  fx.landT = fx.vt; fx.recoil = { p, t: fx.vt }; burst(x, y, 6, 50, { col: "f" });
+  if (loud()) sfx.edge();
+}
+function land(f) {
+  const q = f.q, tc = f.tEnd, from = f.o.p, now = T(), play = run.mode === "play";
+  const tier = f.kind === "rescue" ? "rescue" : f.rel < q.perf ? "perfect" : f.rel < EDGE_REL ? "nice" : "edge";
+  const skip = q.idx > from.idx + 1, before = run.combo;
+  run.hops = q.idx;
+  if (f.kind === "rescue") { run.moons--; run.rescues++; }
+  if (tier === "perfect" || tier === "nice") { run.combo++; run.maxCombo = Math.max(run.maxCombo, run.combo); }
+  else { if (run.combo >= 5) fx.lost = { n: run.combo, t: now }; run.combo = 0; }
+  run.streak = tier === "perfect" ? run.streak + 1 : 0;
+  if (tier === "perfect") run.perfects++;
+  if (skip) run.skips++;
+  if (q.giant) { run.leaps++; if (tier === "perfect") run.leapPerf++; if (run.moons < MAX_MOONS) { run.moons++; notice("n_moon", 950); } }
+  let base = q.giant ? (tier === "perfect" ? 10 : 4) : tier === "perfect" ? 3 : 1;
+  if (skip) base *= 2;
+  run.score += base * multOf(run.combo); fx.scoreT = now;
+  if (multOf(run.combo) > multOf(before)) { fx.multT = now; if (loud()) sfx.notice(); }
+  genUpTo(q.idx + 4, tc);
+  const cc = centerAt(q, tc), rx = f.x - cc.x, ry = f.y - cc.y;
+  let dir = rx * f.uy - ry * f.lux > 0 ? 1 : -1;
+  if (q.rev) dir = -dir;
+  if (f.leap) musicLevel("play");
+  startOrbit(q, Math.atan2(ry, rx), dir, tc, q.giant && tier === "perfect" ? HOLD.giant : tier === "perfect" ? HOLD.perfect : HOLD.other);
+  // tiered feedback (bar 1.2.3): only PERFECT shakes and stops; the giant PERFECT adds the camera punch
+  const x = f.x, y = f.y;
+  fx.landT = fx.vt; fx.recoil = { p: q, t: fx.vt };
+  const sub = skip ? S("skip") : q.rev ? S("flip") : f.kind === "rescue" ? S("subMiss", Math.max(1, Math.ceil(f.near.g))) : "";
+  if (tier === "perfect" && q.giant) {
+    call("bigPerf", "y", now, sub, true); fx.impact = { x, y, t: fx.vt, big: true }; fx.happyT = fx.vt;
+    addTrauma(0.85); hitstop(0.12); nudge(f.ux, f.uy, 2, 300, now);
+    burst(x, y, 26, 130, { col: "y", s: 2 }); burst(x, y, 9, 150, { kind: "spr", spr: SP.spark });
+    if (loud()) sfx.giant(); if (play) platform("happytime");
+  } else if (tier === "perfect") {
+    call("perfect", "l", now, sub, true); fx.impact = { x, y, t: fx.vt, big: false }; fx.happyT = fx.vt;
+    fx.flash = { p: q, t: fx.vt }; // the PERFECT core flashes on the planet; hitstop and the camera punch belong to the big leap
+    burst(x, y, 12, 95, { col: run.combo >= 12 ? "y" : "l", s: 2 }); burst(x, y, 3, 110, { kind: "spr", spr: SP.sparkL });
+    if (loud()) sfx.perfect(run.combo);
+  } else if (q.giant) { // a big leap caught off centre still pays off: the impact, a shake and its own chord
+    call(tier === "edge" ? "edge" : "leap", tier === "edge" ? "h" : "y", now, sub, true); fx.impact = { x, y, t: fx.vt, big: false }; fx.happyT = fx.vt;
+    addTrauma(0.5); nudge(f.ux, f.uy, 1, 220, now);
+    burst(x, y, 16, 100, { col: "y", s: 2 }); burst(x, y, 4, 110, { kind: "spr", spr: SP.spark });
+    if (loud()) sfx.leapLand();
+  } else if (tier === "nice") {
+    call(q.giant ? "leap" : "nice", "q", now, sub); burst(x, y, 6, 60, { col: "q" }); if (loud()) sfx.nice(run.combo);
+  } else if (tier === "edge") {
+    call("edge", "h", now, sub); burst(x, y, 5, 50, { col: "h" }); if (loud()) sfx.edge();
+  } else {
+    call("rescue", "f", now, sub); fx.rescue = { x, y, cx: cc.x, cy: cc.y, t: fx.vt };
+    burst(x, y, 10, 70, { col: "f", s: 2 }); if (loud()) sfx.rescue();
+  }
+  if (q.rev && loud()) sfx.flip();
+  if (fx.lost && fx.lost.t === now && loud()) sfx.crack();
+  if (play) {
+    hint.success();
+    if (run.bestHop > 0 && !run.crossed && q.idx > run.bestHop) { run.crossed = true; notice("n_best"); if (loud()) sfx.cross(); }
+  }
+}
+function advice(f) { // which side would have landed: "a bit earlier" or "a bit later" (shown on the result)
+  for (const d of [70, 140, 240]) {
+    const e = f.tl - d >= f.o.t0 + f.o.hold ? solveFlight(f.o, f.tl - d, 0) : null, l = f.tl + d < f.o.tEnd ? solveFlight(f.o, f.tl + d, 0) : null;
+    const eo = !!(e && e.kind === "cap"), lo = !!(l && l.kind === "cap");
+    if (eo !== lo) return eo ? "advEarly" : "advLate";
+    if (eo) return null;
+  }
+  return null;
+}
+
+// ---------- KEEP: AI for attract and ?demo=1. It launches through the same solver as the player ----------
+// It takes the first launch window it sees (like a person), aiming at that window's best moment. With
+// __game.autoplay(true) it plays a real run with a human-like timing error (AI_JITTER ms, one sigma), so it
+// fails more as the phases speed up; its run lengths are what bar 1.5.1 measures (review-kit "autoplay").
+function planAI(o, from, actIn) {
+  const u = gauss(run.rAI, 0, 1), v = run.rAI();
+  let act = actIn === undefined ? null : actIn;
+  if (actIn === undefined) {
+    if (run.mode === "demo" && run.script.length && o.t0 >= run.script[0].at) act = run.script.shift().act;
+    else if (run.mode === "attract" && v < 0.06) act = "fail";
+    if (act === "rescue" && run.moons < 1) act = "edge";
+    const nx = run.planets[o.p.idx + 1];
+    if (act && act !== "perfect" && nx && nx.giant) { if (run.mode === "demo") run.script.unshift({ at: 0, act }); act = "perfect"; } // the big leap is always shown landing
+    if (act === "fail" && run.mode === "demo" && nx && Math.abs(nx.x0 - 90) > 34) { run.script.unshift({ at: 0, act }); act = null; } // the clip's failure happens in the middle column, clear of the Shorts buttons
+    // the shown AI lands most hops as NICE and saves PERFECT for streaks and the big leap, so the tiers read as escalation
+    if (!act && run.mode !== "play" && !(nx && nx.giant) && run.rAI() < 0.6) act = "nice";
+  }
+  const target = o.p.idx + 1, end = Math.min(o.tEnd - 30, from + 7000), want = act === "fail" ? (run.mode === "demo" ? 4 : 10) : 3;
+  let best = null, inWin = false;
+  for (let t = from; t < end; t += AI_GRID) {
+    const f = solveFlight(o, t, 0);
+    let val = Infinity;
+    if (act === "fail" || act === "rescue") { if ((f.kind === "miss" || (f.kind === "out" && act === "fail")) && f.near && f.near.g > 0.5 && f.near.g < 14 && landingAfter(o, t, BUF) == null) val = Math.abs(f.near.g - want) + (f.near.q.idx === target ? 0 : 2) + (f.kind === "out" && run.mode === "demo" ? 6 : 0); } // the clip's failure is a near miss in the middle, not a fling into the fog
+    else if (f.kind === "cap" && f.q.idx === target) val = act === "edge" ? Math.abs(f.rel - 0.9) : act === "nice" ? Math.abs(f.rel - 0.45 - v * 0.2) : f.rel;
+    if (val < Infinity) { inWin = true; if (!best || val < best.val) best = { t, val }; }
+    else if (inWin) { inWin = false; if (act || best.val < 0.5) break; } // take the first good window, like a person
+  }
+  if (!best && act) { if (run.mode === "demo" && act !== "nice") run.script.unshift({ at: 0, act }); return planAI(o, from, null); } // try the scripted beat on the next planet
+  let at = best ? best.t : Infinity;
+  if (best && run.mode === "play") at = Math.max(from, Math.round(at + u * AI_JITTER));
+  else if (best && run.mode === "attract") at += Math.round(u * 10);
+  run.plan = { at, act };
+}
+
+// ---------- KEEP: failure. Freeze with the cause on screen, then the result (bar 1.4.1) ----------
+function kill(reason, tc, f) {
+  const now = T(), o = f ? f.o : run.orbit, pos = f ? flyPos(f, tc) : orbitPos(o, tc), rawX = pos.x;
+  if (f) pos.x = clamp(pos.x, DEAD_IN, CW - DEAD_IN); // the frozen star never sits half off the screen edge
+  // the cause names what the frozen picture shows: a near miss only when the fling was headed at that ring and the gap is small
+  const n = f ? f.near : null, aimQ = n && n.g <= 30 ? n.q : o && run.planets[o.p.idx + 1];
+  let off = false;
+  if (f && aimQ) { const cc = centerAt(aimQ, f.tl), dx = cc.x - f.x0, dy = cc.y - f.y0; off = (dx * f.ux + dy * f.uy) / (Math.hypot(dx, dy) || 1) < 0.55; }
+  const wall = !!f && reason !== "rock" && (reason === "out" || rawX < XMIN + 14 || rawX > XMAX - 14);
+  const gapShown = !!(n && reason !== "rock" && reason !== "decay" && n.g <= 15 && !off);
+  run.dead = { reason, at: now, c: tc, x: pos.x, y: pos.y, away: !!(f && (f.away || off)), wall, gapShown, vx: f ? f.lux * f.spd : 0, vy: f ? f.uy * f.spd : 0, f: f || null, o, near: n, rock: f ? f.rock : null, adv: null };
+  if (run.mode === "play") run.dead.adv = reason === "decay" ? "advDecay" : f ? advice(f) : null;
+  run.fly = null; run.plan = null; run.queued = null; run.orbit = null;
+  state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
+  if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
+  fx.note = null; fx.lost = null; // the cause is the only message on screen
+  call(reason === "rock" ? "crash" : reason === "decay" ? "fall" : gapShown && n.g <= 14 ? "close" : "miss", reason === "rock" ? "r" : "h", now, "", true);
+  if (reason === "rock") burst(pos.x, pos.y, 12, 80, { col: "e", s: 2 });
+  else if (reason !== "decay") { // a fizzle: sparks pop off the star and float after the freeze
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + 0.3; addPart({ kind: "spr", spr: i & 1 ? SP.spark : SP.sparkL, x: pos.x + Math.cos(a) * 9, y: pos.y + Math.sin(a) * 9, vx: Math.cos(a) * 26, vy: Math.sin(a) * 26, life: 0.9, max: 0.9 }); }
+    burst(pos.x, pos.y, 8, 40, { col: reason === "out" ? "f" : "c", g: 0 });
+  }
+  if (loud()) sfx.fail(reason, gapShown && n.g <= 14);
+  musicLevel("cut");
+  addTrauma(reason === "rock" ? 0.7 : 0.5);
+  if (f) nudge(f.ux, f.uy, 2, 360, now);
+}
+
+// ---------- KEEP: one judgement slot and one notice line (never stacked popups) ----------
+// the camera punch: the world kicks 2 whole dots along the hit and steps back (never a non-integer zoom, STYLE.md 8)
+function nudge(ux, uy, px, ms, now) { if (!reduceMotion) fx.nudge = { ux, uy, px, ms, t: now }; }
+function nudgeNow(now) {
+  const n = fx.nudge; if (!n) return { x: 0, y: 0 };
+  const k = (now - n.t) / n.ms; if (k >= 1) { fx.nudge = null; return { x: 0, y: 0 }; }
+  const a = k < 0.4 ? n.px : k < 0.75 ? Math.ceil(n.px / 2) : 0;
+  return { x: Math.round(n.ux * a), y: Math.round(n.uy * a) };
+}
+function call(key, col, now, sub, big) { fx.call = { key, col, t: now, sub: sub || "", big: !!big }; }
+function notice(key, delay) { if (!fx) return; fx.note = { key, t: T() + (delay || 0), snd: !!delay }; if (!delay && loud()) sfx.notice(); } // a delayed notice waits for the call to finish
+
+function updateRun(now) {
+  const c = now - run.offset;
+  for (let guard = 0; guard < 8 && !run.dead; guard++) {
+    if (run.fly) {
+      const f = run.fly;
+      if (f.bT != null && !f.bounced && c >= f.bT) bounceFx(f);
+      if (c >= f.tEnd) { arrive(f); continue; } break;
+    }
+    const o = run.orbit; if (!o) break;
+    if (autopilot && !run.ai && !run.plan) planAI(o, Math.max(o.t0 + o.hold + REACT, Math.ceil(c)));
+    if (run.queued) { if (c >= run.queued.at) { launch(run.queued.at); continue; } break; }
+    if ((run.ai || autopilot) && run.plan && c >= run.plan.at && run.plan.at < o.tEnd) { const at = run.plan.at; run.plan = null; tryLaunch(at); continue; }
+    if (c >= o.tEnd) { kill("decay", o.tEnd, null); break; }
+    break;
+  }
+}
+
+// ---------- KEEP: audio. SFX are data-like functions; every voice goes through the kit bus ----------
+// Levels are set for a phone speaker: every sound has content above 400 Hz, and the SFX peaks sit within 6 dB.
+const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0];
+const pz = d => PENTA[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5)); // pentatonic degree -> Hz
+const climb = n => 5 + Math.min(n, 10); // one combo-driven scale degree for every catch tier, capped at two octaves
+const sfx = {
+  launch(leap) { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(40, 0.1); // the core verb: a bright click, a whoosh, a rising zip
+    hiss("bandpass", 2200 * q.f, 2, 0.03, 0.8 * q.g, w); hiss("bandpass", 800 * q.f, 1.4, leap ? 0.5 : 0.2, 0.6 * q.g, w, null, 3000);
+    tone("triangle", 380 * q.f, 900 * q.f, 0.13, 0.55 * q.g, w); tone("sine", 150 * q.f, 70, 0.08, 0.2 * q.g, w);
+    if (leap) { tone("triangle", 523, 2093, 0.55, 0.3, w + 0.05, null, 0.4); tone("triangle", 659, 2637, 0.55, 0.16, w + 0.08, null, 0.4); } }, // the leap gets a riser
+  windup() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(40, 0.1); // a kept tap: a soft cocking click
+    hiss("bandpass", 1800 * q.f, 3, 0.025, 0.56 * q.g, w); tone("triangle", 520 * q.f, 780 * q.f, 0.07, 0.45 * q.g, w + 0.01); },
+  tap() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(50, 0.1); tone("triangle", 1250 * q.f, 1050 * q.f, 0.05, 0.6 * q.g, w); },
+  nice(combo) { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.1), f = pz(climb(combo));
+    tone("triangle", f * q.f, f * q.f * 0.99, 0.22, 0.52 * q.g, w); tone("sine", 140 * q.f, 60, 0.1, 0.28 * q.g, w); hiss("bandpass", 1500, 1.2, 0.04, 0.5, w, null, 400); },
+  edge() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(40, 0.1);
+    hiss("bandpass", 2400 * q.f, 1.2, 0.2, 0.34 * q.g, w, null, 600); tone("triangle", 420 * q.f, 520 * q.f, 0.16, 0.28 * q.g, w + 0.03); tone("sine", 120, 60, 0.08, 0.16, w); },
+  perfect(combo) { // climbs the scale with the combo, capped at two octaves
+    if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.1), d = climb(combo), f = pz(d);
+    tone("triangle", f * q.f, f * q.f, 0.2, 0.3 * q.g, w); tone("triangle", pz(d + 2) * q.f, pz(d + 2) * q.f, 0.22, 0.2, w + 0.05); tone("triangle", pz(d + 4) * q.f, pz(d + 4) * q.f, 0.25, 0.14, w + 0.1);
+    tone("sine", 160 * q.f, 55, 0.14, 0.24 * q.g, w); hiss("bandpass", 3000, 1, 0.05, 0.3, w); },
+  giant() { // the peak payoff: a deep hit, a bright chord, shimmer falling like stardust
+    if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(20, 0.06);
+    tone("sine", 100 * q.f, 38, 0.55, 0.28 * q.g, w); hiss("bandpass", 1200, 0.8, 0.3, 0.32, w, null, 200); tone("triangle", 220 * q.f, 110, 0.4, 0.24, w);
+    [5, 8, 10, 12, 15].forEach((n, i) => tone("triangle", pz(n) * q.f, pz(n) * q.f, 0.8, 0.09, w + 0.03 + i * 0.045));
+    for (let i = 0; i < 7; i++) tone("triangle", 2400 - i * 180, 2300 - i * 180, 0.1, 0.06, w + 0.3 + i * 0.05); },
+  leapLand() { // a big leap caught off centre: a deep thump and a two-note chord (the PERFECT keeps the full payoff)
+    if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.08);
+    tone("sine", 110 * q.f, 45, 0.4, 0.3 * q.g, w); tone("triangle", 200 * q.f, 100, 0.25, 0.3, w); hiss("bandpass", 1200, 0.8, 0.18, 0.4, w, null, 300);
+    tone("triangle", pz(7) * q.f, pz(7) * q.f, 0.5, 0.26, w + 0.03); tone("triangle", pz(9) * q.f, pz(9) * q.f, 0.55, 0.22, w + 0.1); },
+  rescue() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.1);
+    hiss("bandpass", 900, 1.4, 0.26, 0.48 * q.g, w, null, 3000); tone("triangle", 300 * q.f, 900 * q.f, 0.28, 0.42 * q.g, w); tone("triangle", pz(9), pz(9), 0.22, 0.26, w + 0.22); },
+  flip() { if (!audioOn()) return; const w = AU.ctx.currentTime + 0.06; tone("square", 700, 350, 0.08, 0.25, w, null, 0.004, 1800); tone("square", 350, 820, 0.09, 0.25, w + 0.08, null, 0.004, 1800); },
+  crack() { if (!audioOn()) return; const w = AU.ctx.currentTime + 0.05; hiss("highpass", 3200, 1, 0.12, 0.16, w); tone("triangle", 880, 220, 0.35, 0.3, w + 0.02); tone("sine", 90, 50, 0.2, 0.12, w); },
+  warn(n) { if (!audioOn()) return; const q = vary(20, 0.05), f = pz(10 + 2 * Math.min(3, n || 0)); tone("triangle", f * q.f, f * q.f * 0.96, 0.06, 0.3 * q.g, AU.ctx.currentTime); }, // urgent by pitch, not by loudness
+  charge() { if (!audioOn()) return; const w = AU.ctx.currentTime; tone("triangle", 660, 1320, 1.4, 0.3, w, null, 0.6); tone("triangle", 880, 1760, 1.4, 0.14, w + 0.2, null, 0.6); hiss("bandpass", 1400, 2, 1.4, 0.3, w, null, 3200); },
+  fail(reason, close) { // the music is cut; a near miss swishes past, then the last melody note echoes and sinks
+    if (!audioOn()) return; const w = AU.ctx.currentTime;
+    if (close) { hiss("bandpass", 600, 1.5, 0.28, 0.26, w, null, 2400); tone("triangle", 600, 1100, 0.14, 0.15, w + 0.03); }
+    if (reason === "rock") { hiss("bandpass", 900, 0.8, 0.3, 0.32, w, null, 150); tone("sine", 120, 40, 0.4, 0.22, w); }
+    const f = mus.lastF || pz(7), t = w + 0.12;
+    [0.36, 0.2, 0.1].forEach((gn, i) => tone("triangle", f, f * 0.5, 0.42, gn, t + i * 0.19));
+    tone("sine", 180, 60, 0.6, 0.15, t + 0.1); },
+  notice() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.1); tone("triangle", pz(7) * q.f, pz(7) * q.f, 0.12, 0.35 * q.g, w); tone("triangle", pz(9) * q.f, pz(9) * q.f, 0.16, 0.35 * q.g, w + 0.08); },
+  cross() { if (!audioOn()) return; const w = AU.ctx.currentTime + 0.1; [7, 9, 12, 14].forEach((n, i) => tone("triangle", pz(n), pz(n), 0.2, 0.35, w + i * 0.06)); },
+  best() { if (!audioOn()) return; const w = AU.ctx.currentTime; tone("sine", 130, 55, 0.3, 0.45, w); tone("triangle", 260, 130, 0.18, 0.3, w); // a low thump under the fanfare
+    [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", pz(n + 5), pz(n + 5), 0.28, i === 5 ? 0.45 : 0.32, w + 0.04 + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.12, w + 0.45); },
+  tick(i) { if (!audioOn()) return; const f = 900 + (i % 12) * 40, q = vary(30, 0.1); tone("triangle", f * q.f, f * q.f, 0.035, 0.32 * q.g, AU.ctx.currentTime); },
+  stamp() { if (!audioOn()) return; const w = AU.ctx.currentTime; tone("sine", 140, 60, 0.15, 0.3, w); hiss("bandpass", 1400, 1, 0.08, 1.0, w); tone("triangle", 520, 260, 0.1, 0.3, w); },
+  ui() { if (!audioOn()) return; tone("triangle", 880, 1320, 0.09, 0.68, AU.ctx.currentTime); }
+};
+const PEAK_SET = ["giant", "perfect", "fail", "rescue", "crack", "best", "stamp", "launch"]; // the 8 loudest, for the peak test
+
+// Music: an original pentatonic space song scheduled ahead on the audio clock, voiced for a phone speaker
+// (pads, bass and lead all sit at 130 Hz and up, as triangles). Form: A and B melodies of 32 steps over four
+// chords, so it repeats every 12.8 s. Layers join with the combo: the melody sings an octave up from the start,
+// is doubled below at combo 3, a sparkle arpeggio joins at 8, a shaker and a harmony line at 12. Pitched roll
+// ticks speed up and climb while the big leap waits; the bed holds its breath during the leap; failure cuts it.
+const MEL = [
+  7, -1, 9, 7, 5, -1, 4, -1, 5, 7, 9, -1, 10, 9, 7, -1, 7, -1, 5, 4, 2, -1, 4, -1, 5, -1, 4, 2, 0, -1, -1, -1,
+  4, -1, 5, 7, -1, 5, 4, -1, 2, -1, 4, 5, 7, -1, -1, -1, 9, -1, 7, 5, 4, -1, 2, -1, 4, -1, 5, -1, 7, -1, -1, -1
+];
+const CHORDS = [[0, 2, 4], [1, 3, 4], [-1, 1, 3], [0, 2, 3]]; // C E A | D G A | A D G | C E G, 16 steps each
+const BASS_OFF = [0, 0, 2, 3], STEP = 0.2;
+const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1, lastF: 0, roll: -1 };
+function musicLevel(lv) {
+  mus.level = lv;
+  if (!mus.bus || !AU.ctx) return;
+  const v = { title: 0.7, play: 1.15, leap: 0.4, bed: 0.65, duck: 0.15, cut: 0, off: 0 }[lv], t = AU.ctx.currentTime;
+  mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" || lv === "cut" ? 0.015 : 0.25);
+  if (lv === "duck" || lv === "cut") mus.drop = mus.i + 16;
+}
+function pad(f, w, dur, peak) { // a held drone voice: linear swell, hold, release; starts and ends at silence
+  const c = AU.ctx, o = c.createOscillator(), lp = c.createBiquadFilter(), gn = c.createGain(), r = Math.min(0.6, dur * 0.3);
+  o.type = "triangle"; o.frequency.value = f; lp.type = "lowpass"; lp.frequency.value = 1500; gn.gain.value = 0;
+  gn.gain.setValueAtTime(0, w); gn.gain.linearRampToValueAtTime(peak, w + r); gn.gain.setValueAtTime(peak, w + dur - r); gn.gain.linearRampToValueAtTime(0, w + dur);
+  o.connect(lp); lp.connect(gn); gn.connect(mus.bus); o.start(w); o.stop(w + dur + 0.05);
+}
+function musicStep(ahead) { // ahead: schedule this many seconds (an offline render passes the whole length)
+  if (!audioOn() || (AU.offline && !ahead)) return;
+  const c = AU.ctx;
+  if (!mus.bus || mus.bus.context !== c) { mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(AU.music); musicLevel(mus.level); mus.next = c.currentTime + 0.05; }
+  if (mus.level === "off") { mus.next = c.currentTime + 0.05; return; }
+  if (mus.next < c.currentTime) mus.next = c.currentTime + 0.02;
+  const roll = charging() && run.mode !== "attract";
+  while (mus.next < c.currentTime + (ahead || 0.15)) {
+    const i = mus.i++, w = mus.next, combo = run ? run.combo : 0, full = (mus.level === "play" || mus.level === "leap") && i >= mus.drop;
+    const lay = mus.level === "bed" || mus.level === "title" ? 1 : !full ? 0 : (run && run.mode === "demo") ? 3 : combo >= 12 ? 3 : combo >= 8 ? 2 : combo >= 3 ? 1 : 0;
+    const ch = CHORDS[(i >> 4) % 4];
+    if (i % 16 === 0) ch.forEach((d, k) => pad(pz(d), w + k * 0.03, STEP * 16 + 0.6, [0.04, 0.032, 0.028][k])); // overlapping pads: never a silent gap
+    if (i % 4 === 0) { const b = ch[0] + BASS_OFF[(i >> 2) % 4]; tone("triangle", pz(b - 5), pz(b - 5) * 0.98, 0.34, 0.12, w, mus.bus, 0.006); tone("triangle", pz(b), pz(b) * 0.99, 0.28, 0.07, w, mus.bus, 0.006); } // bass in two octaves, both in the phone band
+    if (i % 4 === 2 && mus.level !== "bed") tone("triangle", 1568, 1568, 0.04, 0.06, w, mus.bus, 0.002);
+    const m = MEL[i % 64];
+    // the melody sings an octave up from the start; combo 3 doubles it below for body
+    if (m >= 0 && (mus.level !== "bed" || i % 2 === 0)) { mus.lastF = pz(m); tone("triangle", pz(m + 5), pz(m + 5) * 0.995, 0.3, 0.09, w, mus.bus, 0.003); if (lay >= 1) tone("triangle", pz(m), pz(m) * 0.995, 0.36, 0.09, w, mus.bus, 0.003); }
+    if (lay >= 2 && i % 2 === 1) { const a = pz([10, 12, 14, 12][(i >> 1) % 4] + (m >= 0 ? 0 : 2)); tone("triangle", a, a, 0.12, 0.08, w, mus.bus, 0.002); }
+    if (lay >= 3) { hiss("bandpass", 6000, 1.2, 0.035, i % 2 ? 0.12 : 0.2, w, mus.bus); if (m >= 0) tone("triangle", pz(m + 2), pz(m + 2) * 0.995, 0.24, 0.06, w, mus.bus, 0.003); }
+    if (roll) { // the drum roll before the big leap: pitched ticks that speed up and climb one scale step each beat
+      if (mus.roll < 0) mus.roll = i;
+      const k = i - mus.roll, deg = 10 + Math.min(8, k >> 2), f = pz(deg);
+      if (k >= 8 || i % 2 === 0) { tone("triangle", f, f * 0.97, 0.05, 0.3, w, mus.bus, 0.002); hiss("bandpass", 1800, 1.4, 0.04, 0.2, w, mus.bus); }
+      if (k >= 16) tone("triangle", f, f * 0.97, 0.04, 0.22, w + STEP / 2, mus.bus, 0.002);
+    } else mus.roll = -1;
+    mus.next += STEP;
+  }
+}
+
+// ---------- KEEP: result screen. Steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
+const RES = { drop: 220, head: 200, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
+function makeResult(now) {
+  const play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0, d = run.dead;
+  const gap = d.near ? Math.max(1, Math.ceil(d.near.g)) : 0;
+  // the cause names what the screen shows: a labelled near miss first, then the fog the star sits in, then the direction
+  const cause = d.reason === "decay" ? S("causeDecay") : d.reason === "rock" ? S("causeRock") : d.gapShown ? S("causeMiss", gap) : d.wall ? S("causeOut") : d.away ? S("causeAway") : S("causeFar");
+  const r = { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0, rank: rankOf(run.score), showRank: !play || runs >= 1,
+    cause, adv: d.adv ? S(d.adv) : "", ticks: 0, rankDone: false, stamped: false, goal: null };
+  // one concrete next goal from a small rotating pool (bar 1.6.1)
+  const next = RANKS.find(t => t > run.score), pool = [
+    next ? { k: "g_score", n: next } : null, { k: "g_perf", n: run.perfects + 2 }, { k: "g_combo", n: Math.max(5, run.maxCombo + 3) },
+    run.leapPerf ? null : { k: "g_leap" }, { k: "g_hops", n: (fl(run.hops / 5) + 1) * 5 }
+  ];
+  for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
+  return r;
+}
+function resultStep(now) {
+  const r = run.result, age = resAge(r, now);
+  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
+  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
+  if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
+    r.stamped = true; sfx.best(); platform("happytime");
+    const y = overY() + 128; burst(140, y + Math.round(fx.camY), 16, 110, { col: "y", s: 2 }); burst(140, y + Math.round(fx.camY), 5, 120, { kind: "spr", spr: SP.spark });
+  }
+}
+const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
+function skipResult(now) { const r = run && run.result; if (r && now - r.at < RES.goal) { r.at = now - RES.goal; r.ticks = 99; r.rankDone = true; return true; } return false; }
+
+// ---------- GAME-SPECIFIC: drawing. Everything goes into the pixel buffer ----------
+let bgTile = null, bayTiles = null;
+const BGM = 6, TILE = 192; // shake margin; the far starfield tile repeats vertically with a slow parallax
+const h01 = i => hash1(i) * 0.5 + 0.5;
+function ditherEll(cx, cy, rx, ry, col, lv) { for (let dy = -ry; dy <= ry; dy++) { const w = hw(rx, ry, dy); if (w > 0) D(cx - w, cy + dy, 2 * w + 1, 1, null, col, lv); } }
+function buildBg() {
+  const W = PX.LW + 2 * BGM;
+  bgTile = newCanvas(W, TILE);
+  const keep = g; g = bgTile.getContext("2d"); g.imageSmoothingEnabled = false;
+  R(0, 0, W, TILE, "G");
+  // nebula clouds: lumpy masses of overlapping lobes, each trailing a few streaks in the other hue; wrapped so the tile repeats
+  for (let i = 0; i < 6; i++) {
+    const cx = fl(h01(i * 7 + 1) * W), cy = fl(h01(i * 13 + 5) * TILE), rx = 14 + fl(h01(i + 40) * 22), ry = Math.max(4, fl(rx * 0.45)), hue = i % 3 ? "n" : "F";
+    for (const oy of [-TILE, 0, TILE]) {
+      for (let j = 0; j < 3 + (i % 2); j++) {
+        const lx = cx + fl((h01(i * 19 + j * 7 + 60) - 0.5) * rx * 1.4), ly = cy + oy + fl((h01(i * 23 + j * 5 + 61) - 0.5) * ry), k = 0.55 + h01(i * 29 + j + 62) * 0.45;
+        for (const [kk, lv] of [[1, 2], [0.62, 4], [0.3, 7]]) ditherEll(lx, ly, fl(rx * k * kk), Math.max(2, fl(ry * k * kk)), hue, lv);
       }
-      cam += (camTarget - cam) * Math.min(1, h * 3.2);
-      if (x < -30 || x > W + 30 || y - cam < -60 || y - cam > H + 30) return null;
-    }
-    return null;
-  }
-
-  function pickAiStyle() {
-    // Mostly hunts PERFECTs (looks great on video); sometimes settles for a safe early hop like a human would.
-    ai = { style: Math.random() < 0.85 ? 'perfect' : 'early', reaction: 0.12 + Math.random() * 0.2 };
-  }
-
-  function aiThink() {
-    if (state !== 'orbit' || orbitTime < ai.reaction) return;
-    const now = predictLaunch(0);
-    const revolution = TAU / player.w;
-    if (!now) {
-      // no landing angle exists (should not happen); jump anyway so the demo never stalls on screen
-      if (orbitTime > revolution * 2 + 0.5) launch();
-      return;
-    }
-    if (ai.style === 'early' || orbitTime > revolution + ai.reaction) {
-      if (now.rel < 0.75) launch();
-      return;
-    }
-    const next = predictLaunch(1 / 60);
-    const atMinimum = !next || next.planet !== now.planet || next.rel >= now.rel;
-    if (now.rel < PERFECT_ZONE * 0.8 && atMinimum) launch();
-  }
-
-  // ---- loop ----
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 30)); last = now;
-    if (!paused) {
-      time += dt;
-      if (hitStop > 0) hitStop -= dt; else step(dt);
-    }
-    draw();
-    requestAnimationFrame(frame);
-  }
-
-  function step(dt) {
-    for (const p of planets) { driftStep(p, dt); p.pulse = Math.max(0, p.pulse - dt * 2.5); }
-
-    if (state === 'orbit') {
-      orbitTime += dt;
-      player.a += player.dir * player.w * dt;
-      placeOnOrbit();
-      if (mode !== 'play') aiThink();
-    } else if (state === 'fly') {
-      flyTime += dt;
-      // substeps of <= 4 px so a star grazing an orbit is never stepped past it on a slow frame
-      const sub = Math.max(1, Math.ceil(Math.hypot(player.vx, player.vy) * dt / 4)), h = dt / sub;
-      for (let k = 0; k < sub && state === 'fly'; k++) {
-        player.x += player.vx * h; player.y += player.vy * h;
-        for (const p of planets) {
-          if (p.idx <= player.from.idx) continue;
-          if (Math.hypot(player.x - p.x, player.y - p.y) < p.R) { capture(p); break; }
-        }
-      }
-      if (state === 'fly') {
-        const sy = player.y - camY;
-        if (player.x < -30 || player.x > W + 30 || sy > H + 30 || sy < -60 || flyTime > 2.2) die();
-      }
-    } else if (state === 'dead') {
-      deadTimer -= dt;
-      if (deadTimer <= 0) {
-        if (mode === 'play') showGameOver(); else reset();
+      for (let j = 0; j < 3; j++) {
+        const wy = cy + oy + fl((h01(i * 31 + j + 63) - 0.5) * ry * 1.2), wl = 16 + fl(h01(i * 37 + j + 64) * 34), wx = (i & 1) ? cx + fl(rx * 0.5) : cx - fl(rx * 0.5) - wl;
+        D(wx, wy, wl, 1, null, i % 3 ? "F" : "b", 3); D(wx + 4, wy + 1, wl - 8, 1, null, i % 3 ? "F" : "b", 2);
       }
     }
-
-    if (state === 'orbit' || state === 'fly') {
-      trail.push({ x: player.x, y: player.y });
-      if (trail.length > 22) trail.shift();
-    }
-
-    // camera keeps the current planet in the lower part of the screen
-    const target = player.planet.y - H * 0.68;
-    camY += (target - camY) * Math.min(1, dt * 3.2);
-    spawnAhead();
-
-    for (const q of particles) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.95; q.vy *= 0.95; }
-    particles = particles.filter(q => q.t < q.life);
-    for (const u of popups) u.t += dt;
-    popups = popups.filter(u => u.t < 0.9);
-    for (const r of rings) r.t += dt;
-    rings = rings.filter(r => r.t < 0.5);
-    shake *= Math.pow(0.0003, dt);
-    flash = Math.max(0, flash - dt);
-    squash = Math.max(0, squash - dt * 5);
   }
-
-  function draw() {
-    ctx.save();
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#070920'); g.addColorStop(1, '#141a4a');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-
-    if (shake > 0.3 && !reduceMotion) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-
-    for (const s of stars) {
-      let y = (s.y - camY * s.z) % 3000; if (y < 0) y += 3000;
-      y = y / 3000 * (H + 40) - 20;
-      const a = 0.35 + 0.35 * Math.sin(time * 2 + s.tw);
-      ctx.fillStyle = `rgba(246,239,224,${a * s.z * 1.4})`;
-      ctx.fillRect(s.x * W, y, s.z * 2.2, s.z * 2.2);
+  for (let i = 0; i < 64; i++) P(fl(h01(i * 31 + 3) * W), fl(h01(i * 17 + 11) * TILE), i % 6 ? "n" : "b");
+  for (let i = 0; i < 26; i++) P(fl(h01(i * 37 + 9) * W), fl(h01(i * 23 + 19) * TILE), i % 4 ? "b" : "c");
+  const wl = PX.cx0 + BGM;
+  bayTiles = wl > 8 ? [buildBay(wl, 0), buildBay(wl, 1)] : null;
+  g = keep;
+}
+// landscape: the side bays are painted world, not a flat dither: banded nebula masses with hard rims, a far ringed planet, stars
+function buildBay(wl, side) {
+  const c = newCanvas(wl, TILE), keep = g; g = c.getContext("2d"); g.imageSmoothingEnabled = false;
+  const inner = x => side ? x : wl - 1 - x; // x counted from the core edge outward
+  const nb = Math.min(wl, 20); D(side ? 0 : wl - nb, 0, nb, TILE, null, "F", 2); // the fog thickens toward the play field
+  for (let i = 0; i < 14; i++) P(fl(h01(i * 41 + side * 97 + 500) * wl), fl(h01(i * 43 + side * 89 + 501) * TILE), i % 5 ? "b" : "c");
+  if (wl > 40) { const ps = planetSprite(side ? "teal" : "lilac", 6, true), py = fl(h01(side + 510) * (TILE - 40)) + 20; spr(ps, inner(fl(wl * 0.62)) - fl(ps.width / 2), py); }
+  for (let j = 0; j < 2; j++) { // two tall, lumpy gas columns per tile, banded inside, a dotted lit rim on the upper left
+    const cy = fl((j + 0.25 + h01(j * 7 + side * 31 + 520) * 0.5) * TILE / 2), rx = Math.min(fl(wl * 0.4), 34) + fl(h01(j + side * 5 + 530) * 8), ry = 26 + fl(h01(j * 3 + side + 540) * 22);
+    const cx = inner(fl(Math.min(wl - 4, rx * 0.7 + h01(j + side + 550) * Math.max(1, wl - rx * 1.4)))), sd = j * 1.7 + side * 3.1;
+    const wob = dy => Math.round(Math.sin(dy * 0.21 + sd) * rx * 0.3 + Math.sin(dy * 0.53 + sd * 2) * 2);
+    for (const oy of [-TILE, 0, TILE]) for (let dy = -ry; dy <= ry; dy++) {
+      const w = hw(rx, ry, dy), y = cy + oy + dy, x0 = cx - w + wob(dy);
+      if (w < 2 || y < -1 || y > TILE) continue;
+      const k = 1 - Math.abs(dy) / (ry + 1);
+      D(x0, y, 2 * w + 1, 1, null, "F", 2); if (w > 4) D(x0 + 3, y, 2 * w - 5, 1, null, "F", k > 0.4 ? 5 : 3); if (k > 0.55 && w > 8) D(x0 + 6, y, 2 * w - 11, 1, null, "n", 6);
+      if (dy < 0 && (dy & 1)) P(x0, y, "f"); else if (dy >= 0 && !(dy & 1)) P(x0 + 2 * w, y, "F");
     }
-
-    ctx.translate(0, -camY);
-
-    // first hops: show whether the current aim would land (teaches the game without reading)
-    let aimHit = null;
-    const tutorial = state === 'orbit' && hops < 3;
-    if (tutorial) aimHit = predictLaunch(0);
-
-    for (const p of planets) {
-      const sy = p.y - camY; if (sy < -150 || sy > H + 150) continue;
-      const targeted = aimHit && aimHit.planet === p;
-      const pr = p.R * (1 + p.pulse * 0.08);
-      ctx.beginPath(); ctx.arc(p.x, p.y, pr, 0, TAU);
-      ctx.setLineDash([4, 7]); ctx.lineDashOffset = -time * 12;
-      ctx.strokeStyle = targeted ? 'rgba(127,227,196,.9)' : p === player.planet ? 'rgba(255,211,110,.55)' : 'rgba(143,149,199,.35)';
-      ctx.lineWidth = targeted ? 2.5 : 1.5; ctx.stroke(); ctx.setLineDash([]);
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.R * PERFECT_ZONE, 0, TAU);
-      ctx.fillStyle = targeted ? 'rgba(255,211,110,.14)' : 'rgba(255,211,110,.05)'; ctx.fill();
-      const gl = ctx.createRadialGradient(p.x, p.y, p.body * 0.6, p.x, p.y, p.body * 2.2);
-      gl.addColorStop(0, p.color + '55'); gl.addColorStop(1, p.color + '00');
-      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p.x, p.y, p.body * 2.2, 0, TAU); ctx.fill();
-      const b = p.body * (1 + p.pulse * 0.12);
-      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, b, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(7,9,32,.22)'; ctx.beginPath(); ctx.arc(p.x + b * 0.35, p.y + b * 0.3, b * 0.8, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(p.x - b * 0.35, p.y - b * 0.4, b * 0.22, 0, TAU); ctx.fill();
-      if (p.ring) {
-        ctx.strokeStyle = 'rgba(246,239,224,.55)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, b * 1.6, b * 0.45, -0.35, 0, TAU); ctx.stroke();
-      }
-    }
-
-    for (const r of rings) {
-      const k = r.t / 0.5;
-      ctx.globalAlpha = 1 - k; ctx.strokeStyle = r.color; ctx.lineWidth = 3 * (1 - k) + 1;
-      ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (1 + k * 0.6), 0, TAU); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    const alive = state === 'orbit' || state === 'fly';
-    if (alive) for (let i = 0; i < trail.length; i++) {
-      const t = trail[i], k = i / trail.length;
-      ctx.fillStyle = `rgba(255,211,110,${k * 0.5})`;
-      ctx.beginPath(); ctx.arc(t.x, t.y, 2 + k * 4, 0, TAU); ctx.fill();
-    }
-
-    if (alive) {
-      if (state === 'orbit') {
-        const tx = -Math.sin(player.a) * player.dir, ty = Math.cos(player.a) * player.dir;
-        const len = tutorial ? 240 : 90;
-        ctx.strokeStyle = aimHit ? 'rgba(127,227,196,.85)' : 'rgba(255,248,230,.25)';
-        ctx.lineWidth = 2; ctx.setLineDash([2, 8]);
-        ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(player.x + tx * len, player.y + ty * len); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      // squash on capture, stretch along velocity while flying
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      if (state === 'fly') { ctx.rotate(Math.atan2(player.vy, player.vx)); ctx.scale(1.45, 0.72); }
-      else if (squash > 0) { ctx.rotate(player.a); ctx.scale(1 - squash * 0.35, 1 + squash * 0.35); }
-      ctx.fillStyle = '#fff8e6'; ctx.shadowColor = '#ffd36e'; ctx.shadowBlur = 18;
-      ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
-      ctx.restore();
-    }
-
-    for (const q of particles) {
-      ctx.globalAlpha = 1 - q.t / q.life; ctx.fillStyle = q.color;
-      ctx.fillRect(q.x - q.size / 2, q.y - q.size / 2, q.size, q.size);
-    }
-    ctx.globalAlpha = 1;
-
-    ctx.textAlign = 'center';
-    for (const u of popups) {
-      const k = u.t / 0.9, pop = u.perfect ? 1 + Math.max(0, 0.4 - u.t * 2) : 1;
-      ctx.globalAlpha = 1 - k;
-      ctx.font = `900 ${Math.round((u.perfect ? 21 : 16) * pop)}px ${FONT}`;
-      const half = ctx.measureText(u.text).width / 2 + 6;
-      const x = Math.max(half, Math.min(W - half, u.x));
-      ctx.fillStyle = '#070920'; ctx.fillText(u.text, x, u.y - 20 - u.t * 40 + 2);
-      ctx.fillStyle = u.perfect ? '#ffd36e' : '#f6efe0'; ctx.fillText(u.text, x, u.y - 22 - u.t * 40);
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-
-    if (flash > 0) { ctx.fillStyle = `rgba(255,248,230,${flash * 0.5})`; ctx.fillRect(0, 0, W, H); }
   }
-
-  // ---- flow ----
-  function startGame() {
-    mode = 'play'; paused = false;
-    $('title').hidden = true; $('over').hidden = true; $('pause').hidden = true;
-    $('hud').hidden = false; $('pauseBtn').hidden = false;
-    reset();
-    cv.focus({ preventScroll: true });
-    platform('gameplayStart');
+  g = keep;
+  return c;
+}
+const NEAR = Array.from({ length: 34 }, (_, i) => ({ x: h01(i * 11 + 70), y: h01(i * 29 + 71), big: i % 7 === 0, tw: i % 3 }));
+function drawNearStars(now, cy) { // a nearer layer at half the camera speed; a few twinkle with two poses
+  const W = PX.LW + 8, H = 360, top = -PX.cy0 - 4;
+  for (const s of NEAR) {
+    const x = fl(s.x * W) - PX.cx0 - 4, y = top + ((fl(s.y * H - cy * 0.5) % H) + H) % H - 4;
+    if (y > vBot() + cy + 4) continue;
+    const tw = (fl(now / 300) + s.tw) % 3 === 0;
+    if (s.big) { P(x, y + cy, tw ? "q" : "c"); if (tw) { P(x - 1, y + cy, "b"); P(x + 1, y + cy, "b"); P(x, y + cy - 1, "b"); P(x, y + cy + 1, "b"); } }
+    else P(x, y + cy, tw ? "c" : "b");
   }
-
-  function pauseGame() {
-    if (mode !== 'play' || paused || (state !== 'orbit' && state !== 'fly')) return;
-    paused = true;
-    $('pause').hidden = false; $('pauseBtn').hidden = true;
-    $('resume').focus({ preventScroll: true });
-    platform('gameplayStop');
-    updateHud();
+}
+function drawHome(cy) { // the home world below the first planet: a dithered horizon that falls away as you climb
+  const top = 62;
+  if (top - cy > vBot() + 4) return;
+  const X0 = -PX.cx0 - BGM, X1 = PX.LW - PX.cx0 + BGM;
+  for (let y = top; y < vBot() + cy + BGM; y++) {
+    const dy = y - top, half = Math.round(Math.sqrt(Math.max(0, dy * (900 - dy))) * 1.15), x0 = Math.max(X0, 90 - half), x1 = Math.min(X1, 90 + half);
+    if (x1 <= x0) continue;
+    R(x0, y, x1 - x0, 1, dy < 2 ? "f" : dy < 5 ? "F" : "n");
+    if (dy >= 5 && dy < 14) D(x0, y, x1 - x0, 1, null, "F", 16 - dy);
   }
-
-  function resumeGame() {
-    if (!paused) return;
-    paused = false; last = performance.now();
-    $('pause').hidden = true; $('pauseBtn').hidden = false;
-    cv.focus({ preventScroll: true });
-    platform('gameplayStart');
-    updateHud();
-  }
-
-  // ---- input ----
-  for (const type of ['pointerup', 'touchend', 'click', 'keydown', 'mousedown']) addEventListener(type, unlockAudio, true);
-
-  // A short lock after the result appears, so a player still mashing Space/tap does not skip their score.
-  function retry(lockMs = 350) { if (state === 'over' && performance.now() - overAt > lockMs) startGame(); }
-
-  // Listen on the whole window: on wide screens clicks in the side margins count too.
-  addEventListener('pointerdown', e => {
-    if (e.button > 0 || e.target.closest('button')) return;
-    e.preventDefault();
-    if (paused) resumeGame();
-    else if (mode === 'play' && state === 'orbit') launch();
-    else if (!$('over').hidden) retry(600); // tap anywhere to retry, after a longer lock than the button
-    else if (!$('title').hidden) startGame();
-  });
-  addEventListener('keydown', e => {
-    // keyboard users on the mute/language buttons get the normal button behaviour
-    if (e.target.closest && e.target.closest('.tool') && (e.code === 'Space' || e.code === 'Enter')) return;
-    if (e.code === 'Escape' || e.code === 'KeyP') {
-      if (paused) resumeGame(); else pauseGame();
-      return;
+  for (let i = 0; i < 18; i++) { const x = fl(h01(i * 5 + 300) * 260) - 40, y = top + 14 + fl(h01(i * 3 + 301) * 40); P(x, y, i % 3 ? "y" : "a"); }
+}
+function drawWalls(cy) { // the nebula walls at the edge of the star chart: a fog band inside the core with a dotted rim, deeper fog outside
+  const y0 = -PX.cy0 + cy - BGM, h = PX.LH + 2 * BGM, wl = PX.cx0 + BGM, yA = y0 - (((y0 % 6) + 6) % 6);
+  if (bayTiles && wl > 2) { // landscape and wide phones: the painted bays scroll at half the camera speed, a few stars twinkle in the fog
+    const bw = bayTiles[0].width, sh = Math.round(cy * 0.5);
+    for (let k = Math.floor((y0 - sh) / TILE); k * TILE + sh < y0 + h; k++) { g.drawImage(bayTiles[0], -bw, k * TILE + sh); g.drawImage(bayTiles[1], CW, k * TILE + sh); }
+    D(-Math.min(wl, 6), y0, Math.min(wl, 6), h, null, "F", 4); D(CW, y0, Math.min(wl, 6), h, null, "F", 4);
+    for (let y = yA; y < y0 + h; y += 6) {
+      const r = fl(y / 6);
+      if (h01(r * 11 + 903) < 0.12) { const sx = fl(h01(r + 904) * wl); P(-sx - 1, y, (fl(cy / 40 + r) & 3) ? "c" : "q"); P(CW + sx, y + 2, "c"); }
     }
-    if (e.code !== 'Space' && e.code !== 'Enter' && e.code !== 'NumpadEnter' && e.code !== 'ArrowUp') return;
-    if (e.repeat) { e.preventDefault(); return; }
-    e.preventDefault();
-    if (paused) resumeGame();
-    else if (mode === 'play' && state === 'orbit') launch();
-    else if (!$('over').hidden) retry();
-    else if (!$('title').hidden) startGame();
-  });
-  $('start').addEventListener('click', startGame);
-  $('retry').addEventListener('click', () => retry());
-  $('resume').addEventListener('click', resumeGame);
-  $('pauseBtn').addEventListener('click', e => { e.currentTarget.blur(); pauseGame(); });
-  $('mute').addEventListener('click', e => {
-    e.currentTarget.blur();
-    soundOn = !soundOn; store.set('sound', soundOn);
-    updateHud();
-  });
-  $('lang').addEventListener('click', e => {
-    e.currentTarget.blur();
-    lang = lang === 'ja' ? 'en' : 'ja'; store.set('lang', lang);
-    applyLang();
-    if (!$('over').hidden) $('resultSub').innerHTML = S.resultSub(best, perfects);
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { pauseGame(); suspendAudio(); } else if (actx) unlockAudio();
-  });
-  addEventListener('blur', pauseGame);
-  addEventListener('resize', resize);
-  if (window.ResizeObserver) new ResizeObserver(resize).observe(cv); // embeds can resize the play area without a window resize
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  document.addEventListener('gesturestart', e => e.preventDefault()); // older iOS Safari pinch-zoom
-
-  // ---- boot ----
-  resize();
-  reset();
-  applyLang();
-  if (DEMO) {
-    $('title').hidden = true; $('hud').hidden = false; $('tools').hidden = true; $('brand').hidden = false;
-    $('bestBox').hidden = true; // a demo never sets a best, so "BEST 0" next to a big score would look wrong
   }
-  requestAnimationFrame(t => { last = t; frame(t); });
+  if (XMIN > 5) { D(0, y0, XMIN - 4, h, null, "F", 3); D(XMAX + 4, y0, XMIN - 4, h, null, "F", 3); } // the clip's narrower field: thinner fog outside the band
+  D(XMIN - 4, y0, 5, h, "n", "F", 7); D(XMAX - 1, y0, 5, h, "n", "F", 7); // the band a star can be lost in
+  for (let y = yA; y < y0 + h; y += 6) {
+    const r = fl(y / 6), wa = fl(h01(r * 13 + 905) * 3), wb = fl(h01(r * 17 + 906) * 3);
+    if (wa) R(XMIN + 1, y, wa, 2, "F"); if (wb) R(CW - XMIN - 1 - wb, y + 3, wb, 2, "F"); // ragged fog edge
+    P(XMIN + 1 + wa, y + 1, "f"); P(CW - XMIN - 2 - wb, y + 4, "f"); // the dotted rim
+  }
+}
+function ringDots(x, y, r, col, step, alt, from, span, dir) {
+  const n = Math.max(10, Math.round(TAU * r / (step || 4)));
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU;
+    if (span != null) { let d = ((a - from) * dir) % TAU; if (d < 0) d += TAU; if (d > span) continue; }
+    P(x + Math.round(Math.cos(a) * r), y + Math.round(Math.sin(a) * r), alt && (i & 1) ? alt : col);
+  }
+}
+function drawPlanet(p, c, role, now) {
+  const cc = centerAt(p, c), x = Math.round(cc.x), y = Math.round(cc.y), vt = fx.vt;
+  if (y - Math.round(fx.camY) < vTop() - 60 || y - Math.round(fx.camY) > vBot() + 60) return;
+  const bump = fx.recoil && fx.recoil.p === p && vt - fx.recoil.t < 90 ? 1 : 0, blink = fl(now / 120) & 1;
+  if (role === "cur") {
+    const o = run.orbit, a = orbitA(o, c), rl = revsLeft(o, c), low = rl < 0.4;
+    const col = low ? (blink ? "r" : "h") : rl > 2 ? "l" : rl > 1 ? "s" : "c";
+    ringDots(x, y, p.R + bump, col, 4, null, a, Math.min(TAU, rl * TAU), o.dir);
+    if (fx.flash && fx.flash.p === p && vt - fx.flash.t < 140) ringDots(x, y, Math.round(p.R * p.perf) + 1, (fl((vt - fx.flash.t) / 70) & 1) ? "l" : "w", 2);
+    if (rl < 1.5) { const ae = a + o.dir * rl * TAU, ex = x + Math.round(Math.cos(ae) * p.R), ey = y + Math.round(Math.sin(ae) * p.R); for (const [dx, dy] of [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]]) P(ex + dx, ey + dy, "r"); }
+  } else if (role === "next") {
+    const lit = run.mode === "play" && (run.tut > 0 || aidOn()) && fx.aimHit === p;
+    const col = p.giant ? (charging() && blink ? "q" : "y") : lit ? "l" : "q";
+    ringDots(x, y, p.R, col, 4, p.rev ? "r" : null);
+    ringDots(x, y, Math.round(p.R * p.perf), lit ? "w" : "l", 3);
+  } else if (role === "next2") { ringDots(x, y, p.R, "b", 5, p.rev ? "R" : null); ringDots(x, y, Math.round(p.R * p.perf), "n", 3); }
+  else if (role !== "past") ringDots(x, y, p.R, "n", 6);
+  const sp = planetSprite(p.style, p.br + bump, p.giant);
+  spr(sp, x - fl(sp.width / 2), y - fl(sp.height / 2));
+  if (p.A && role !== "past") { // drifting: chevrons on the side it is moving to
+    const v = Math.cos(p.om * c / 1000 + p.ph), s = v > 0 ? 1 : -1, ax = x + s * (p.br + 5);
+    if (Math.abs(v) > 0.2) for (let k = 0; k < 2; k++) { const bx = ax + s * k * 3; P(bx, y - 1, "q"); P(bx + s, y, "q"); P(bx, y + 1, "q"); }
+  }
+}
+function drawRocks(c, now) {
+  for (const rk of run.rocks) {
+    if (rk.orb && rk.v === 0) { const cc = centerAt(rk.orb, c), sy0 = cc.y - Math.round(fx.camY); if (sy0 > vTop() - 60 && sy0 < vBot() + 60) ringDots(Math.round(cc.x), Math.round(cc.y), rk.rad, "e", 9); } // the guard rocks' path
+    const p = rockAt(rk, c), sy = p.y - Math.round(fx.camY);
+    if (sy < vTop() - 12 || sy > vBot() + 12 || p.x < -14 || p.x > CW + 14) continue;
+    const hot = run.dead && run.dead.rock === rk && (fl((now - run.dead.at) / 110) & 1), s = (hot ? SP.rockHot : SP.rock)[rk.v];
+    spr(s, Math.round(p.x) - 4, Math.round(p.y) - 4, (fl(now / 500) + rk.v) & 1);
+  }
+}
+const tutLevel = () => run.mode === "play" ? run.tut * clamp(1 - (run.hops - 3) / 5, 0, 1) : 0; // the long aim helper fades out over the first hops
+const aidOn = () => run.mode === "play" && run.aid && run.hops < 2; // runs 3 to 5: the first two hops still light up
+function aimPredict(c) { // first runs: would a launch now, or a moment from now, land? (lights the aim line and the target ring a little early)
+  fx.aimHit = null;
+  const o = run.orbit;
+  if (!o || run.fly || run.dead || !(tutLevel() > 0 || aidOn())) return;
+  for (const t of [c, c + Math.min(AIM_LEAD, bufferMs() + 80)]) { if (t >= o.tEnd) continue; const f = solveFlight(o, t, 0); if (f.kind === "cap") { fx.aimHit = f.q; return; } }
+}
+function drawAim(c, now) {
+  const o = run.orbit; if (!o || run.fly || run.dead) return;
+  const p = orbitPos(o, c), ux = -Math.sin(p.a) * o.dir, uy = Math.cos(p.a) * o.dir;
+  const tut = run.queued ? 1 : tutLevel(), L = Math.round(30 + tut * 120), col = fx.aimHit || run.queued ? "l" : "c";
+  for (let s = 10; s < L; s += 3) { if (s > L * 0.66 && (fl(s / 3) & 1)) continue; P(p.x + ux * s, p.y + uy * s, col); }
+}
+function drawTrail() {
+  const t = fx.trail, tier = run.combo >= 12 ? 2 : run.combo >= 5 ? 1 : 0;
+  for (let i = 0; i < t.length; i++) {
+    const k = i / t.length, col = tier === 2 ? ["h", "y", "l"][i % 3] : tier === 1 ? "y" : "l";
+    if (k < 0.4 && (i & 1)) continue;
+    R(fl(t[i].x) - (k > 0.7 ? 1 : 0), fl(t[i].y) - (k > 0.7 ? 1 : 0), k > 0.7 ? 2 : 1, k > 0.7 ? 2 : 1, col);
+  }
+}
+function deadVis(now) {
+  const d = run.dead; let k = Math.max(0, now - d.at - freezeMs()) / 1000;
+  if (d.reason === "decay" && d.o) {
+    const cc = centerAt(d.o.p, d.c), a0 = Math.atan2(d.y - cc.y, d.x - cc.x), rr = d.o.p.R * Math.max(0, 1 - k * 1.3), a = a0 + d.o.dir * k * 5;
+    return { x: cc.x + Math.cos(a) * rr, y: cc.y + Math.sin(a) * rr, gone: rr < d.o.p.br };
+  }
+  const s = d.reason === "rock" ? -0.22 : 0.14; k = Math.min(k, 0.7); // a short drift, then the star hangs where the camera can frame it
+  return { x: clamp(d.x + d.vx * s * k, DEAD_IN, CW - DEAD_IN), y: d.y + d.vy * s * k }; // the drift never carries the star off screen
+}
+function drawStar(now, c) {
+  const d = run.dead, vt = fx.vt;
+  let p, pose = "n", face = "normal", flip = false, ux = 0, uy = 1;
+  if (d) {
+    p = deadVis(now); face = "dead";
+    if (p.gone) { if (!fx.fellT) { fx.fellT = now; burst(p.x, p.y, 10, 60, { col: "a", s: 2 }); } return; }
+    if (now - d.at > freezeMs()) flip = !!(fl((now - d.at) / 160) & 1);
+    const v = Math.hypot(d.vx, d.vy) || 1; ux = d.vx / v; uy = d.vy / v;
+  } else {
+    p = starPos(c);
+    if (run.fly) { pose = vt - fx.launchT < 110 ? "st" : "n"; face = "fly"; ux = run.fly.bounced ? run.fly.lux : run.fly.ux; uy = run.fly.uy; }
+    else {
+      const o = run.orbit, a = orbitA(o, c); ux = -Math.sin(a) * o.dir; uy = Math.cos(a) * o.dir;
+      if (vt - fx.landT < 90 || run.queued) pose = "sq"; // a kept tap: the star crouches until its moment
+      const rl = revsLeft(o, c);
+      face = vt - fx.happyT < 450 ? "happy" : rl < 0.4 ? "scared" : charging() || run.queued ? "focus" : fl(now / 130) % 23 === 0 ? "blink" : "normal";
+    }
+  }
+  const x = Math.round(p.x), y = Math.round(p.y), sp = SP[pose], fa = FACE_AT[pose];
+  const trem = !d && charging() && !reduceMotion ? (fl(now / 45) & 1) : 0;
+  const sx = x - (sp.width >> 1) + trem, sy = y - (sp.height >> 1);
+  // the scarf streams behind the motion, with a little wave
+  for (let i = 1; i <= 6; i++) { const w = Math.round(Math.sin(now / 90 + i) * (i > 2 ? 1 : 0)), r = i < 5 ? 2 : 1; R(x - Math.round(ux * (5 + i * 1.8)) + w * Math.round(uy), y + 2 - Math.round(uy * (5 + i * 1.8)) - w * Math.round(ux), r, r, i < 4 ? "r" : "R"); }
+  const moons = d ? 0 : run.moons, ma = now / 380;
+  const moonAt = i => ({ x: x + Math.round(Math.cos(ma + i * Math.PI) * 13) - 2, y: y + Math.round(Math.sin(ma + i * Math.PI) * 6) - 2, back: Math.sin(ma + i * Math.PI) < 0 });
+  for (let i = 0; i < moons; i++) { const m = moonAt(i); if (m.back) spr(SP.moon, m.x, m.y); }
+  spr(sp, sx, sy, flip); spr(SP.face[face], sx + (flip ? sp.width - fa[0] - 7 : fa[0]), sy + fa[1], flip);
+  if (face === "scared") spr(SP.sweat, sx + sp.width, sy - 1);
+  for (let i = 0; i < moons; i++) { const m = moonAt(i); if (!m.back) spr(SP.moon, m.x, m.y); }
+  if (vt - fx.tapT < 70 && !d) ring(x, y, 11, 11, 10, 10, "q"); // every press shows at once, even mid-flight
+  if (run.queued && !d) { const k = fl(now / 70) & 1; ring(x, y, 12, 12, 11, 11, k ? "l" : "w"); } // a kept tap: a lit ready ring until the window opens
+  if (run.fly && vt - fx.launchT < 160) for (const o of [-4, 0, 4]) { const bx = x - ux * 11 + uy * o, by = y - uy * 11 - ux * o; line(bx, by, bx - ux * 6, by - uy * 6, "q"); }
+}
+function drawFail(now) {
+  const d = run.dead; if (!d) return;
+  const blink = fl((now - d.at) / 110) & 1;
+  if (d.reason === "decay" && d.o) { const cc = centerAt(d.o.p, d.c); ringDots(Math.round(cc.x), Math.round(cc.y), d.o.p.R, blink ? "r" : "h", 3); return; }
+  const n = d.near; if (!n || d.reason === "rock") return;
+  const cc = centerAt(n.q, d.c), cx = Math.round(cc.x), cy = Math.round(cc.y);
+  ringDots(cx, cy, n.q.R, blink ? "r" : "h", 3);
+  if (d.f) { // the honest shadow: where the line had to go (through the centre) for a PERFECT
+    const dx = cx - d.f.x0, dy = cy - d.f.y0, L = Math.hypot(dx, dy) || 1;
+    for (let s = 8; s < L - n.q.br - 2; s += 4) P(d.f.x0 + dx / L * s, d.f.y0 + dy / L * s, "l");
+  }
+  if (d.gapShown) {
+    const L = Math.hypot(n.rx - n.mx, n.ry - n.my), k = Math.max(1, Math.round(L));
+    for (let s = 0; s <= k; s += 2) P(n.mx + (n.rx - n.mx) * s / k, n.my + (n.ry - n.my) * s / k, "q");
+    for (const [dx, dy] of [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]]) P(Math.round(n.rx) + dx, Math.round(n.ry) + dy, "r");
+    const str = S("subMiss", Math.max(1, Math.ceil(n.g))), hw2 = fl(textW(str, { px: 12, sc: 2 }) / 2) + 3;
+    const ox = n.mx - cx, oy = n.my - cy, ol = Math.hypot(ox, oy) || 1, lx = clamp(Math.round(n.mx + ox / ol * 14), hw2 + (DEMO ? 26 : 2), (DEMO ? 150 : CW - 2) - hw2), ly = Math.round(n.my + oy / ol * 12) - 5;
+    txt(str, lx, ly, { c: "q", o: "k", px: 12, sc: 2 });
+  }
+}
+function drawSwallow(now) { // a star lost in the fog: a tongue of fog reaches out from the wall and closes over it
+  const d = run.dead; if (!d || !d.wall) return;
+  const k = easeOut((now - d.at) / 300), x = Math.round(d.x), y = Math.round(d.y), left = d.x < CW / 2, edge = left ? XMIN + 1 : CW - XMIN - 1, len = Math.abs(x - edge);
+  for (let j = -6; j <= 6; j++) { const w = Math.round(len * k * (1 - Math.abs(j) / 8)); if (w > 0) D(left ? edge : edge - w, y + j, w, 1, null, "F", 8); }
+  ditherEll(x, y, 9, 9, "F", Math.round(k * 9)); ditherEll(x, y, 5, 5, "f", Math.round(k * 4));
+}
+function drawBestLine() { // play only: the height of the best run so far, a line to cross
+  if (run.mode !== "play" || run.bestHop < 1) return;
+  const p = run.planets[run.bestHop]; if (!p) return;
+  const y = p.y - p.R - 10, col = run.crossed ? "e" : "y", sy = y - Math.round(fx.camY);
+  const hud = !bay() && sy > satY() - 8 && sy < satY() + 52; // the line passes behind the score satellite, never across it
+  for (let x = 2; x < CW - 2; x += 4) if (!hud || x < 40 || x > 138) R(x, y, 2, 1, col);
+  R(3, y - 13, 1, 13, "k"); R(4, y - 13, 1, 12, "c");
+  txt(S("best"), 7, y - 14, { c: col, o: "k", px: 12, a: "l" });
+}
+function drawImpact() {
+  const im = fx.impact; if (!im || fx.vt - im.t > 160) return;
+  const s = im.big ? 2 : 1, sp = im.big ? SP.burstL : SP.burst;
+  spr(sp, Math.round(im.x) - fl(sp.width * s / 2), Math.round(im.y) - fl(sp.height * s / 2), false, s);
+}
+function drawRescue() {
+  const r = fx.rescue; if (!r || fx.vt - r.t > 380) return;
+  const k = (fx.vt - r.t) / 380, dx = r.cx - r.x, dy = r.cy - r.y, L = Math.hypot(dx, dy) || 1;
+  for (let s = 0; s < L * (1 - k); s += 3) P(r.x + dx / L * s, r.y + dy / L * s, "f");
+}
+function drawSatellite(x, y, now, label) { // the score lives on a little survey satellite (the HUD is a world object)
+  y += fl(now / 700) & 1;
+  for (const s of [-1, 1]) {
+    const wx = s < 0 ? x - 43 : x + 27;
+    R(s < 0 ? x - 27 : x + 25, y + 13, 3, 3, "k"); P(s < 0 ? x - 26 : x + 26, y + 14, "e");
+    nr(wx, y + 8, 16, 13, "k", 1); R(wx + 1, y + 9, 14, 11, "b");
+    for (let i = 1; i < 4; i++) R(wx + i * 4, y + 9, 1, 11, "n");
+    R(wx + 1, y + 14, 14, 1, "n"); R(wx + 2, y + 10, 2, 1, "s");
+  }
+  nr(x - 25, y + 3, 50, 23, "k", 2); R(x - 23, y + 5, 46, 19, "e"); R(x - 23, y + 5, 46, 1, "c");
+  R(x - 21, y + 7, 42, 15, "G"); R(x - 21, y + 7, 42, 1, "n");
+  for (const bx of [x - 23, x + 22]) { P(bx, y + 22, "k"); }
+  R(x + 15, y - 3, 1, 6, "k"); R(x + 14, y - 5, 3, 2, (fl(now / 450) & 1) ? "r" : "R");
+  ell(x - 14, y + 2, 4, 2, "k", -1); ell(x - 14, y + 2, 3, 1, "c", -1); R(x - 14, y + 2, 1, 2, "k");
+  if (label != null) {
+    const pop = now - fx.scoreT < 80, big = label.length > 3;
+    bigText(label, x, y + (big ? 11 : 8) - (pop ? 1 : 0), big ? 2 : 3, pop ? "w" : "l", "k");
+  }
+}
+function drawTicker(x, y, now) { // the satellite's second line: notices for 1.5 s, else the combo
+  let str = null, col = "l", torn = null;
+  const n = fx.note && now >= fx.note.t && now - fx.note.t < 1500 ? fx.note : null, lost = fx.lost && now - fx.lost.t < 1300 ? fx.lost : null;
+  if (lost) { str = S("n_lost", lost.n); col = "r"; torn = lost; }
+  else if (n) { str = S(n.key); col = (fl((now - n.t) / 120) & 1) || now - n.t > 360 ? "y" : "w"; } // a notice blinks in by colour
+  else if (run.combo >= 2 && !run.dead) { const m = multOf(run.combo); str = S("combo") + " " + run.combo + (m > 1 ? "  x" + m : ""); col = m > 1 && now - fx.multT > 300 ? "y" : m > 1 ? "w" : "l"; }
+  if (str == null) return;
+  const w = Math.max(44, textW(str || "x", { px: 12, sc: 2 }) + 12), tx = clamp(x - fl(w / 2), 2 - PX.cx0, PX.LW - PX.cx0 - 2 - w), tc = tx + fl(w / 2), j = now - fx.multT < 120 ? -1 : 0; // kept inside the view in the landscape bay
+  R(x - 12, y - 3, 1, 4, "k"); R(x + 11, y - 3, 1, 4, "k");
+  nr(tx, y + j, w, 16, "k", 1); R(tx + 1, y + 1 + j, w - 2, 14, "G"); D(tx + 1, y + 1 + j, w - 2, 14, null, "n", 4); R(tx + 1, y + 14 + j, w - 2, 1, "n"); // the satellite's LED strip
+  for (const lx of [tx + 2, tx + w - 3]) P(lx, y + 2 + j, (fl(now / 300) & 1) ? "l" : "g");
+  if (str) txt(str, tc, y + 2 + j, { c: col, px: 12, sc: 2 });
+  if (torn) { const k = Math.min(3, fl((now - torn.t) / 90)); for (let i = 0; i < 16; i++) { P(x - 1 - k + ((i >> 1) & 1), y + i, "k"); P(x + k + ((i >> 1) & 1), y + i, "r"); } }
+}
+const satY = () => bay() ? vTop() + 12 : vTop() + 3;
+const satX = () => bay() ? -fl(PX.cx0 / 2) : 90;
+const callY = () => bay() ? vTop() + 8 : vTop() + (DEMO ? 70 : 52); // the clip's label sits between the satellite and the call
+const viewW = () => Math.min(CW, PX.LW) - 16; // the widest a call may be (the tight demo crop is narrower than the scene)
+const wordSc = (str, big) => big && textW(str) * 3 <= viewW() ? 3 : 2; // long Latin calls drop to 2x so they fit the scene
+const wordPx = (str, big) => big && textW(str, { c: "q", o: "k", px: 16 }) <= viewW() ? 16 : textW(str, { c: "q", o: "k", px: 13 }) <= viewW() ? 13 : 12; // long kana calls drop a size too
+function word(str, x, y, col, big, full) { // a judgement word: chunky Latin or crisp kana, always outlined
+  if (isLatin(str)) bigText(str, x, y, wordSc(full || str, big), col, "k");
+  else txt(str, x, y, { c: col, o: "k", px: wordPx(full || str, big) });
+}
+function wordPlate(str, x, y, big, sub) { // a dark cloth plate under the call, so it reads over planets and rings
+  const lat = isLatin(str), kp = wordPx(str, big), w = lat ? textW(str) * wordSc(str, big) + 2 : textW(str, { c: "q", o: "k", px: kp }), h = lat ? 5 * wordSc(str, big) + 2 : kp > 13 ? 18 : 15;
+  const sw = sub ? textW(sub, { px: 12, sc: 2 }) + 2 : 0, pw = Math.max(w, sw) + 8, ph = (sub ? (big ? 21 : 18) + 14 : h) + 5;
+  nr(x - fl(pw / 2), y - 3, pw, ph, "k", 2); D(x - fl(pw / 2) + 1, y - 2, pw - 2, ph - 2, "G", "k", 5);
+}
+function drawCall(now) {
+  const cl = fx.call; if (!cl) return;
+  const age = now - cl.t; if (age > 950) { fx.call = null; return; }
+  if (age > 830 && (fl(age / 40) & 1)) return; // blink out
+  const full = S(cl.key), chars = [...full], shown = chars.slice(0, Math.min(chars.length, 1 + Math.max(0, fl(age / 20)))).join(""); // a call set later in this frame still shows its first letter
+  let y = callY();
+  if (charging()) { // during the big-leap approach the call never covers the ringed giant: it moves under the star
+    const gq = run.planets[run.orbit.p.idx + 1], cam = Math.round(fx.camY), gy = gq.y - cam;
+    if (gy + 24 > y - 4 && gy - 24 < y + 38) y = clamp(Math.round(starPos(clockNow()).y) - cam + 16, y, vBot() - 44);
+  }
+  y -= age < 60 ? 2 : 0;
+  wordPlate(full, 90, y, cl.big, cl.sub && age > 120 ? cl.sub : "");
+  word(shown, 90, y, cl.col, cl.big, full);
+  if (cl.sub && age > 120) txt(cl.sub, 90, y + (cl.big ? 21 : 18), { c: "q", o: "k", px: 12, sc: 2 });
+}
+function drawHud(now) {
+  const x = satX(), y = satY();
+  drawSatellite(x, y, now, String(fx.disp));
+  drawTicker(x, y + 30, now);
+}
+function plate(x, y, w, h, label, big) { // this game's button: a satellite panel plate (the kit tag's cut shape, in lilac with rivets)
+  for (let j = 0; j < h; j++) {
+    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j));
+    R(x + cut, y + j, w - 2 * cut, 1, "k");
+    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - 2 * cut - 2, 1, j === 1 ? "f" : j >= h - 3 ? "n" : "F");
+  }
+  for (const rx of [x + 3, x + w - 4]) { P(rx, y + 3, "f"); P(rx, y + h - 4, "n"); }
+  const tc = textCanvas(label, { c: "q", o: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
+  spr(tc, fl(x + (w - tc.width) / 2), fl(y + (h - tc.height) / 2));
+}
+function drawBanner(x, y, w, h, now) { // the title cloth trailing from the satellite, a 1 px ripple running along it
+  const ph = fl(now / 140);
+  for (let i = 0; i < w; i++) {
+    const dy = ((i + ph) % 28) < 14 ? 0 : 1;
+    R(x + i, y + dy, 1, h, "k");
+    if (i > 0 && i < w - 1) { R(x + i, y + dy + 1, 1, h - 2, "F"); P(x + i, y + dy + 1, "f"); R(x + i, y + dy + h - 3, 1, 2, "n"); }
+    if (i > 1 && i < w - 2 && (i % 4) < 2) R(x + i, y + dy + h, 1, 2, "y");
+  }
+}
+function drawTitleUI(now) {
+  // the title is painted on a banner that the satellite tows; attract play stays visible below it
+  const top = vTop(), sy = top + 4, by = sy + 33, bx = 6, bw = 168, bh = 56;
+  line(70, sy + 24, bx + 16, by, "e"); line(110, sy + 24, bx + bw - 16, by, "e");
+  drawSatellite(90, sy, now, null);
+  spr(SP.n, 83, sy + 7 + (fl(now / 700) & 1)); spr(SP.face[fl(now / 130) % 23 === 0 ? "blink" : "happy"], 87, sy + 14 + (fl(now / 700) & 1));
+  drawBanner(bx, by, bw, bh, now);
+  if (lang === "ja") {
+    const art = kanaArt(GLYPH, "軌道ホッパー", "q", "k", "R"); noteText(S("title"), 12);
+    spr(art, 90 - art.width, by + 5, false, 2);
+    txt(S("titleEn"), 90, by + bh - 11, { c: "l" });
+  } else {
+    bigText(S("title"), 90, by + 13, 3, "q", "k", null, null, "R");
+    txt(STRINGS.ja.title, 90, by + 35, { c: "l", px: 12 });
+  }
+  const b = Number(store.get("best", 0)) || 0;
+  if (b > 0) { // a small plank under the banner: best and, from the second run, the rank
+    const runs = Number(store.get("runs", 0)) || 0, rk = runs >= 2 ? S("ranks")[rankOf(b)] : "";
+    const s1 = S("best") + " " + b, w1 = textW(s1, { px: 12, sc: 2 }), w2 = rk ? textW(rk, { px: 12, sc: 2 }) + 20 : 0, pw = w1 + w2 + 12, px = 90 - fl(pw / 2), py = by + bh + 6;
+    nr(px, py, pw, 16, "k", 1); R(px + 1, py + 1, pw - 2, 14, "q"); txt(s1, px + 6, py + 3, { c: "k", px: 12, sc: 2, a: "l" });
+    if (rk) { spr(SP.medal, px + 6 + w1 + 3, py, false, 2); txt(rk, px + 6 + w1 + 19, py + 3, { c: "R", px: 12, sc: 2, a: "l" }); }
+  }
+  const hy = UI.start[1] - 30, hw = Math.max(textW(S("how1"), { px: 12 }), textW(S("how2"), { px: 12 })) + 14;
+  nr(90 - fl(hw / 2), hy - 4, hw, 29, "k", 2); D(91 - fl(hw / 2), hy - 3, hw - 2, 27, "G", "k", 6); // dark plate keeps the hint readable over attract play
+  txt(S("how1"), 90, hy, { c: "q", o: "k", px: 12, sc: 1 }); txt(S("how2"), 90, hy + 14, { c: "l", o: "k", px: 12, sc: 1 });
+  const [tx, ty, tw, th] = UI.start, bob = fl(now / 400) & 1;
+  plate(tx, ty + bob, tw, th, S("start"), true);
+  spr(SP.pointer, tx - 15 + (fl(now / 300) & 1) * 2, ty + 6 + bob);
+  if (finePointer) txt(S("space"), tx + tw + 4, ty + 7, { c: "c", o: "k", a: "l", px: 12 });
+  txt(S("credit"), 4, Math.min(UI.start[1] + 30, vBot() - 9), { c: "c", o: "k", a: "l" });
+}
+function drawPause(now) {
+  D(-PX.cx0, -PX.cy0, PX.LW, PX.LH, null, "k", 8);
+  const dy = Math.round(-30 * (1 - easeOut((T() - fx.pauseT) / 200))), y = pauseY();
+  g.translate(0, dy);
+  win(8, y, 164, 96);
+  txt(S("paused"), 90, y + 10, { c: "q", px: 14, sc: 2 });
+  plate(...UI.resume, S("resume"), true); plate(...UI.restart, S("restart")); plate(...UI.quit, S("toTitle"));
+  g.translate(0, -dy);
+}
+const pauseY = () => Math.max(84, vTop() + 20);
+const overY = () => Math.max(26, vTop() + 4);
+function drawOver(now) {
+  const r = run.result, play = state === "over", age = resAge(r, now);
+  const x = DEMO ? 20 : 10, w = DEMO ? 140 : 160, h = play ? 168 : 132, y = overY() + Math.round(-180 * (1 - easeOut(age / RES.drop))) + (age > RES.drop && age < RES.drop + 80 ? 1 : 0);
+  line(40, y - 40, 40, y, "e"); line(140, y - 40, 140, y, "e"); // hung in the sky like the banner
+  win(x, y, w, h);
+  if (age > RES.head) word(S("over"), 90, y + 7, "q", true);
+  if (age > RES.cause) { txt(r.cause, 90, y + 27, { c: "h", px: 12, sc: 2 }); if (r.adv) txt(r.adv, 90, y + 41, { c: "s", px: 12, sc: 2 }); }
+  const ry0 = y + (r.adv ? 58 : 50);
+  if (age > RES.count) {
+    const k = clamp((age - RES.count) / RES.countDur, 0, 1), shown = String(Math.round(r.score * easeOut(k)));
+    const rk = r.showRank && r.rankDone ? S("ranks")[r.rank] : "", rw = rk ? textW(rk, { px: 12, sc: 2 }) : 0, sw = textW(String(r.score)) * 4;
+    bigText(shown, r.showRank ? x + 10 + fl(sw / 2) : 90, ry0, 4, "q", "k");
+    if (rk) { const rx = x + w - 10 - rw, rry = ry0 + 1; spr(SP.medal, rx - 17, rry, false, 2); txt(rk, rx, rry + 2, { c: "y", o: "k", px: 12, sc: 2, a: "l" }); }
+  }
+  if (age > RES.rows) {
+    [["rPerf", String(run.perfects)], ["rCombo", String(run.maxCombo)], ["rHops", String(run.hops)]].forEach(([k, v], i) => {
+      const ry = ry0 + 28 + i * 14;
+      txt(S(k), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" }); txt(v, x + w - 10, ry, { c: "q", sc: 2, a: "r" });
+      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 12, "b");
+    });
+    if (play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
+      const ry = ry0 + 70;
+      txt(S("rBest"), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" });
+      if (r.newBest) { if (age > RES.best) { const t = textCanvas(S("newBest"), { c: "w", px: 12, sc: 2 }), bw = t.width + 8, bx = x + w - 10 - bw, j = age < RES.best + 90 ? -2 : 0; noteText(S("newBest"), 12); nr(bx - 1, ry - 2 + j, bw + 2, 15, "k", 1); R(bx, ry - 1 + j, bw, 13, "r"); spr(t, bx + 4, ry + 1 + j); } }
+      else { txt(String(r.best), x + 70, ry, { c: "q", sc: 2, a: "l" }); txt(r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), x + w - 10, ry, { c: "y", px: 12, sc: 2, a: "r" }); }
+      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 12, "b");
+    }
+  }
+  if (play && age > RES.goal && r.goal) {
+    const gt = S(r.goal.k, r.goal.n), tw = textW(gt, { px: 12, sc: 2 }), gx = 90 - fl((tw + 14) / 2);
+    spr(SP.pointer, gx, y + h - 19); txt(gt, gx + 14, y + h - 20, { c: "y", px: 12, sc: 2, a: "l" });
+  }
+  if (play) {
+    plate(...UI.retry, S("retry"), true); plate(...UI.toTitle, S("toTitle"));
+    if (retryReady()) spr(SP.pointer, UI.retry[0] + UI.retry[2] + 2 - (fl(now / 300) & 1) * 2, UI.retry[1] + 6, true);
+  }
+}
+function drawDemoLabel() { // ?demo=1: a small bilingual title under the score satellite, clear of the Shorts caption zone
+  const x = satX(), y = state === "demo-over" ? overY() + 138 : satY() + 50, ja = STRINGS.ja.title, en = STRINGS.en.title; // under the result window while it hangs
+  if (bay()) { txt(ja, x, y, { c: "q", o: "k", px: 12 }); txt(en, x, y + 16, { c: "l", o: "k" }); return; }
+  const wj = textW(ja, { c: "q", o: "k", px: 12 }), we = textW(en, { c: "l", o: "k" }), x0 = x - fl((wj + 6 + we) / 2);
+  txt(ja, x0, y, { c: "q", o: "k", px: 12, a: "l" }); txt(en, x0 + wj + 6, y + 4, { c: "l", o: "k", a: "l" });
+}
+function camTarget() {
+  const H = vBot() - vTop(), A = vBot() - (isTitle() ? 138 : DEMO ? Math.round(H * 0.4) : 92); // the demo keeps the orbit above the Shorts caption zone
+  if (run.dead) { // frame the star and the whole missed ring between 20 % and 70 % of the view (wider when the view is short)
+    const d = run.dead, dv = deadVis(T()), q = d.reason === "decay" && d.o ? d.o.p : d.near && d.near.g <= 30 && d.reason !== "rock" ? d.near.q : null;
+    let lo = dv.y, hi = dv.y;
+    if (q) { const cc = centerAt(q, d.c); lo = Math.min(lo, cc.y - q.R - 3); hi = Math.max(hi, cc.y + q.R + 3); }
+    if (state === "demo-over") return Math.max(lo - (vTop() + H * 0.67), hi - (vTop() + H * 0.97)); // the clip's result hangs above: the failure stays in shot below it
+    const fit = hi - lo <= H * 0.5, a = fit ? 0.2 : 0.05, b = fit ? 0.7 : 0.95;
+    if (hi - lo > H * (b - a)) return (lo + hi) / 2 - (vTop() + H * 0.5);
+    return clamp((lo + hi) / 2 - (vTop() + H * 0.45), hi - (vTop() + H * b), lo - (vTop() + H * a));
+  }
+  const c = clockNow();
+  if (run.fly) {
+    const f = run.fly, k = clamp((c - f.tl) / Math.max(1, f.tEnd - f.tl), 0, 1), ty = f.q ? f.q.y : f.y;
+    return Math.min(lerp(f.o.p.y, ty, smooth(k)) - A, flyPos(f, c).y - vTop() - 44);
+  }
+  return run.orbit ? run.orbit.p.y - A : fx.camY;
+}
+function draw(now) {
+  if (!run) return;
+  const c = clockNow(), sh = shakeOffset(5), cy = Math.round(fx.camY), nd = nudgeNow(now);
+  sh.x = clamp(sh.x + nd.x, -BGM, BGM); sh.y = clamp(sh.y + nd.y, -BGM, BGM);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (bgTile) { const oy = ((Math.round(-cy * 0.2) % TILE) + TILE) % TILE; for (let y = oy - TILE; y < PX.LH + BGM; y += TILE) g.drawImage(bgTile, sh.x - BGM, y + sh.y - BGM); }
+  g.setTransform(1, 0, 0, 1, PX.cx0 + sh.x, PX.cy0 + sh.y - cy);
+  aimPredict(c);
+  drawNearStars(now, cy); drawHome(cy); drawWalls(cy); drawBestLine();
+  const cur = run.orbit ? run.orbit.p.idx : run.fly ? run.fly.o.p.idx : run.dead && run.dead.o ? run.dead.o.p.idx : run.hops;
+  for (const p of run.planets) {
+    if (p.idx < cur - 3) continue;
+    const role = run.orbit && p === run.orbit.p ? "cur" : p.idx === cur + 1 ? "next" : p.idx === cur + 2 ? "next2" : p.idx < cur || (run.fly && p === run.fly.o.p) ? "past" : "far";
+    drawPlanet(p, c, role, now);
+  }
+  drawRocks(c, now);
+  drawAim(c, now);
+  if (!run.dead) drawTrail();
+  drawFail(now);
+  drawRescue();
+  drawStar(now, c);
+  drawSwallow(now);
+  partsDraw(now);
+  drawImpact();
+  if (state === "play" && hint.active && run.orbit && !run.fly) { // first-run gesture hint next to the star
+    const sp = starPos(c);
+    drawTapHint(Math.round(sp.x) + 12, Math.round(sp.y) + 20, fx.aimHit && fx.aimHit.idx === run.orbit.p.idx + 1 ? 0 : 1);
+  }
+  g.setTransform(1, 0, 0, 1, PX.cx0, PX.cy0); // HUD and feedback never shake
+  if (!isTitle() && !isOver()) { drawHud(now); drawCall(now); }
+  if (isTitle()) drawTitleUI(now);
+  if (state === "paused") drawPause(now);
+  if (isOver()) drawOver(now);
+  if (DEMO) drawDemoLabel();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (!DEMO) {
+    if (!btnMute.hidden) icon(PX.LW - 17, 2, 15, 15, AU.muted ? "mute" : "sound");
+    if (!btnPause.hidden) icon(PX.LW - 17, 19, 15, 15, "pause");
+    if (isTitle() && !ovTitle.hidden) icon(2, 2, langW(), 15, S("lang"));
+  }
+  pixBlit(ctx, null);
+}
+const langW = () => textW(S("lang"), { px: 12, sc: 2 }) + 8;
+
+// ---------- KEEP: screen, language, mute ----------
+const UI = { start: [57, 278, 66, 22], retry: [57, 278, 66, 22], toTitle: [4, 302, 58, 17], resume: [0, 0, 94, 22], restart: [0, 0, 66, 18], quit: [0, 0, 66, 18] };
+function layoutUI() {
+  const py = pauseY(); UI.resume = [43, py + 34, 94, 22]; UI.restart = [12, py + 66, 76, 18]; UI.quit = [92, py + 66, 76, 18];
+  const core = (el, r, p) => place(el, r[0] - p + PX.cx0, r[1] - p + PX.cy0, r[2] + 2 * p, r[3] + 2 * p);
+  core($("btnStart"), UI.start, 3); core($("btnResume"), UI.resume, 1); core($("btnRestart"), UI.restart, 1); core($("btnQuit"), UI.quit, 1);
+  core($("btnRetry"), UI.retry, 2); core($("btnToTitle"), UI.toTitle, 1);
+  place(btnMute, PX.LW - 19, 0, 19, 18); place(btnPause, PX.LW - 19, 18, 19, 18); place($("btnLang"), 0, 0, langW() + 4, 19);
+}
+function resize() {
+  const cw = wrap.clientWidth || innerWidth, ch = wrap.clientHeight || innerHeight, tight = DEMO && ch > cw * 1.3;
+  const box = pixResize(cv, cw, ch, tight ? DEMO_CORE[0] : CW, tight ? DEMO_CORE[1] : CH, [0, 40, 60, 80, 100, 120]);
+  if (tight) { PX.cx0 = fl((PX.LW - CW) / 2); PX.cy0 = fl((PX.LH - CH) * 0.6); } // the world keeps its 180 x 320 coordinates, cropped at the sides
+  for (const el of [cv, uiEl]) { el.style.width = box.w + "px"; el.style.height = box.h + "px"; el.style.left = box.left + "px"; el.style.top = box.top + "px"; }
+  buildBg(); layoutUI();
+}
+window.addEventListener("resize", resize);
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = STRINGS[lang].title + (lang === "ja" ? " / " + STRINGS.en.title : "");
+  document.querySelectorAll("[data-s]").forEach(el => { el.textContent = S(el.getAttribute("data-s")); });
+  $("btnLang").textContent = S("lang");
+  layoutUI();
+}
+function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
+
+// ---------- KEEP: flow ----------
+function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
+const newSeed = () => (Math.random() * 4294967296) >>> 0;
+function startAI(mode, seed) { state = mode === "demo" ? "demo" : "title"; newRun(mode, seed == null ? newSeed() : seed); btnPause.hidden = true; }
+function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+function startPlay() {
+  if (auInit()) auResume();
+  sfx.ui(); hideAll();
+  state = "play"; runCount++;
+  newRun("play", newSeed());
+  btnPause.hidden = false;
+  pfStart();
+}
+function showOver(now) {
+  state = "over"; run.result = makeResult(now); musicLevel("bed");
+  if (run.result.newBest) store.set("best", run.score);
+  if (run.hops > (Number(store.get("bestHop", 0)) || 0)) store.set("bestHop", run.hops);
+  store.set("runs", (Number(store.get("runs", 0)) || 0) + 1);
+  ovOver.hidden = false; overShownAt = T(); overPress = false; btnPause.hidden = true;
+  platform("gameOver", run.score);
+}
+function pauseGame(at) {
+  if (state !== "play") return;
+  state = "paused"; fx.pauseT = T();
+  run.pauseClock = (at || T()) - run.offset;
+  musicLevel("off");
+  ovPause.hidden = false; btnPause.hidden = true;
+  pfStop();
+}
+function resumeGame() {
+  if (state !== "paused") return;
+  if (auInit()) auResume();
+  run.offset = T() - run.pauseClock;
+  state = "play"; ovPause.hidden = true; btnPause.hidden = false;
+  musicLevel(charging() ? "leap" : "play");
+  pfStart();
+}
+function holdClock() { if (run && run.holdAt == null && (state === "title" || state === "demo")) run.holdAt = T(); }
+function releaseClock() { if (run && run.holdAt != null) { run.offset += T() - run.holdAt; run.holdAt = null; } }
+function onHide() { if (state === "play") pauseGame(); else holdClock(); }
+function onShow() { releaseClock(); lastNow = performance.now(); }
+const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
+function retry() { if (state === "over" && retryReady()) startPlay(); }
+// one tap or one Space on the result: inside the lockout it only fast-forwards the count-up; after it, it plays again at once (bar 1.5.4)
+function overTap() { if (state !== "over") return; if (retryReady()) { skipResult(T()); retry(); } else skipResult(T()); }
+
+// ---------- KEEP: input. Gameplay on pointerdown / keydown; the response is drawn on the next frame ----------
+function press(tc) { // the core input: the star lets go of its orbit; mid-flight a tap only flickers
+  if (!run || run.dead) return;
+  fx.tapT = fx.vt;
+  if (run.orbit && !run.fly && !run.queued) tryLaunch(tc);
+  else if (loud()) sfx.tap();
+}
+auUnlock();
+cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") press(clockNow()); });
+cv.addEventListener("pointercancel", e => e.preventDefault()); // nothing is held, so a cancelled touch commits nothing
+ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
+ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
+ovOver.addEventListener("pointerdown", e => { if (e.target === ovOver) overPress = true; }); // only a press that starts on the result counts
+ovOver.addEventListener("click", e => { if (e.target === ovOver && overPress) overTap(); overPress = false; });
+$("btnLang").addEventListener("click", e => { e.stopPropagation(); lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
+btnMute.addEventListener("click", e => { e.stopPropagation(); if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
+btnPause.addEventListener("click", e => { e.stopPropagation(); pauseGame(); btnPause.blur(); });
+$("btnResume").addEventListener("click", e => { e.stopPropagation(); resumeGame(); });
+$("btnRestart").addEventListener("click", e => { e.stopPropagation(); pfStop(); startPlay(); });
+$("btnQuit").addEventListener("click", e => { e.stopPropagation(); toTitle(); });
+$("btnRetry").addEventListener("click", e => { e.stopPropagation(); retry(); });
+$("btnToTitle").addEventListener("click", e => { e.stopPropagation(); if (retryReady()) toTitle(); });
+document.addEventListener("keydown", e => {
+  if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
+  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar";
+  if (ok || k.startsWith("Arrow")) e.preventDefault();
+  if (e.repeat) return;
+  if (k === "m" || k === "M") { setMute(!AU.muted); return; }
+  if (isTitle()) { if (ok) startPlay(); }
+  else if (state === "play") { if (k === "Escape" || k === "p" || k === "P") pauseGame(); else if (ok || k === "ArrowUp" || k === "ArrowDown") press(clockNow()); }
+  else if (state === "paused") { if (ok || k === "Escape" || k === "p" || k === "P") resumeGame(); }
+  else if (state === "over") { if (ok) overTap(); else if (k === "Escape") toTitle(); }
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) onHide(); else onShow(); });
+window.addEventListener("blur", () => { if (state === "play") pauseGame(); });
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+// ---------- KEEP: update and loop ----------
+function update(now, dt) {
+  if (!run) return;
+  if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) updateRun(now);
+  if (isDying()) {
+    const el = now - run.dead.at, wait = state === "dying" ? FREEZE : state === "demo-dying" ? 1700 : 1500; // the demo lingers on the failure for the clip
+    if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else startAI("attract"); }
+  }
+  if (state === "demo-over" && now - run.result.at > 1800) startAI("demo"); // a short result hold, then the clip loops
+  if (isOver()) resultStep(now);
+  if (fx.note && fx.note.snd && now >= fx.note.t) { fx.note.snd = false; if (loud()) sfx.notice(); }
+  juiceStep(dt);
+  if (state !== "paused") fx.camY += (camTarget() - fx.camY) * (1 - Math.exp(-dt * (run.dead ? 4 : 7))); // the camera may settle on the cause during the freeze
+  if (state === "paused" || (isDying() && now - run.dead.at < freezeMs())) return; // the failure freeze holds every pose
+  const vdt = Juice.stop > 0 ? dt * 0.15 : dt; // hitstop slows the visuals; the star itself holds by rule (HOLD)
+  fx.vt += vdt * 1000;
+  partsStep(vdt);
+  const c = clockNow();
+  if (dt <= 0) {} // a zero step (a redraw) must not grow the trail
+  else if (!run.dead && (run.orbit || run.fly)) { const sp = starPos(c); fx.trail.push({ x: sp.x, y: sp.y }); if (fx.trail.length > (run.fly ? 16 : 10)) fx.trail.shift(); }
+  else if (fx.trail.length) fx.trail.shift();
+  if (run.orbit && !run.fly && !run.dead && loud() && revsLeft(run.orbit, c) < 0.4 && now - fx.warnT > 230) { fx.warnT = now; sfx.warn(fx.warnN++); }
+}
+function step(now, dt) {
+  update(now, dt);
+  if (run) fx.disp = run.score < fx.disp ? run.score : fx.disp + Math.ceil((run.score - fx.disp) * Math.min(1, dt * 12));
+  musicStep();
+}
+let lastNow = performance.now();
+function frame() {
+  requestAnimationFrame(frame);
+  if (manual) return;
+  let now = performance.now(); if (now < lastNow) now = lastNow;
+  const raw = now - lastNow, prev = lastNow; lastNow = now;
+  if (raw > 300 && state === "play") pauseGame(prev); // a long stall must not count as time the player had
+  if (raw > 250 && run && run.ai && run.holdAt == null && !isDying()) run.offset += raw - 16; // the AI never teleports
+  step(now, clamp(raw, 0, 50) / 1000);
+  draw(now);
+}
+
+// ---------- KEEP: test hooks (the contract in tools/README.md; tools/qa.mjs and review-kit read them) ----------
+window.__game = {
+  get state() { return state === "demo-over" || state === "demo-dying" ? "demo" : state === "title-dying" ? "title" : state; },
+  get score() { return run ? run.score : 0; },
+  get mode() { return run ? run.mode : null; },
+  snap() { // gameplay state for frame-rate parity: integers only, no wall clock
+    if (!run) return null;
+    const c = clockNow(), sp = starPos(c);
+    return { state, score: run.score, hops: run.hops, combo: run.combo, moons: run.moons, perfects: run.perfects,
+      planet: run.orbit ? run.orbit.p.idx : -1, fly: run.fly ? 1 : 0, x: Math.round(sp.x), y: Math.round(sp.y), dead: run.dead && run.dead.reason, t: Math.round(c) };
+  },
+  manual(on) { manual = !!on; simT = performance.now(); lastNow = simT; },
+  tick(ms, render) { simT += ms; step(simT, ms / 1000); if (render) draw(simT); },
+  demo(seed) { hideAll(); btnPause.hidden = true; startAI("demo", seed); },
+  tap() { if (state === "play") press(clockNow()); },
+  autoplay(on) { autopilot = !!on; if (!autopilot && run && run.mode === "play") run.plan = null; },
+  fail() { if (state === "play" && !run.dead) { const c = clockNow(); if (run.fly) kill("miss", c, run.fly); else kill("decay", c, null); } },
+  audioState() { return AU.ctx ? AU.ctx.state : "none"; },
+  view() { return { K: PX.K, dpr: PX.dpr, w: PX.LW, h: PX.LH, top: PX.TOP, reduce: Juice.reduce, textMin: TXT.min }; },
+  texts() { return TXT.last.slice(); },
+  target() { const u = PX.K / PX.dpr, b = cv.getBoundingClientRect(); return { x: b.left + (PX.cx0 + CW / 2) * u, y: b.top + (PX.cy0 + vBot() - 130) * u }; }, // a fixed point on the field, never a moving object
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); }
+};
+
+// ---------- boot ----------
+buildSprites();
+resize();
+applyLang();
+AU.muted = !!store.get("mute", false); setMute(AU.muted);
+if (DEMO) { hideAll(); btnMute.hidden = true; btnPause.hidden = true; auInit(); startAI("demo"); } // recordings start the bus without a gesture when the browser allows it
+else toTitle();
+requestAnimationFrame(frame);
 })();
 </script>
 </body>
