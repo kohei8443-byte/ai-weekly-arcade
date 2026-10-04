@@ -283,6 +283,21 @@ export async function runHardChecks(browser, origin, gameDir, { parallel = 2 } =
       const ok = r.playAt != null && r.playAt <= 1000 && lock >= 300;
       add(ok ? 'pass' : 'fail', 'retry-latency', BAR.retry, r.playAt == null ? 'holding Space after the game over never started a new run within 5 s'
         : `death -> playable ${r.playAt} ms with Space pressed every frame (need <= 1000), result screen at ${r.overAt ?? '-'} ms, lockout ${lock} ms (need >= 300)`);
+      // A person presses once: one Space at the moment found above must start the run by itself
+      // (a first press that only skips a count-up fails here).
+      if (ok) {
+        const d2 = await ev(waitDeath);
+        if (d2.dead) {
+          const one = await ev(at => {
+            const H = window.__hard, G = window.__game; let t = 0;
+            while (t < at) { H.step(16); t += 16; }
+            H.press(' ', 'Space'); H.step(16); H.step(16);
+            return { at: t, state: G.state, dead: !!(G.snap() || {}).dead };
+          }, Math.max(r.playAt, 320));
+          const oneOk = one.state === 'play' && !one.dead;
+          add(oneOk ? 'pass' : 'fail', 'retry-one-press', BAR.retry, `one Space ${one.at} ms after a second game over -> "${one.state}"${oneOk ? '' : ' (need "play": the first press after the lockout must start the next run, not only skip the result animation)'}`);
+        }
+      }
       const pf = await ev(() => window.__hard.pf.slice());
       await readKeys(ev);
       let pairOk = atLoad.length === 0 && pf[0] === 'start', on = false;
