@@ -12,6 +12,8 @@ const STRING_FIELDS = [
   'slug', 'title_ja', 'title_en', 'tagline_ja', 'tagline_en',
   'how_to_play_ja', 'how_to_play_en', 'genre', 'video_hook_ja'
 ];
+// Optional fields: "quality_bar": 1 marks a game built to QUALITY_BAR.md (qa runs the hard checks).
+export const OPTIONAL_META_FIELDS = ['quality_bar'];
 export const META_FIELDS = [
   'slug', 'week', 'title_ja', 'title_en', 'tagline_ja', 'tagline_en', 'how_to_play_ja', 'how_to_play_en',
   'controls', 'genre', 'tags', 'session_length_sec', 'video_hook_ja'
@@ -64,7 +66,8 @@ export function validateMeta(meta, dirName = '') {
   for (const k of ['title_en', 'tagline_en', 'how_to_play_en']) {
     if (typeof meta[k] === 'string' && jp.test(meta[k])) warnings.push(`"${k}" contains Japanese characters`);
   }
-  const known = new Set(META_FIELDS);
+  if ('quality_bar' in meta && !(Number.isInteger(meta.quality_bar) && meta.quality_bar >= 0)) errors.push('"quality_bar" must be a whole number (1 = built to QUALITY_BAR.md)');
+  const known = new Set([...META_FIELDS, ...OPTIONAL_META_FIELDS]);
   for (const k of Object.keys(meta)) if (!known.has(k)) warnings.push(`unknown field "${k}" (ignored by hub)`);
   const m = /^w(\d{2,3})-(.+)$/.exec(dirName);
   if (m) {
@@ -151,9 +154,11 @@ function findFallbackChromium() {
 
 // extraArgs: e.g. ['--force-device-scale-factor=3'] so screencasts / recordVideo capture device pixels
 // (with only the emulated deviceScaleFactor, Chromium screencasts at CSS-pixel size).
-export async function launchBrowser(extraArgs = []) {
+// autoplay: 'no-user-gesture-required' (default: tools hear the game at once) or 'user-gesture-required'
+// (like a real phone; the hard checks use it to test the audio unlock).
+export async function launchBrowser(extraArgs = [], { autoplay = 'no-user-gesture-required' } = {}) {
   const { chromium } = await loadPlaywright();
-  const args = ['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
+  const args = [`--autoplay-policy=${autoplay}`, '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', ...extraArgs];
   const opts = { args };
   if (process.env.CHROMIUM_PATH) return chromium.launch({ ...opts, executablePath: process.env.CHROMIUM_PATH });

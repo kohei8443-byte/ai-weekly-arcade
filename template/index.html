@@ -3,490 +3,1135 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101433">
-<title>タイミングストップ</title>
+<title>タイミングストップ / Timing Stop</title>
 <style>
-/* Starter game for AI Weekly Arcade. One portrait play area (canvas + DOM overlays), centred on wide screens.
-   Rules every game keeps: single file, no network, [hidden] rule below, ja/en strings, ?demo=1 attract AI,
-   window.Platform adapter, localStorage only inside try/catch, data-qa attributes for tools/qa.mjs. */
-:root {
-  --bg: #101433;
-  --bg-deep: #080a1f;
-  --ink: #f6efe0;
-  --dim: #9aa0cf;
-  --accent: #ffd36e;
-  --accent-shadow: #c99a2e;
-  --good: #7fe3c4;
-  --bad: #ff7a6b;
-  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-  color-scheme: dark;
-}
-[hidden] { display: none !important; }
-html, body { height: 100%; margin: 0; }
-body {
-  background: var(--bg-deep); color: var(--ink); font-family: var(--font); overflow: hidden; overscroll-behavior: none;
-  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none;
-}
-#app {
-  position: relative; height: 100%; aspect-ratio: 9 / 16; max-width: 100%; margin: 0 auto; overflow: hidden;
-  background: var(--bg); touch-action: none; box-shadow: 0 0 60px #00000080;
-}
-canvas { display: block; width: 100%; height: 100%; outline: none; }
-.hud {
-  position: absolute; inset: 0 0 auto 0; display: flex; justify-content: space-between; align-items: flex-start;
-  padding: calc(12px + env(safe-area-inset-top)) 16px 0; pointer-events: none;
-}
-.score { font-weight: 900; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
-.best { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--dim); margin-top: 44px; text-align: right; }
-.best b { display: block; font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; }
-.tools { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; display: flex; gap: 6px; z-index: 5; }
-.tool {
-  font: 700 12px/1 var(--font); color: var(--dim); background: #080a1f99; min-width: 36px; height: 32px;
-  border: 1px solid #ffffff2a; border-radius: 999px; padding: 0 10px; cursor: pointer;
-}
-.panel {
-  position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 16px; padding: 0 16px; text-align: center; background: radial-gradient(ellipse at 50% 45%, #080a1f99 0%, #080a1fe0 75%);
-}
-.kicker { font-size: 12px; font-weight: 700; letter-spacing: .3em; color: var(--good); }
-h1 { margin: 0; font-size: clamp(38px, 11vw, 60px); line-height: 1.1; font-weight: 900; text-wrap: balance; }
-.how { margin: 0; max-width: 21em; font-size: 15px; line-height: 1.8; font-weight: 700; color: var(--dim); }
-.how em { font-style: normal; color: var(--ink); }
-.btn {
-  font: 900 20px/1 var(--font); color: var(--bg-deep); background: var(--accent); border: 0; border-radius: 999px;
-  padding: 16px 40px; cursor: pointer; box-shadow: 0 6px 0 var(--accent-shadow); letter-spacing: .04em;
-}
-.btn:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--accent-shadow); }
-.btn:focus-visible, .tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.hint { font-size: 12px; color: var(--dim); }
-.big { font-size: 84px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
-.newbest { font-size: 15px; font-weight: 900; letter-spacing: .12em; color: var(--bad); }
-.credit {
-  position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
-  font-size: 11px; line-height: 1.5; color: #9aa0cfcc; letter-spacing: .08em;
-}
-/* small title shown only in ?demo=1 (recordings) */
-.brand {
-  position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center;
-  font-size: 13px; font-weight: 900; letter-spacing: .18em; color: #f6efe0b0; pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
+/* Template for AI Weekly Arcade (pixel house style, see STYLE.md and QUALITY_BAR.md).
+   Everything the player sees is drawn into one pixel buffer on the canvas. The DOM only holds
+   transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#262b52}
+body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
+#wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#cv{position:absolute;left:0;top:0;display:block;touch-action:none;image-rendering:pixelated}
+#ui{position:absolute;left:0;top:0;pointer-events:none}
+.ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+/* every control is drawn in pixels on the canvas; these buttons are invisible hit areas on top of the drawings */
+#ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+#ui button:focus{outline:none}
+#ui button:focus-visible{outline:2px dashed #f6e2a6;outline-offset:1px}
 </style>
 </head>
 <body>
-<div id="app">
-  <canvas id="c" tabindex="-1"></canvas>
-
-  <div class="hud" id="hud" hidden>
-    <div class="score" id="score" data-qa="score">0</div>
-    <div class="best"><span data-s="best"></span><b id="best">0</b></div>
-  </div>
-
-  <section class="panel" id="title">
-    <div class="kicker" id="kicker"></div>
-    <h1 data-s="title"></h1>
-    <p class="how" data-h="how"></p>
-    <button class="btn" id="start" type="button" data-qa="start" data-s="start"></button>
-    <div class="hint" data-s="controls"></div>
-    <div class="credit" data-s="credit"></div>
+<div id="wrap">
+<canvas id="cv"></canvas>
+<div id="ui">
+  <section id="ovTitle" class="ov">
+    <button id="btnStart" type="button" data-qa="start" data-s="start"></button>
+    <button id="btnLang" type="button" data-qa="lang"></button>
   </section>
-
-  <section class="panel" id="pause" hidden>
-    <div class="kicker" data-s="paused"></div>
-    <button class="btn" id="resume" type="button" data-qa="resume" data-s="resume"></button>
-    <div class="hint" data-s="resumeHint"></div>
+  <section id="ovPause" class="ov" hidden>
+    <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
+    <button id="btnRestart" type="button" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-s="toTitle"></button>
   </section>
-
-  <section class="panel" id="over" hidden>
-    <div class="kicker" data-s="over"></div>
-    <div class="big" id="final">0</div>
-    <div class="newbest" id="newbest" data-s="newBest" hidden></div>
-    <button class="btn" id="retry" type="button" data-qa="retry" data-s="retry"></button>
-    <div class="hint" data-s="retryHint"></div>
+  <section id="ovOver" class="ov" hidden>
+    <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
+    <button id="btnToTitle" type="button" data-s="toTitle"></button>
   </section>
-
-  <div class="brand" id="brand" hidden></div>
-
-  <div class="tools" id="tools">
-    <button class="tool" id="pauseBtn" type="button" data-qa="pause" hidden>II</button>
-    <button class="tool" id="mute" type="button" data-qa="mute"></button>
-    <button class="tool" id="lang" type="button" data-qa="lang"></button>
-  </div>
+  <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
+  <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
 </div>
-
+</div>
 <script>
-(() => {
-  "use strict";
+(function () {
+"use strict";
 
-  // ===== game identity (TODO(game): change for each week) =====
-  const GAME = { slug: 'timing-stop', week: 1 };
-  const KEY = name => `${GAME.slug}-${name}`; // localStorage keys start with "<slug>-"
+// Portal SDK adapter: a portal build can replace this object before the game script runs.
+window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
 
-  // ===== portal adapter: a portal build can replace window.Platform before this script runs =====
-  window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
-  const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* adapter errors never break the game */ } };
+// ==== PIXEL KIT START ====
+// The pixel house style (STYLE.md) as reusable code. Nothing in this block knows about the game: the game
+// passes its core size, sprites, glyph tables, strings and sounds. Copy it unchanged into every game; the
+// only allowed edit is swapping up to ~6 palette hues for the theme. tools/qa.mjs relies on TXT and auPeak.
 
-  // ===== strings (every visible text lives here, ja and en) =====
-  const STRINGS = {
-    ja: {
-      docTitle: 'タイミングストップ', title: 'タイミングストップ',
-      how: '動く玉が<em>光るゾーン</em>に入ったら<em>タップ</em>。<br>3回はずすとおしまい。',
-      start: 'スタート', controls: 'タップ / クリック / スペースキー',
-      best: 'ベスト', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'EN', pauseLabel: '一時停止',
-      paused: '一時停止中', resume: 'つづける', resumeHint: 'スペースキーでも再開',
-      over: 'GAME OVER', newBest: 'ベスト更新！', retry: 'もう一回', retryHint: 'スペースキーでもリトライ',
-      perfect: 'PERFECT', good: 'GOOD', miss: 'MISS',
-      credit: 'Made with Claude', canvas: 'ゲーム画面'
-    },
-    en: {
-      docTitle: 'Timing Stop', title: 'Timing Stop',
-      how: '<em>Tap</em> when the ball is inside the <em>glowing zone</em>.<br>Miss three times and it is over.',
-      start: 'START', controls: 'Tap / Click / Space',
-      best: 'BEST', soundOn: '♪ ON', soundOff: '♪ OFF', lang: 'JA', pauseLabel: 'Pause',
-      paused: 'PAUSED', resume: 'RESUME', resumeHint: 'or press Space',
-      over: 'GAME OVER', newBest: 'NEW BEST!', retry: 'RETRY', retryHint: 'or press Space',
-      perfect: 'PERFECT', good: 'GOOD', miss: 'MISS',
-      credit: 'Made with Claude', canvas: 'Game screen'
+// ---------- palette: 24 colours, one letter each (a game may swap up to ~6 hues) ----------
+const PAL = {
+  k: "#2b1b17", n: "#262b52", b: "#3d5a98", s: "#8db7dc", p: "#d4e6ea", w: "#fbf6ea", m: "#e2d3b6", c: "#aebfd2",
+  r: "#d6402b", R: "#8a2232", h: "#ef9a86", f: "#f1c597", F: "#c98b5e", o: "#dba268", O: "#a5653a", D: "#6a3b22",
+  y: "#ecc659", Y: "#b4832d", g: "#3f7b3b", G: "#23432b", l: "#8fbf58", a: "#ef8834", e: "#87838e", q: "#f6e2a6"
+};
+
+// ---------- small helpers ----------
+const fl = Math.floor;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
+const newCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+// seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
+function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+// ---------- storage: one JSON record under "<prefix>save"; never throws, keeps working in memory when blocked ----------
+function makeStore(prefix) {
+  const KEY = prefix + "save"; let data = {};
+  try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
+  return {
+    get(k, d) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : d; },
+    set(k, v) { data[k] = v; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } }
+  };
+}
+
+// ---------- pixel buffer: one small canvas, integer upscale, never stretched ----------
+const PX = { B: newCanvas(1, 1), K: 1, LW: 1, LH: 1, dpr: 1, TOP: 0, cx0: 0, cy0: 0 };
+let g = PX.B.getContext("2d");
+// Fit a cw x ch core scene at the largest integer scale; extra space shows more world around it.
+// Landscape screens may crop `tops` rows of sky when that buys a bigger scale and okTop(sideBay) agrees.
+function pixResize(cv, cssW, cssH, cw, ch, tops, okTop) {
+  const dpr = PX.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
+  let best = null;
+  for (const top of devW > devH * 1.15 ? tops : [0]) {
+    const k = Math.max(1, fl(Math.min(devW / cw, devH / (ch - top))));
+    if (top && okTop && !okTop(fl((Math.ceil(devW / k) - cw) / 2))) continue;
+    if (!best || k > best.k) best = { k, top };
+  }
+  PX.K = best.k; PX.TOP = best.top; PX.LW = Math.ceil(devW / PX.K); PX.LH = Math.ceil(devH / PX.K);
+  PX.B.width = PX.LW; PX.B.height = PX.LH; g = PX.B.getContext("2d"); g.imageSmoothingEnabled = false;
+  cv.width = PX.LW * PX.K; cv.height = PX.LH * PX.K;
+  PX.cx0 = fl((PX.LW - cw) / 2); PX.cy0 = fl((PX.LH - (ch - PX.TOP)) * 0.6) - PX.TOP;
+  const w = PX.LW * PX.K / dpr, h = PX.LH * PX.K / dpr;
+  return { w, h, left: fl((cssW - w) / 2), top: fl((cssH - h) / 2) };
+}
+// one drawImage per frame; zoom = { x, y, s } is a short camera punch toward buffer point (x, y)
+function pixBlit(ctx, zoom) {
+  const K = PX.K, W = PX.LW * K, H = PX.LH * K;
+  TXT.last = TXT.seen; TXT.seen = []; // the strings of the frame just drawn (window.__game.texts())
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+  if (!zoom || zoom.s <= 1.001) { ctx.drawImage(PX.B, 0, 0, W, H); return; }
+  ctx.drawImage(PX.B, Math.round(zoom.x * K * (1 - zoom.s)), Math.round(zoom.y * K * (1 - zoom.s)), Math.round(W * zoom.s), Math.round(H * zoom.s));
+}
+// place a transparent DOM hit area over something drawn at buffer rect (x, y, w, h)
+function place(el, x, y, w, h) {
+  const u = PX.K / PX.dpr;
+  el.style.left = x * u + "px"; el.style.top = y * u + "px"; el.style.width = w * u + "px"; el.style.height = h * u + "px";
+}
+
+// ---------- primitives: integer rectangles and spans from the palette ----------
+function R(x, y, w, h, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
+function P(x, y, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), 1, 1); }
+function line(x0, y0, x1, y1, c, t) { // Bresenham with a square brush of t px
+  t = t || 1; x0 = fl(x0); y0 = fl(y0); x1 = fl(x1); y1 = fl(y1);
+  const o = t >> 1, dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let e = dx + dy; g.fillStyle = PAL[c];
+  for (let i = 0; i < 400; i++) {
+    g.fillRect(x0 - o, y0 - o, t, t);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * e;
+    if (e2 >= dy) { e += dy; x0 += sx; }
+    if (e2 <= dx) { e += dx; y0 += sy; }
+  }
+}
+const hw = (rx, ry, dy) => Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / (ry + 0.5)) ** 2)));
+// filled ellipse / ring from horizontal spans; part: 0 all, -1 top half, 1 bottom half
+function ell(cx, cy, rx, ry, c, part) {
+  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
+  for (let dy = -ry; dy <= ry; dy++) { if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue; const w = hw(rx, ry, dy); g.fillRect(cx - w, cy + dy, 2 * w + 1, 1); }
+}
+function ring(cx, cy, rxo, ryo, rxi, ryi, c, part) {
+  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
+  for (let dy = -ryo; dy <= ryo; dy++) {
+    if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue;
+    const wo = hw(rxo, ryo, dy);
+    if (Math.abs(dy) > ryi) { g.fillRect(cx - wo, cy + dy, 2 * wo + 1, 1); continue; }
+    const wi = hw(rxi, ryi, dy);
+    g.fillRect(cx - wo, cy + dy, wo - wi, 1); g.fillRect(cx + wi + 1, cy + dy, wo - wi, 1);
+  }
+}
+// scanline polygon fill; c may be a function (y) -> palette letter or pattern for per-row cel shading
+function poly(pts, c) {
+  let y0 = 1e9, y1 = -1e9;
+  for (const p of pts) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  for (let y = fl(y0); y <= Math.ceil(y1); y++) {
+    const sy = y + 0.5, xs = [];
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) xs.push(a.x + (sy - a.y) / (b.y - a.y) * (b.x - a.x)); }
+    xs.sort((a, b) => a - b);
+    for (let j = 0; j + 1 < xs.length; j += 2) {
+      const xa = Math.round(xs[j]), xb = Math.round(xs[j + 1]);
+      if (xb > xa) { const v = typeof c === "function" ? c(y) : c; g.fillStyle = typeof v === "string" ? PAL[v] : v; g.fillRect(xa, y, xb - xa, 1); }
     }
+  }
+}
+// ordered dithering: 4x4 Bayer tile of two palette colours (null = transparent), level 0..16 = share of b
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], patCache = {};
+function pat(a, b, lv) {
+  const key = a + b + lv;
+  if (!patCache[key]) {
+    const t = newCanvas(4, 4), x = t.getContext("2d");
+    for (let i = 0; i < 16; i++) { const col = BAYER[i] < lv ? b : a; if (col) { x.fillStyle = PAL[col]; x.fillRect(i % 4, i >> 2, 1, 1); } }
+    patCache[key] = g.createPattern(t, "repeat");
+  }
+  return patCache[key];
+}
+function D(x, y, w, h, a, b, lv) { g.fillStyle = pat(a, b, lv); g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
+function band(x, y, w, h, a, b) { for (let i = 0; i < h; i++) D(x, y + i, w, 1, a, b, Math.round((i + 0.5) / h * 16)); }
+
+// ---------- sprites: char maps ("..kffk..", one palette letter per pixel) baked once into canvases ----------
+function mk(rows, swap) {
+  const c = newCanvas(Math.max(...rows.map(r => r.length)), rows.length), x = c.getContext("2d");
+  rows.forEach((r, y) => { for (let i = 0; i < r.length; i++) { let ch = r[i]; if (swap && swap[ch]) ch = swap[ch]; if (ch !== "." && PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, y, 1, 1); } } });
+  return c;
+}
+function spr(c, x, y, flip, sx, sy) {
+  sx = sx || 1; sy = sy || sx;
+  const w = c.width * sx, h = c.height * sy;
+  if (!flip) { g.drawImage(c, fl(x), fl(y), w, h); return; }
+  g.save(); g.translate(fl(x) + w, fl(y)); g.scale(-1, 1); g.drawImage(c, 0, 0, w, h); g.restore();
+}
+function outline(src, col) { // 1 px border (8 neighbours) in one colour
+  const c = newCanvas(src.width + 2, src.height + 2), x = c.getContext("2d"), m = newCanvas(src.width, src.height), mx = m.getContext("2d");
+  mx.drawImage(src, 0, 0); mx.globalCompositeOperation = "source-in"; mx.fillStyle = PAL[col]; mx.fillRect(0, 0, m.width, m.height);
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) x.drawImage(m, i, j);
+  x.drawImage(src, 1, 1);
+  return c;
+}
+
+// ---------- type: 3x5 bitmap font (Latin, digits) and crisp system text (Japanese, >= 12 buffer px) ----------
+// each glyph: width digit, then one base-32 digit per row (bit = pixel, MSB left); a 6th row is a descender
+const GL = {
+  "0": "375557", "1": "326227", "2": "371747", "3": "371317", "4": "355711", "5": "374717", "6": "374757", "7": "371222", "8": "375757", "9": "375717",
+  A: "325755", B: "365656", C: "334443", D: "365556", E: "374647", F: "374644", G: "334553", H: "355755", I: "372227", J: "311152",
+  K: "355655", L: "344447", M: "5hrlhh", N: "49db99", O: "325552", P: "365644", Q: "325563", R: "365655", S: "334216", T: "372222",
+  U: "355557", V: "355552", W: "5hhlla", X: "355255", Y: "355222", Z: "371247",
+  a: "303553", b: "346556", c: "303443", d: "313553", e: "303563", f: "312722", g: "3035316", h: "346555", i: "110111", j: "2101112",
+  k: "345665", l: "222221", m: "50qlll", n: "306555", o: "302552", p: "3065644", q: "3035311", r: "305644", s: "303616", t: "327221",
+  u: "305553", v: "305552", w: "50hlla", x: "305225", y: "3055316", z: "307127",
+  " ": "200000", "!": "111101", "?": "361202", ".": "100001", ",": "100011", ":": "101010", "/": "311244", "-": "300700", "+": "302720",
+  "×": "305250", "=": "307070", "'": "111000", "~": "405a00", "♩": "311176", "(": "212221", ")": "221112", ">": "342124"
+};
+// TXT: every string drawn this frame and the smallest text size drawn so far, in buffer px of font size
+// (a 5 px Latin cap reads like a 7 px font). tools/qa.mjs turns it into CSS px with view().K / view().dpr.
+const TXT = { min: Infinity, seen: [], last: [] };
+function noteText(str, em) { if (em < TXT.min) TXT.min = em; if (TXT.seen.length < 300) TXT.seen.push(String(str)); }
+const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",Meiryo,system-ui,sans-serif';
+const isLatin = s => [...s].every(ch => GL[ch]);
+const tcache = new Map();
+function cached(key, make) { let c = tcache.get(key); if (!c) { if (tcache.size > 600) tcache.clear(); c = make(); tcache.set(key, c); } return c; }
+function bitmapText(str, col) {
+  const gl = [...str].map(ch => GL[ch]); let w = -1;
+  gl.forEach(q => { w += +q[0] + 1; });
+  const c = newCanvas(w, 6), x = c.getContext("2d"); x.fillStyle = PAL[col];
+  let px = 0;
+  gl.forEach(q => { const gw = +q[0]; for (let r = 1; r < q.length; r++) { const bits = parseInt(q[r], 32); for (let i = 0; i < gw; i++) if (bits & (1 << (gw - 1 - i))) x.fillRect(px + i, r - 1, 1, 1); } px += gw + 1; });
+  return c;
+}
+const tcv = newCanvas(8, 8), tctx = tcv.getContext("2d", { willReadFrequently: true });
+function crispText(str, px, col) { // never below 12 buffer px: smaller kanji turn to mush
+  px = Math.max(12, px);
+  const thr = px <= 12 ? 120 : 100, font = `${px <= 12 ? 700 : 800} ${px}px ${FONT}`;
+  tctx.font = font;
+  const w = Math.ceil(tctx.measureText(str).width) + 2, h = Math.ceil(px * 1.4) + 2;
+  tcv.width = w; tcv.height = h;
+  tctx.font = font; tctx.textBaseline = "middle"; tctx.fillStyle = "#000"; tctx.fillText(str, 1, Math.round(h / 2));
+  const d = tctx.getImageData(0, 0, w, h).data;
+  let top = h, bot = -1;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) { top = Math.min(top, j); bot = j; }
+  if (bot < 0) return newCanvas(1, 1);
+  const c = newCanvas(w, bot - top + 1), x = c.getContext("2d"); x.fillStyle = PAL[col];
+  for (let j = top; j <= bot; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) x.fillRect(i, j - top, 1, 1);
+  return c;
+}
+// o: { c colour, o outline colour, sc integer scale for Latin (baked before the 1 px outline), px size for other text, a "l"|"c"|"r" }
+function textCanvas(str, o) {
+  const col = o.c || "k", ol = o.o || "", lat = isLatin(str), sc = lat ? (o.sc || 1) : 1, px = Math.max(12, o.px || 12);
+  return cached(str + "|" + col + ol + (lat ? "x" + sc : px), () => {
+    let c = lat ? bitmapText(str, col) : crispText(str, px, col);
+    if (sc > 1) { const s = newCanvas(c.width * sc, c.height * sc), x = s.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, s.width, s.height); c = s; }
+    return ol ? outline(c, ol) : c;
+  });
+}
+function txt(str, x, y, o) {
+  o = o || {}; let maxW = 0;
+  String(str).split("\n").forEach((ln, i) => {
+    const c = textCanvas(ln, o), w = c.width, lx = o.a === "l" ? x : o.a === "r" ? x - w : x - fl(w / 2);
+    noteText(ln, isLatin(ln) ? 5 * (o.sc || 1) / 0.7 : Math.max(12, o.px || 12));
+    spr(c, lx, y + i * (o.lh || (c.height + 2))); maxW = Math.max(maxW, w);
+  });
+  return maxW;
+}
+const textW = (str, o) => textCanvas(str, o || {}).width;
+// big chunky Latin: glyphs scaled by sx/sy with a 1 px (unscaled) outline, optional second ring ol2
+function bigText(str, x, y, sc, fill, ol, sx, sy, ol2) {
+  sx = sx || sc; sy = sy || sc;
+  const f = textCanvas(str, { c: fill }), w = f.width * sx, x0 = fl(x - w / 2);
+  noteText(str, (isLatin(str) ? 5 / 0.7 : 12) * Math.min(sx, sy));
+  if (ol2) { const o = textCanvas(str, { c: ol2 }); for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const m = Math.abs(dx) + Math.abs(dy); if (m > 1 && m < 4) spr(o, x0 + dx, y + dy, false, sx, sy); } }
+  if (ol) { const o = textCanvas(str, { c: ol }); for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) spr(o, x0 + dx, y + dy, false, sx, sy); }
+  spr(f, x0, y, false, sx, sy);
+  return w;
+}
+// signature words from hand-placed glyph grids ("#" = ink). They are pictures, so call noteText(word, 12)
+// when you draw one; the tools read the demo title label from TXT.
+// kanaArt: bold 2 px strokes, ring outline(s), glyph cut points for stamping the word in letter by letter.
+function kanaArt(table, str, fill, ol, ol2) {
+  return cached("K" + str + fill + ol + (ol2 || ""), () => {
+    const gl = [...str].map(ch => table[ch]), gw = q => Math.max(...q.map(r => r.length));
+    const c = newCanvas(gl.reduce((a, q) => a + gw(q) + 1, 0), 15), x = c.getContext("2d"), cuts = [];
+    x.fillStyle = PAL[fill]; let px = 0;
+    gl.forEach((q, i) => {
+      const jy = [1, 0, 2, 0, 1, 2][i % 6]; // hand-lettered bounce: each glyph sits at its own height
+      q.forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j, y + jy, 1, 1); });
+      px += gw(q) + 1; cuts.push(px + 1);
+    });
+    const o = ol2 ? outline(outline(c, ol), ol2) : outline(c, ol); o.cuts = ol2 ? cuts.map(v => v + 1) : cuts;
+    return o;
+  });
+}
+// inkArt: 1 px strokes inked twice 1 px apart (flat brush) over a carved shadow; draw it at x2
+function inkArt(table, str, jys, ink, shade) {
+  return cached("I" + str + (ink || "k") + (shade || "D"), () => {
+    const chars = [...str], gw = ch => Math.max(...table[ch].map(r => r.length)), H = Math.max(...chars.map(ch => table[ch].length)) + 3;
+    const c = newCanvas(chars.reduce((a, ch) => a + gw(ch) + 1, 0) + 2, H), x = c.getContext("2d");
+    const pass = (col, ox, oy) => { x.fillStyle = PAL[col]; let px = 0; chars.forEach((ch, i) => { const jy = jys ? jys[i % jys.length] : 0; table[ch].forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j + ox, y + jy + oy, 1, 1); }); px += gw(ch) + 1; }); };
+    pass(shade || "D", 1, 1); pass(shade || "D", 2, 1); pass(ink || "k", 0, 0); pass(ink || "k", 1, 0);
+    return c;
+  });
+}
+
+// ---------- UI pieces: wooden tags, noren windows, small wood icons ----------
+function nr(x, y, w, h, c, n) { R(x + n, y, w - 2 * n, h, c); R(x, y + n, w, h - 2 * n, c); if (n > 1) R(x + 1, y + 1, w - 2, h - 2, c); }
+function tag(x, y, w, h, label, big) { // cut corners on the left, a string hole, an uneven right edge
+  for (let j = 0; j < h; j++) {
+    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j)), rj = (j % 5 === 2) ? 1 : 0;
+    R(x + cut, y + j, w - cut - rj, 1, "k");
+    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - cut - rj - 2, 1, j === 1 ? "q" : j >= h - 3 ? "O" : "o");
+  }
+  R(x + 4, y + fl(h / 2) - 1, 2, 2, "D");
+  const tc = textCanvas(label, { c: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
+  spr(tc, fl(x + 4 + (w - 4 - tc.width) / 2), fl(y + (h - tc.height) / 2));
+}
+function win(x, y, w, h) { // indigo window: notched corners, ink / cream / ink border, dithered cloth
+  nr(x, y, w, h, "k", 2); nr(x + 1, y + 1, w - 2, h - 2, "q", 2); nr(x + 2, y + 2, w - 4, h - 4, "k", 1);
+  R(x + 3, y + 3, w - 6, h - 6, "n"); D(x + 3, y + 3, w - 6, h - 6, "n", "b", 1);
+}
+function icon(x, y, w, h, kind) { // low-contrast dark-wood system icon
+  nr(x, y, w, h, "k", 1); R(x + 1, y + 1, w - 2, h - 2, "D"); R(x + 1, y + h - 2, w - 2, 1, "k");
+  const cx = x + fl(w / 2), cy = y + fl(h / 2) - 1;
+  if (kind === "pause") { R(cx - 3, cy - 3, 2, 7, "o"); R(cx + 1, cy - 3, 2, 7, "o"); }
+  else if (kind === "sound" || kind === "mute") {
+    R(cx - 5, cy - 1, 2, 3, "o"); R(cx - 3, cy - 2, 1, 5, "o"); R(cx - 2, cy - 3, 1, 7, "o");
+    if (kind === "sound") { R(cx, cy - 1, 1, 3, "o"); R(cx + 2, cy - 2, 1, 5, "o"); R(cx + 4, cy - 3, 1, 7, "o"); }
+    else for (let i = 0; i < 5; i++) { P(cx + i, cy - 2 + i, "h"); P(cx + 4 - i, cy - 2 + i, "h"); }
+  } else { const t = textCanvas(kind, { c: "o", px: 12, sc: 2 }); noteText(kind, isLatin(kind) ? 10 / 0.7 : 12); spr(t, cx - fl(t.width / 2), cy - fl(t.height / 2) + 1); }
+}
+const POINTER = [".kkkk", "kwwwwkkkkkk", "kwwwwwwwwwwk", "kwwwwkkkkkk", "kwwwwwwk", "kwwwwkk", "kwwwwwwk", ".kkkkkk"];
+const FINGER = ["..kk.....", ".kwwk....", ".kwwk....", ".kwwkkk..", ".kwwkwwkk", "kkwwkwwkwk", "kwkwwwwwwk", "kwwwwwwwwk", ".kwwwwwwk.", "..kwwwwk..", "...kkkk..."];
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch, particle pool ----------
+const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
+function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
+function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
+function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms }; }
+function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
+const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
+function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
+function shakeOffset(maxPx) {
+  const a = Juice.trauma * Juice.trauma * maxPx * (Juice.reduce ? 0.3 : 1);
+  return a < 0.5 ? { x: 0, y: 0 } : { x: Math.round(vnoise(Juice.t * 24) * a), y: Math.round(vnoise(Juice.t * 24 + 57.3) * a) };
+}
+function zoomNow(now) {
+  const z = Juice.zoom; if (!z) return null;
+  const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
+  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
+}
+const PARTS = [], PART_MAX = 300;
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "w", kind: "dot", s: 1 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random() * 0.8), life = 0.45 + Math.random() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 300, life, max: life }, o)); } }
+function partsStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i]; p.life -= dt;
+    if (p.life <= 0) { PARTS.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.kind === "steam") p.vx += Math.sin(p.life * 4 + p.y) * 6 * dt;
+  }
+}
+function partsDraw(now) {
+  for (const p of PARTS) {
+    const a = p.life / p.max, x = fl(p.x), y = fl(p.y);
+    if (p.kind === "steam") { const s = a > 0.6 ? 3 : a > 0.3 ? 2 : 1; if (a > 0.45) R(x, y, s, s, p.col); else D(x, y, s, s, null, p.col, 8); }
+    else if (p.kind === "spr") { if (a > 0.3 || (fl(now / 50) & 1)) spr(p.spr, x - (p.spr.width >> 1), y - (p.spr.height >> 1)); }
+    else if (p.kind === "drop") R(x, y, 1, 2, p.col);
+    else R(x, y, p.s, p.s, p.col);
+  }
+}
+
+// ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
+const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
+function auBuild(ctx) {
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
+  const master = ctx.createGain(); master.gain.value = AU.muted ? 0 : AU.vol;
+  master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
+  const sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
+  const music = ctx.createGain(); music.gain.value = 0.75; music.connect(master);
+  // one shared echo send, so dry voices sit in a small room: music fully, sfx at a lower level
+  const echo = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), sendS = ctx.createGain();
+  echo.delayTime.value = 0.15; fb.gain.value = 0.3; wet.gain.value = 0.16; sendS.gain.value = 0.45;
+  echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(sendS); sendS.connect(echo);
+  const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
+}
+function auInit() {
+  if (AU.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  try { auBuild(new AC()); } catch (e) { AU.ctx = null; return false; }
+  try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) { /* not supported */ }
+  return true;
+}
+function auResume() { if (AU.ctx && AU.ctx.state !== "running" && AU.ctx.state !== "closed") AU.ctx.resume().catch(() => {}); }
+const audioOn = () => !!AU.ctx && (AU.ctx.state === "running" || AU.offline);
+// unlock on every kind of first gesture (iOS needs touchend/click), and again whenever the tab comes back
+function auUnlock() {
+  const f = () => { if (auInit()) auResume(); };
+  for (const t of ["pointerdown", "pointerup", "touchend", "click", "keydown", "mousedown"]) document.addEventListener(t, f, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
+}
+function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
+function auDuck(node, depth, back) { if (!node || !AU.ctx) return; const t = AU.ctx.currentTime, gn = node.gain; gn.cancelScheduledValues(t); gn.setTargetAtTime(depth, t, 0.02); gn.setTargetAtTime(1, t + 0.2, back || 0.4); }
+const cents = c => Math.pow(2, c / 1200);
+function vary(c, gv) { return { f: cents((Math.random() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (Math.random() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// one oscillator voice: starts and ends at silence, always has stop() scheduled; square/saw go through a lowpass
+function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
+  const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
+  gn.gain.value = 0; // silent until its envelope starts (the default gain of 1 would leak a click)
+  o.type = type; o.frequency.setValueAtTime(f0, when);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
+  gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + (att || 0.004)); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  let head = o;
+  if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
+  head.connect(gn); gn.connect(dest || AU.sfx);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
+  const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
+  gn.gain.value = 0;
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when);
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
+  f.Q.value = q; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + 0.002); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
+  s.start(when, Math.random() * 0.5); s.stop(when + dur + 0.05);
+}
+// Fire some voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak
+// sample (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+async function auPeak(fire, sec) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
+  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
+  auBuild(oc); AU.master.gain.value = AU.vol; AU.offline = true;
+  try { fire(); } finally { Object.assign(AU, keep); AU.offline = false; }
+  const d = (await oc.startRendering()).getChannelData(0); let p = 0;
+  for (let i = 0; i < d.length; i++) p = Math.max(p, Math.abs(d[i]));
+  return p;
+}
+
+// ---------- tap hint: an animated finger at the input target, per player (not per run) ----------
+// shown until the first success; comes back after two quick deaths (< 5 s); works when storage is blocked
+function makeHint(store, key) {
+  let quick = 0;
+  return {
+    active: false,
+    begin() { this.active = !store.get(key, false) || quick >= 2; },
+    success() { if (this.active) { this.active = false; quick = 0; store.set(key, true); } },
+    runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
   };
+}
+let FINGER_C = null;
+function drawTapHint(x, y, k) { // (x, y) = fingertip; k = 0 when a tap would succeed now .. 1 far from it
+  if (!FINGER_C) FINGER_C = mk(FINGER);
+  const lift = Math.round(clamp(k, 0, 1) * 6);
+  if (k < 0.3) { const r = 4 + fl((0.3 - k) * 40); ring(x, y + 1, r + 1, fl(r / 2) + 1, r, fl(r / 2), "w"); }
+  spr(FINGER_C, x - 3, y - FINGER_C.height - lift + 1);
+}
+// ==== PIXEL KIT END ====
 
-  // ===== URL options: ?demo=1 (AI plays, for recordings), ?seed=123 (fixed run), ?lang=en =====
-  const params = new URLSearchParams(location.search);
-  const DEMO = params.get('demo') === '1';
-  const SEED_PARAM = params.has('seed') ? (Number(params.get('seed')) >>> 0) : null;
+// =====================================================================================================
+// Below: the sample game "Timing Stop". Sections marked GAME-SPECIFIC are what a new week replaces.
+// Sections marked KEEP are required systems (QUALITY_BAR.md, CLAUDE.md section 4): adapt their content,
+// keep what they do. window.__game at the end is the test contract (tools/README.md).
+// =====================================================================================================
 
-  // ===== seeded RNG: gameplay randomness goes through rng() so a seed replays the same run =====
-  function mulberry32(seed) {
-    let s = seed >>> 0;
-    return () => {
-      s = (s + 0x6D2B79F5) >>> 0;
-      let t = s;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
+// ---------- GAME-SPECIFIC: identity, scene size, tuning ----------
+const SLUG = "timing-stop", WEEK = 1;
+const CW = 180, CH = 320;          // the core 9:16 scene in buffer px (STYLE.md 2)
+const DEMO = /[?&]demo=1(&|$)/.test(location.search);
+const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+Juice.reduce = reduceMotion;
+const store = makeStore(SLUG + "-");
+
+const RAIL_X = 18, RAIL_W = 144, RAIL_Y = 214, FUSE_Y = 234;
+const SETTLE = 170;                // ms the gem rests after a press before the next round
+const FREEZE = 450;                // ms failure freeze in play (the cause stays on screen)
+const CLOSE_PX = 6;                // a miss this close to the plate is a near miss: shown as "CLOSE, N px"
+const GOLD_CHARGE = 750;           // ms build-up before a gold round (the peak moment)
+// Phase table as data (bar 1.5.2): 0-8 s core verb only and safe, 8-25 s denser, 25-45 s the twist
+// (the plate slides), then escalation. Past the last row the speed keeps rising: no plateau.
+const PHASES = [
+  { at: 0, speed: 0.42, zone: 30, drift: 0, fuse: 4.2 },
+  { at: 8, speed: 0.58, zone: 26, drift: 0, fuse: 3.8, note: "faster" },
+  { at: 25, speed: 0.66, zone: 22, drift: 10, fuse: 3.6, note: "slide" },
+  { at: 45, speed: 0.8, zone: 18, drift: 14, fuse: 3.4, note: "faster" },
+  { at: 65, speed: 0.95, zone: 15, drift: 18, fuse: 3.2, note: "faster" }
+];
+function phaseAt(sec) {
+  let i = 0; for (let j = 0; j < PHASES.length; j++) if (sec >= PHASES[j].at) i = j;
+  const p = PHASES[i], extra = Math.max(0, sec - 80);
+  return Object.assign({ i }, p, extra ? { speed: p.speed + extra * 0.006, zone: Math.max(10, p.zone - extra * 0.05) } : {});
+}
+const GOLD_EVERY = { play: 8, demo: 5, attract: 6 };
+// ?demo=1 is a 30 s clip that holds the whole story. Drama is scripted by elapsed run time, never by luck:
+// a perfect at once, a near miss, a plain miss, a gold round (every 5th hit), then the final near miss.
+const DEMO_SKIP = 8;               // the demo starts at the 8 s row of the phase table
+const DEMO_SCRIPT = [{ at: 400, act: "perfect" }, { at: 8200, act: "close" }, { at: 13200, act: "miss" }, { at: 20800, act: "fail" }];
+const RANKS = [0, 15, 40, 80, 130, 200];
+const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
+
+// ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
+const STRINGS = {
+  ja: {
+    title: "タイミングストップ", titleEn: "TIMING STOP", start: "スタート", how1: "光る板の上でタップ!", how2: "まんなかなら ピタッ!",
+    lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
+    perfect: "ピタッ!", good: "いいね", close: "おしい!", miss: "ミス", late: "時間切れ", gold: "金!",
+    faster: "スピードUP", slide: "板がうごく!", goldIn: "金のラウンド!",
+    causeClose: "あと {n}", causeMiss: "ズレ {n}", causeLate: "まにあわず",
+    over: "おしまい", rPerf: "ピタッ", rCombo: "最大コンボ", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
+    g_score: "{n}点まで", g_combo: "{n}コンボ", g_perf: "ピタッを{n}回", g_gold: "金をピタッと",
+    ranks: ["みならい", "なかなか", "じょうず", "名人", "達人", "伝説"], best: "ベスト", combo: "コンボ", space: "SPACE", credit: "Made with Claude"
+  },
+  en: {
+    title: "TIMING STOP", titleEn: "TIMING STOP", start: "START", how1: "TAP ON THE GLOWING PLATE", how2: "DEAD CENTRE IS PERFECT",
+    lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
+    perfect: "PERFECT!", good: "GOOD", close: "CLOSE!", miss: "MISS", late: "TOO SLOW", gold: "GOLD!",
+    faster: "SPEED UP", slide: "IT SLIDES!", goldIn: "GOLD ROUND!",
+    causeClose: "{n} PX OFF", causeMiss: "{n} PX OFF", causeLate: "OUT OF TIME",
+    over: "GAME OVER", rPerf: "PERFECT", rCombo: "MAX COMBO", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
+    g_score: "REACH {n}", g_combo: "{n} COMBO", g_perf: "{n} PERFECTS", g_gold: "STOP THE GOLD",
+    ranks: ["ROOKIE", "STEADY", "SKILLED", "MASTER", "EXPERT", "LEGEND"], best: "BEST", combo: "COMBO", space: "SPACE", credit: "Made with Claude"
   }
-  let rng = mulberry32(1);
-  const newSeed = () => (SEED_PARAM !== null ? SEED_PARAM : (Math.random() * 2 ** 32) >>> 0);
+};
+let lang = store.get("lang", null);
+if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
+const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; return n == null || typeof v !== "string" ? v : v.replace("{n}", n); };
 
-  // ===== storage: optional, the game must work when localStorage throws (iframes, private mode) =====
-  const store = {
-    get(k, d) { try { const v = localStorage.getItem(KEY(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem(KEY(k), JSON.stringify(v)); } catch (e) { /* ignore */ } }
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const wrap = $("wrap"), cv = $("cv"), uiEl = $("ui"), ctx = cv.getContext("2d");
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
+
+// ---------- GAME-SPECIFIC: sprites (char maps, one palette letter per pixel) ----------
+const GEM = [
+  "....kkkkk....", "..kkrrrrrkk..", ".krrhhrrrrRk.", ".krhwhrrrrRk.", "krrhhrrrrrRRk", "krrrrrrrrrRRk", "krrrrrrrrrRRk",
+  "krrrrrrrrRRRk", "kRrrrrrrRRRRk", ".kRRrrrRRRRk.", ".kRRRRRRRRRk.", "..kkRRRRRkk..", "....kkkkk...."
+];
+const STAR = ["..k..", ".kyk.", "kyqyk", ".kyk.", "..k.."];
+const SP = {};
+function buildSprites() {
+  SP.gem = mk(GEM); SP.gemGold = mk(GEM, { r: "y", R: "Y", h: "q" }); SP.gemGrey = mk(GEM, { r: "e", R: "k", h: "c" });
+  SP.star = mk(STAR); SP.pointer = mk(POINTER);
+}
+
+// ---------- state ----------
+// title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
+let state = "title", run = null, fx = null, runCount = 0, manual = false, simT = 0, pfPlaying = false, overShownAt = 0, autopilot = false;
+const T = () => manual ? simT : performance.now();
+const hint = makeHint(store, "hintDone");
+const isTitle = () => state === "title" || state === "title-dying";
+const isDying = () => state === "dying" || state === "demo-dying" || state === "title-dying";
+const isOver = () => state === "over" || state === "demo-over";
+function pfStart() { if (!pfPlaying) { pfPlaying = true; platform("gameplayStart"); } }
+function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop"); } }
+const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its one-shot sounds to itself
+const vTop = () => Math.max(0, -PX.cy0);          // first visible core row (landscape crops the sky)
+const signY = () => Math.max(56, vTop() + 4);
+
+function newFx() { return { vt: 0, malletT: -1e9, malletX: 90, call: null, note: null, scoreT: -1e9, disp: 0, lostT: -1e9 }; }
+function newRun(mode, seed) {
+  run = {
+    mode, ai: mode !== "play", seed, rnd: seeded(seed), rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
+    offset: T(), holdAt: null, pauseClock: 0, startAt: T(),
+    score: 0, lives: 3, combo: 0, maxCombo: 0, hits: 0, perfects: 0, golds: 0, closes: 0, roundNo: 0, goldNext: false, phase: -1,
+    round: null, dead: null, result: null, script: mode === "demo" ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : []
   };
-  let best = Number(store.get('best', 0)) || 0;
-  let soundOn = store.get('sound', true) !== false;
-  let lang = params.get('lang') || store.get('lang', null);
-  if (lang !== 'ja' && lang !== 'en') lang = /^ja\b/i.test(navigator.language || 'ja') ? 'ja' : 'en';
-  let S = STRINGS[lang];
+  fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
+  // a retry skips most of the warm-up (bar 1.5.4)
+  newRound(mode === "play" ? (runCount > 1 ? 300 : 700) : 400, 0.04, 1);
+  if (mode === "play") hint.begin();
+  musicLevel(mode === "attract" ? "title" : "play");
+}
+const clockNow = () => {
+  if (!run) return 0;
+  if (isDying() || isOver()) return run.dead.c;
+  if (state === "paused") return run.pauseClock;
+  return (run.holdAt == null ? T() : run.holdAt) - run.offset;
+};
 
-  const $ = id => document.getElementById(id);
-  const cv = $('c');
-  const ctx = cv.getContext('2d');
-  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif';
-  const TAU = Math.PI * 2;
-
-  function applyLang() {
-    S = STRINGS[lang];
-    document.documentElement.lang = lang;
-    document.title = S.docTitle;
-    for (const el of document.querySelectorAll('[data-s]')) el.textContent = S[el.dataset.s];
-    for (const el of document.querySelectorAll('[data-h]')) el.innerHTML = S[el.dataset.h];
-    $('kicker').textContent = `AI WEEKLY ARCADE #${String(GAME.week).padStart(2, '0')}`;
-    $('brand').textContent = `${S.title} #${String(GAME.week).padStart(2, '0')}`;
-    $('lang').textContent = S.lang;
-    $('pauseBtn').setAttribute('aria-label', S.pauseLabel);
-    cv.setAttribute('aria-label', S.canvas);
-    updateHud();
-  }
-
-  // ===== sound: tiny WebAudio synth, unlocked by the first user gesture, silent in attract/demo =====
-  let actx = null;
-  function unlockAudio() {
-    if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
-    try { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; }
-  }
-  function tone(freq, dur = 0.1, type = 'sine', vol = 0.12, slide = 0, delay = 0) {
-    if (!soundOn || !actx || mode !== 'play') return;
-    try {
-      const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
-      o.type = type; o.frequency.setValueAtTime(freq, t);
-      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
-    } catch (e) { /* audio is optional */ }
-  }
-  const note = n => 440 * Math.pow(2, n / 12);
-  const sfx = {
-    hit: n => tone(note(n % 12), 0.12, 'triangle', 0.12),
-    perfect: () => { tone(note(7), 0.1, 'square', 0.05); tone(note(14), 0.16, 'square', 0.045, 0, 0.07); },
-    miss: () => tone(220, 0.25, 'sawtooth', 0.07, -120),
-    over: () => { tone(300, 0.5, 'sawtooth', 0.07, -220); tone(90, 0.4, 'sine', 0.16, -40); },
-    newBest: () => [0, 4, 7, 12].forEach((n, i) => tone(note(n), 0.2, 'triangle', 0.08, 0, i * 0.08))
-  };
-
-  // ===== canvas: logical width is always 360; logical height follows the element (about 640 on phones) =====
-  const VW = 360;
-  let VH = 640, scale = 1, BAR_Y = 400;
-  function resize() {
-    const r = cv.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    cv.width = Math.max(1, Math.round(r.width * dpr));
-    cv.height = Math.max(1, Math.round(r.height * dpr));
-    scale = cv.width / VW;
-    VH = cv.height / scale;
-    BAR_Y = Math.round(VH * 0.62);
-  }
-
-  // ===== game state (TODO(game): replace the placeholder game below) =====
-  // mode: 'attract' (AI behind the title), 'demo' (?demo=1), 'play' (human)
-  // state: 'play' | 'dead' | 'over'
-  let mode = DEMO ? 'demo' : 'attract';
-  let state = 'play', paused = false;
-  let score, lives, x, dir, speed, zone, zoneW, particles, popups, shake, flash, deadTimer, time = 0, seed;
-  let ai = { wait: 0 };
-
-  function reset() {
-    seed = newSeed();
-    rng = mulberry32(seed);
-    score = 0; lives = 3; x = 0.1; dir = 1; speed = 0.55; zoneW = 0.26;
-    zone = 0.5; particles = []; popups = []; shake = 0; flash = 0; deadTimer = 0;
-    state = 'play';
-    newZone();
-    updateHud();
-  }
-
-  function newZone() {
-    zone = zoneW / 2 + 0.05 + rng() * (0.9 - zoneW);
-    ai.wait = 0.15 + rng() * 0.25;
-  }
-
-  const BAR_X = 30, BAR_W = 300;
-
-  function act() {
-    if (state !== 'play' || paused) return;
-    const d = Math.abs(x - zone);
-    const px = BAR_X + x * BAR_W;
-    if (d <= zoneW / 2) {
-      const perfect = d <= zoneW / 8;
-      score += perfect ? 2 : 1;
-      speed = Math.min(1.6, speed * 1.06);
-      zoneW = Math.max(0.08, zoneW * 0.95);
-      burst(px, BAR_Y, perfect ? '#ffd36e' : '#7fe3c4', perfect ? 26 : 12);
-      popups.push({ x: px, y: BAR_Y - 30, text: perfect ? S.perfect : S.good, t: 0, color: perfect ? '#ffd36e' : '#7fe3c4' });
-      if (perfect) { flash = 0.15; sfx.perfect(); if (mode === 'play' && score % 10 < 2) platform('happytime'); } else sfx.hit(score);
-      newZone();
+// ---------- GAME-SPECIFIC: rules. Positions are functions of the run clock, so a run replays the same at any frame rate ----------
+const tri = s => { const m = ((s % 2) + 2) % 2; return m > 1 ? 2 - m : m; };
+const rawAt = (r, c) => r.u0 + r.dir * r.speed * Math.max(0, c - r.t0);
+const gemX = (r, c) => RAIL_X + tri(rawAt(r, Math.min(c, r.res ? r.resAt : c))) * RAIL_W;
+const zoneX = (r, c) => r.zx0 + r.drift * Math.sin((Math.min(c, r.res ? r.resAt : c) - r.start) / 1000 * 1.6);
+const perfW = r => Math.max(2, r.zw * 0.12);
+function newRound(start, u0, dir) {
+  const sec = start / 1000 + (run.mode === "demo" ? DEMO_SKIP : 0), ph = phaseAt(sec);
+  if (ph.i > run.phase) { if (run.phase >= 0 && ph.note) notice(ph.note); run.phase = ph.i; }
+  const gold = run.goldNext; run.goldNext = false;
+  const zw = Math.round(ph.zone * (gold ? 0.8 : 1)), drift = ph.drift, charge = gold ? GOLD_CHARGE : 0;
+  const lo = RAIL_X + zw / 2 + drift + 3, hi = RAIL_X + RAIL_W - zw / 2 - drift - 3, gx = RAIL_X + u0 * RAIL_W;
+  let zx = 90;
+  for (let i = 0; i < 8; i++) { zx = Math.round(lo + run.rnd() * (hi - lo)); if (Math.abs(zx - gx) >= 40) break; }
+  run.round = { no: ++run.roundNo, start, t0: start + charge, u0, dir, speed: ph.speed * (gold ? 1.2 : 1) / 1000, zx0: zx, zw, drift, gold,
+    fuseAt: start + charge + ph.fuse * 1000, fuse: ph.fuse * 1000, res: null, resAt: 0, nextAt: 0, aiAt: null, d: 0 };
+  if (gold && loud()) { sfx.charge(); notice("goldIn"); }
+}
+function judge(tc) { // the core verb: stop the gem now (tc = run clock ms)
+  const r = run && run.round;
+  if (!r || run.dead) return;
+  if (r.res || tc < r.t0) return; // resting or charging: the mallet still swings (press()), nothing is judged
+  const gx = gemX(r, tc), zx = zoneX(r, tc), d = Math.abs(gx - zx);
+  resolve(r, d <= perfW(r) ? "perfect" : d <= r.zw / 2 ? "good" : d <= r.zw / 2 + CLOSE_PX ? "close" : "miss", tc, d);
+}
+function resolve(r, tier, tc, d) {
+  r.res = tier; r.resAt = tc; r.d = d; r.nextAt = tc + SETTLE;
+  const now = T(), x = gemX(r, tc), y = RAIL_Y - 7;
+  if (tier === "perfect" || tier === "good") {
+    const perfect = tier === "perfect";
+    run.hits++; run.combo++; run.maxCombo = Math.max(run.maxCombo, run.combo);
+    if (perfect) run.perfects++;
+    if (perfect && r.gold) run.golds++;
+    const mult = run.combo >= 15 ? 3 : run.combo >= 5 ? 2 : 1;
+    run.score += (r.gold ? (perfect ? 10 : 3) : (perfect ? 3 : 1)) * mult; fx.scoreT = now;
+    if (run.hits % GOLD_EVERY[run.mode] === 0) run.goldNext = true;
+    if (run.mode === "play") hint.success();
+    // tiered feedback (bar 1.2.3): only the top tier gets shake and hitstop; gold perfect adds the zoom punch
+    if (perfect && r.gold) {
+      call("gold", "y", now); addTrauma(0.85); hitstop(0.12); zoomPunch(x + PX.cx0, y + PX.cy0, 1.06, 320, now);
+      burst(x, y, 22, 130, { col: "y", s: 2 }); burst(x, y, 8, 150, { kind: "spr", spr: SP.star }); if (loud()) sfx.gold();
+      if (run.mode === "play") platform("happytime");
+    } else if (perfect) {
+      call("perfect", "y", now); addTrauma(0.45); hitstop(0.05);
+      burst(x, y, 12, 95, { col: "q", s: 2 }); burst(x, y - 3, 3, 110, { kind: "spr", spr: SP.star }); if (loud()) sfx.perfect(run.combo);
     } else {
-      lives--;
-      if (!reduceMotion) shake = 10;
-      burst(px, BAR_Y, '#ff7a6b', 14);
-      popups.push({ x: px, y: BAR_Y - 30, text: S.miss, t: 0, color: '#ff7a6b' });
-      sfx.miss();
-      if (lives <= 0) die();
+      call("good", "w", now); burst(x, y, 6, 60, { col: "w" }); if (loud()) sfx.good(run.combo);
     }
-    updateHud();
+  } else {
+    run.combo = 0; run.lives--; fx.lostT = now;
+    if (tier === "close") { run.closes++; call("close", "h", now, S("causeClose", Math.ceil(d - r.zw / 2))); if (loud()) sfx.close(); }
+    else if (tier === "late") { call("late", "e", now); if (loud()) sfx.late(); }
+    else { call("miss", "e", now, S("causeMiss", Math.round(d - r.zw / 2))); if (loud()) sfx.miss(); }
+    burst(x, y + 4, 5, 40, { col: "e", g: 120 });
+    if (run.lives <= 0) kill(tier, tc, now);
   }
-
-  function die() {
-    state = 'dead';
-    deadTimer = mode === 'play' ? 0.6 : 1.2;
-    sfx.over();
-    if (mode === 'play') platform('gameplayStop');
+}
+function updateRun(now) {
+  const c = now - run.offset, r = run.round;
+  if ((run.ai || autopilot) && !r.res && r.aiAt == null) planAI(r);
+  if (!r.res && r.aiAt != null && (run.ai || autopilot) && c >= r.aiAt && r.aiAt < r.fuseAt) { press(r.aiAt); }
+  if (!run.dead && !r.res && c >= r.fuseAt) resolve(r, "late", r.fuseAt, 0);
+  if (!run.dead && r.res && c >= r.nextAt) {
+    const raw = rawAt(r, r.resAt), dir = r.dir * ((((raw % 2) + 2) % 2) < 1 ? 1 : -1);
+    newRound(r.nextAt, tri(raw), dir);
   }
+}
 
-  function burst(px, py, color, n) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * TAU, s = 60 + Math.random() * 220;
-      particles.push({ x: px, y: py, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.4 + Math.random() * 0.4, color });
+// ---------- KEEP: AI for attract and ?demo=1. It uses the same judge as the player; human-like reaction delay ----------
+// __game.autoplay(true) lets the same AI play a real run with a human-like timing error (AI_JITTER ms, one sigma),
+// so it fails more as the phases speed up. Its run lengths are what bar 1.5.1 measures (review-kit "autoplay").
+const AI_JITTER = 65;
+function planAI(r) {
+  const u = gauss(run.rAI, 0, 1), v = run.rAI(), w = gauss(run.rAI, 0, 1); // fixed draws per round
+  let off = clamp(u * r.zw * 0.14, -r.zw * 0.42, r.zw * 0.42), act = null;
+  if (run.mode === "demo" && run.script.length && r.start >= run.script[0].at) act = run.script.shift().act;
+  else if (run.mode === "attract" && v < 0.05) act = "miss";
+  const side = v < 0.5 ? -1 : 1;
+  if (act === "perfect") off = 0;
+  else if (act === "close" || act === "fail") off = side * (r.zw / 2 + (act === "fail" ? 2.4 : 3.4));
+  else if (act === "miss") off = side * (r.zw / 2 + 14);
+  const from = r.t0 + 260 + (run.mode === "attract" ? 140 : 0);
+  let prev = gemX(r, from) - (zoneX(r, from) + off);
+  for (let t = from + 2; t < r.fuseAt - 20; t += 2) {
+    const cur = gemX(r, t) - (zoneX(r, t) + off);
+    if ((prev <= 0) !== (cur <= 0)) { r.aiAt = run.mode === "play" ? Math.max(from, t + w * AI_JITTER) : t; return; }
+    prev = cur;
+  }
+  r.aiAt = Infinity; // no crossing in time: the fuse runs out
+}
+
+// ---------- KEEP: failure. Freeze with the cause on screen, then the result (bar 1.4.1) ----------
+function kill(reason, tc, now) {
+  const r = run.round;
+  run.dead = { reason, at: now, c: tc, d: r.d, zx: Math.round(zoneX(r, tc)), gx: Math.round(gemX(r, tc)), zw: r.zw };
+  state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
+  if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
+  if (loud()) sfx.fail();
+  musicLevel("duck");
+}
+
+// ---------- KEEP: one judgement slot and one notice line (never stacked popups) ----------
+function call(key, col, now, sub) { fx.call = { key, col, t: now, sub: sub || "" }; }
+function notice(key) { fx.note = { key, t: T() }; if (loud()) sfx.notice(); }
+
+// ---------- KEEP: audio. SFX are data-like functions; every voice goes through the kit bus ----------
+const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0];
+const pz = d => PENTA[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5)); // pentatonic degree -> Hz
+const sfx = {
+  press() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(40, 0.1); hiss("bandpass", 1700 * q.f, 2, 0.05, 0.1 * q.g, w, null, 700); },
+  good(combo) { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(30, 0.1), f = pz(5 + Math.min(combo, 10) % 5);
+    tone("triangle", f * q.f, f * q.f * 0.99, 0.22, 0.24 * q.g, w); tone("sine", 150 * q.f, 60, 0.1, 0.3 * q.g, w); hiss("lowpass", 900, 1, 0.05, 0.2, w, null, 200); },
+  perfect(combo) { // climbs the scale with the combo, capped at two octaves
+    if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(10, 0.08), d = 5 + Math.min(combo, 10), f = pz(d);
+    tone("sine", f * q.f, f * q.f, 0.2, 0.26 * q.g, w); tone("sine", pz(d + 2) * q.f, pz(d + 2) * q.f, 0.24, 0.16, w + 0.04);
+    tone("sine", 160 * q.f, 55, 0.14, 0.4 * q.g, w); hiss("highpass", 6000, 1, 0.08, 0.08, w + 0.02);
+  },
+  gold() { // the peak payoff: taiko, a bright chord, shimmer
+    if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(20, 0.06);
+    tone("sine", 110 * q.f, 40, 0.5, 0.5 * q.g, w); hiss("lowpass", 700, 1, 0.3, 0.35, w, null, 120);
+    [5, 7, 9, 10].forEach((n, i) => tone("triangle", pz(n) * q.f, pz(n) * q.f, 0.7, 0.1, w + 0.04 + i * 0.05));
+    for (let i = 0; i < 6; i++) tone("sine", 1500 + i * 220, 1560 + i * 220, 0.12, 0.03, w + 0.28 + i * 0.04);
+  },
+  charge() { if (!audioOn()) return; const w = AU.ctx.currentTime; for (let i = 0; i < 12; i++) { const t = w + (GOLD_CHARGE / 1000) * (1 - Math.pow(1 - i / 12, 1.6)); hiss("lowpass", 260 + i * 50, 1, 0.07, 0.05 + i * 0.02, t); tone("sine", 90 + i * 5, 60, 0.08, 0.05 + i * 0.018, t); } },
+  close() { if (!audioOn()) return; const w = AU.ctx.currentTime; hiss("bandpass", 700, 1.5, 0.16, 0.35, w, null, 2400); tone("sine", 600, 1100, 0.12, 0.16, w + 0.04); },
+  miss() { if (!audioOn()) return; const w = AU.ctx.currentTime, q = vary(50, 0.1); tone("sine", 100 * q.f, 55, 0.16, 0.5 * q.g, w); hiss("lowpass", 420, 1, 0.08, 0.35, w, null, 150); tone("triangle", 330, 180, 0.2, 0.1, w + 0.03); },
+  late() { if (!audioOn()) return; const w = AU.ctx.currentTime; hiss("bandpass", 2400, 2, 0.35, 0.22, w, null, 500); tone("triangle", 300, 160, 0.3, 0.1, w); },
+  fail() { if (!audioOn()) return; const w = AU.ctx.currentTime + 0.12; [7, 5, 3, 0].forEach((n, i) => tone("triangle", pz(n), pz(n) * 0.95, 0.28, 0.12, w + i * 0.14)); tone("sine", 200, 70, 0.6, 0.15, w + 0.55); },
+  notice() { if (!audioOn()) return; const w = AU.ctx.currentTime; tone("triangle", pz(7), pz(7), 0.12, 0.12, w); tone("triangle", pz(9), pz(9), 0.16, 0.12, w + 0.08); },
+  best() { if (!audioOn()) return; const w = AU.ctx.currentTime; [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", pz(n), pz(n), 0.28, 0.13, w + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.04, w + 0.4); },
+  tick(i) { if (!audioOn()) return; tone("sine", 900 + (i % 12) * 40, 900 + (i % 12) * 40, 0.035, 0.3, AU.ctx.currentTime); },
+  stamp() { if (!audioOn()) return; const w = AU.ctx.currentTime; tone("sine", 140, 60, 0.15, 0.5, w); hiss("lowpass", 1200, 1, 0.08, 0.3, w); },
+  ui() { if (!audioOn()) return; tone("sine", 880, 1320, 0.09, 0.4, AU.ctx.currentTime); }
+};
+const PEAK_SET = ["gold", "perfect", "fail", "miss", "close", "best", "stamp", "charge"]; // the 8 loudest, for the peak test
+
+// Music: a short original pentatonic loop scheduled ahead on the audio clock. Layers join with the combo
+// (melody at 3, hats at 8, a high line at 15), it ducks and drops layers on failure, softens on title/result.
+const MEL = [5, -1, 7, 5, 4, -1, 2, 4, 5, -1, 7, 8, 7, 5, 4, -1], BASS = [65.41, 65.41, 55.0, 49.0], STEP = 0.25;
+const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1 };
+function musicLevel(lv) {
+  mus.level = lv;
+  if (!mus.bus || !AU.ctx) return;
+  const v = { title: 0.45, play: 0.8, bed: 0.4, duck: 0.12, off: 0 }[lv], t = AU.ctx.currentTime;
+  mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" ? 0.02 : 0.25);
+  if (lv === "duck") mus.drop = mus.i + 16;
+}
+function pad(f, w, dur, peak) { // a held drone voice: linear swell, hold, release; starts and ends at silence
+  const c = AU.ctx, o = c.createOscillator(), gn = c.createGain(), r = Math.min(0.6, dur * 0.3);
+  o.type = "sine"; o.frequency.value = f; gn.gain.value = 0;
+  gn.gain.setValueAtTime(0, w); gn.gain.linearRampToValueAtTime(peak, w + r); gn.gain.setValueAtTime(peak, w + dur - r); gn.gain.linearRampToValueAtTime(0, w + dur);
+  o.connect(gn); gn.connect(mus.bus); o.start(w); o.stop(w + dur + 0.05);
+}
+function musicStep() {
+  if (!audioOn() || AU.offline) return;
+  const c = AU.ctx;
+  if (!mus.bus || mus.bus.context !== c) { mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(AU.music); musicLevel(mus.level); mus.next = c.currentTime + 0.05; }
+  if (mus.level === "off") { mus.next = c.currentTime + 0.05; return; }
+  if (mus.next < c.currentTime) mus.next = c.currentTime + 0.02;
+  while (mus.next < c.currentTime + 0.15) {
+    const i = mus.i++, w = mus.next, combo = run ? run.combo : 0, full = mus.level === "play" && i >= mus.drop;
+    const lay = mus.level === "bed" || mus.level === "title" ? 1 : !full ? 0 : (run && run.mode === "demo") ? 3 : combo >= 15 ? 3 : combo >= 8 ? 2 : combo >= 3 ? 1 : 0;
+    if (i % 8 === 0) { pad(pz(-5), w, STEP * 8 + 0.6, 0.06); pad(pz(-3), w + 0.03, STEP * 8 + 0.6, 0.03); } // overlapping pads: never a silent gap
+    if (i % 4 === 0) tone("sine", BASS[(i >> 2) % 4], BASS[(i >> 2) % 4] * 0.97, 0.32, 0.22, w, mus.bus, 0.006);
+    if (i % 4 === 2 && mus.level !== "bed") hiss("lowpass", 300, 1, 0.05, 0.08, w, mus.bus);
+    const m = MEL[i % 16];
+    if (lay >= 1 && m >= 0 && (mus.level !== "bed" || i % 2 === 0)) tone("triangle", pz(m), pz(m) * 0.995, 0.4, 0.08, w, mus.bus, 0.003);
+    if (lay >= 2 && i % 2 === 1) hiss("highpass", 6500, 0.8, 0.03, 0.05, w, mus.bus);
+    if (lay >= 3 && i % 4 === 0 && m >= 0) tone("sine", pz(m + 5), pz(m + 5), 0.18, 0.04, w, mus.bus, 0.003);
+    mus.next += STEP;
+  }
+}
+
+// ---------- KEEP: result screen. Steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
+const RES = { drop: 220, head: 200, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
+function makeResult(now) {
+  const play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0;
+  const d = run.dead, cause = d.reason === "late" ? S("causeLate") : d.reason === "close" ? S("causeClose", Math.ceil(d.d - d.zw / 2)) : S("causeMiss", Math.round(d.d - d.zw / 2));
+  const r = { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0, rank: rankOf(run.score), showRank: !play || runs >= 1,
+    cause, ticks: 0, rankDone: false, stamped: false, goal: null };
+  // one concrete next goal from a small rotating pool (bar 1.6.1)
+  const next = RANKS.find(t => t > run.score), pool = [
+    next ? { k: "g_score", n: next } : null, { k: "g_combo", n: Math.max(5, run.maxCombo + 3) }, { k: "g_perf", n: run.perfects + 2 }, run.golds ? null : { k: "g_gold" }
+  ];
+  for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
+  return r;
+}
+function resultStep(now) {
+  const r = run.result, age = resAge(r, now);
+  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
+  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
+  if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
+    r.stamped = true; sfx.best(); platform("happytime");
+    burst(140, signY() + 96, 16, 110, { col: "y", s: 2 }); burst(140, signY() + 96, 5, 120, { kind: "spr", spr: SP.star });
+  }
+}
+const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
+function skipResult(now) { const r = run && run.result; if (r && now - r.at < RES.goal) { r.at = now - RES.goal; r.ticks = 99; r.rankDone = true; return true; } return false; }
+
+// ---------- GAME-SPECIFIC: drawing. Everything goes into the pixel buffer ----------
+let bgC = null;
+const BGM = 6; // background margin for the shake
+function buildBg() {
+  const { LW, LH, cx0, cy0 } = PX;
+  bgC = newCanvas(LW + 2 * BGM, LH + 2 * BGM);
+  const keep = g; g = bgC.getContext("2d"); g.imageSmoothingEnabled = false;
+  g.translate(cx0 + BGM, cy0 + BGM);
+  const X0 = -cx0 - BGM, X1 = LW - cx0 + BGM, Y0 = -cy0 - BGM, Y1 = LH - cy0 + BGM, WW = X1 - X0;
+  // night to dawn: flat bands joined by ordered dither
+  if (Y0 < 30) R(X0, Y0, WW, 30 - Y0, "n");
+  band(X0, 30, WW, 40, "n", "b"); R(X0, 70, WW, 40, "b"); band(X0, 110, WW, 40, "b", "s"); R(X0, 150, WW, 24, "s"); band(X0, 174, WW, 16, "s", "p"); R(X0, 190, WW, 12, "p");
+  for (let i = 0; i < 60; i++) { const sx = X0 + ((i * 97 + 13) % WW), sy = Y0 + ((i * 53 + 7) % Math.max(1, 110 - Y0)); if (sy < 104) P(sx, sy, i % 3 ? "s" : "q"); }
+  ell(142, 46, 9, 9, "k"); ell(142, 46, 8, 8, "q"); ell(145, 43, 2, 2, "m"); ell(139, 50, 1, 1, "m");
+  // far hills, then the ground
+  for (let x = X0 - (((X0 % 23) + 23) % 23) - 23; x < X1; x += 23) { const hh = 10 + (((x * 7) % 9) + 9) % 9; ell(x, 202 - hh / 2, 16, hh, "G"); ell(x - 4, 202 - hh / 2 - 2, 6, 3, "g"); }
+  R(X0, 202, WW, Y1 - 202, "m"); R(X0, 202, WW, 1, "k"); D(X0, 203, WW, 60, "m", "q", 2); band(X0, 262, WW, 40, "m", "o"); if (Y1 > 302) R(X0, 302, WW, Y1 - 302, "o");
+  for (let x = X0 - (((X0 % 31) + 31) % 31); x < X1; x += 31) { R(x, 206 + ((x >> 3) & 3), 3, 1, "O"); R(x + 11, 250 + ((x >> 2) & 7), 2, 1, "O"); }
+  // the rail: an inked wooden beam on two posts
+  for (const px of [RAIL_X - 4, RAIL_X + RAIL_W + 1]) { R(px, RAIL_Y + 5, 5, 24, "k"); R(px + 1, RAIL_Y + 5, 3, 23, "O"); }
+  R(RAIL_X - 8, RAIL_Y, RAIL_W + 16, 7, "k"); R(RAIL_X - 7, RAIL_Y + 1, RAIL_W + 14, 5, "o"); R(RAIL_X - 7, RAIL_Y + 1, RAIL_W + 14, 1, "q"); R(RAIL_X - 7, RAIL_Y + 5, RAIL_W + 14, 1, "O");
+  for (let x = RAIL_X - 4; x < RAIL_X + RAIL_W + 6; x += 12) P(x, RAIL_Y + 3, "O");
+  ell(90, RAIL_Y + 30, 82, 3, "O", 0);
+  g = keep;
+}
+function drawSignBoard(x, y, w, h) { // the in-world hanging sign: ropes from the top edge, wood with ink outline
+  const top = -PX.cy0;
+  for (const rx of [x + 10, x + w - 11]) { R(rx, top, 1, y - top, "k"); }
+  nr(x, y, w, h, "k", 2); R(x + 2, y + 2, w - 4, h - 4, "o"); R(x + 2, y + 2, w - 4, 1, "q"); R(x + 2, y + h - 3, w - 4, 1, "O");
+  R(x + 2, y + h - 2, w - 4, 1, "D");
+}
+function drawLanterns(now) { // lives as world objects: lit lanterns under the sign; a lost one goes grey and swings
+  const y0 = signY() + 40;
+  for (let i = 0; i < 3; i++) {
+    const x = 66 + i * 24, lit = run.lives > i, sw = !lit && now - fx.lostT < 600 && run.lives === i ? (fl(now / 80) & 1) * 2 - 1 : 0;
+    line(x, y0 - 4, x + sw, y0, "k"); ell(x + sw, y0 + 5, 5, 6, "k"); ell(x + sw, y0 + 5, 4, 5, lit ? "r" : "e");
+    R(x + sw - 3, y0 + 2, 7, 1, lit ? "R" : "k"); R(x + sw - 3, y0 + 8, 7, 1, lit ? "R" : "k"); if (lit) R(x + sw - 1, y0 + 3, 1, 4, "a");
+  }
+}
+function drawSign(now) {
+  const y = signY(), w = 100, x = 40;
+  drawSignBoard(x, y, w, 36);
+  const bump = now - fx.scoreT < 80 ? -1 : 0;
+  bigText(String(fx.disp), 90, y + 5 + bump, 3, "q", "k");
+  const n = fx.note && now - fx.note.t < 1500 ? fx.note : null;
+  if (n) { if ((fl((now - n.t) / 120) & 1) || now - n.t > 360) txt(S(n.key), 90, y + 21, { c: "R", px: 12 }); }
+  else if (run.combo >= 2) txt(S("combo") + " " + run.combo + (run.combo >= 5 ? "  x" + (run.combo >= 15 ? 3 : 2) : ""), 90, y + 21, { c: "D", px: 12 });
+  drawLanterns(now);
+}
+function word(str, x, y, col, big) { // a judgement word: chunky Latin or crisp kana, always outlined
+  if (isLatin(str)) bigText(str, x, y, big ? 3 : 2, col, "k");
+  else txt(str, x, y, { c: col, o: "k", px: big ? 16 : 13 });
+}
+function drawCall(now) {
+  const cl = fx.call; if (!cl) return;
+  const age = now - cl.t; if (age > 900) { fx.call = null; return; }
+  if (age > 780 && (fl(age / 40) & 1)) return; // blink out
+  const y = signY() + 62 - (age < 60 ? 2 : 0);
+  word(S(cl.key), 90, y, cl.col, cl.key === "perfect" || cl.key === "gold");
+  if (cl.sub) txt(cl.sub, 90, y + 20, { c: "q", o: "k", px: 12 });
+}
+function drawRound(now, c) {
+  const r = run.round, dead = run.dead, frozen = !!dead && (isDying() || isOver());
+  const zx = Math.round(frozen ? dead.zx : zoneX(r, c)), zw = r.zw, hz = fl(zw / 2);
+  // the plate on the rail; gold rounds use the gold plate; at the failure the plate blinks and shows its centre
+  const blink = frozen && (fl((now - dead.at) / 110) & 1);
+  R(zx - hz - 1, RAIL_Y - 3, zw + 2, 4, "k"); R(zx - hz, RAIL_Y - 2, zw, 2, r.gold ? "y" : "q"); R(zx - hz, RAIL_Y - 1, zw, 1, r.gold ? "Y" : "m");
+  const pw = Math.max(2, Math.round(perfW(r) * 2)); R(zx - fl(pw / 2), RAIL_Y - 2, pw, 2, r.gold ? "a" : "r");
+  if (blink) { R(zx - hz - 2, RAIL_Y - 5, zw + 4, 1, "r"); R(zx - hz - 2, RAIL_Y + 1, zw + 4, 1, "r"); }
+  if (frozen) { R(zx, RAIL_Y - 30, 1, 22, "q"); P(zx - 1, RAIL_Y - 10, "q"); P(zx + 1, RAIL_Y - 10, "q"); } // the ghost marker: where the centre was
+  // the fuse: time left in this round, burning from the right
+  const f = r.res ? 1 - (r.resAt - r.start) / (r.fuseAt - r.start) : c < r.t0 ? 1 : clamp((r.fuseAt - c) / r.fuse, 0, 1);
+  const bx = RAIL_X + Math.round(RAIL_W * f);
+  R(RAIL_X, FUSE_Y, bx - RAIL_X, 2, "D"); for (let x = RAIL_X; x < bx; x += 3) P(x, FUSE_Y, "O");
+  for (let x = bx; x < RAIL_X + RAIL_W; x += 2) P(x, FUSE_Y + 1, "e");
+  if (!r.res && !frozen) { const k = fl(now / 70) & 1; R(bx - 1, FUSE_Y - 1 - k, 3, 3, k ? "a" : "y"); P(bx, FUSE_Y - 2 - k, "q"); }
+  // the gem: trembles while a gold round charges; held in its last pose at the failure
+  const gx = frozen ? dead.gx : Math.round(gemX(r, c)), charging = r.gold && !r.res && c >= r.start && c < r.t0;
+  const trem = charging && !reduceMotion ? (fl(now / 45) & 1) : 0;
+  spr(frozen ? (blink ? SP.gemGrey : SP.gem) : r.gold ? SP.gemGold : SP.gem, gx - 6 + trem, RAIL_Y - 13);
+  // the mallet: follows the gem, slams down on every press (smear, impact, recoil), poses not tweens
+  const since = fx.vt - fx.malletT, mx = since < 260 ? fx.malletX : gx;
+  const hy = since < 30 ? 186 : since < 110 ? 192 : since < 170 ? 184 : since < 260 ? 178 : 172 - (charging ? (fl(now / 90) & 1) : 0);
+  R(mx - 1, hy - 26, 3, 26, "k"); R(mx, hy - 25, 1, 25, "O");
+  nr(mx - 8, hy, 17, 9, "k", 1); R(mx - 7, hy + 1, 15, 7, "o"); R(mx - 7, hy + 1, 15, 1, "q"); R(mx - 7, hy + 6, 15, 2, "O"); R(mx - 3, hy + 3, 7, 1, "D");
+  if (since < 30) for (let i = 1; i < 4; i++) R(mx - 7, hy - i * 4, 15, 1, "w"); // a smear frame
+}
+function drawTitleUI(now) {
+  // the title is painted on the scene's own sign, bigger than in play; attract play stays visible below it
+  const y = Math.max(42, vTop() + 2), x = 8, w = 164;
+  drawSignBoard(x, y, w, 50);
+  if (lang === "ja") { txt(S("title"), 90, y + 8, { c: "k", px: 16 }); txt(S("titleEn"), 90, y + 33, { c: "R", sc: 2 }); }
+  else { bigText(S("title"), 90, y + 9, 3, "q", "k"); txt(STRINGS.ja.title, 90, y + 30, { c: "R", px: 12 }); }
+  const b = Number(store.get("best", 0)) || 0;
+  if (b > 0) { // a small plank under the sign: best and, from the second run, the rank
+    const runs = Number(store.get("runs", 0)) || 0, rk = runs >= 2 ? S("ranks")[rankOf(b)] : "";
+    const s1 = S("best") + " " + b, w1 = textW(s1, { px: 12, sc: 2 }), w2 = rk ? textW(rk, { px: 12, sc: 2 }) + 8 : 0, pw = w1 + w2 + 12, px = 90 - fl(pw / 2), py = y + 53;
+    nr(px, py, pw, 16, "k", 1); R(px + 1, py + 1, pw - 2, 14, "q"); txt(s1, px + 6, py + 3, { c: "k", px: 12, sc: 2, a: "l" });
+    if (rk) { R(px + 6 + w1 + 4, py + 2, w2 - 2, 12, "r"); txt(rk, px + 6 + w1 + 7, py + 3, { c: "w", px: 12, sc: 2, a: "l" }); }
+  }
+  txt(S("how1"), 90, 238, { c: "q", o: "k", px: 12, sc: 1 }); txt(S("how2"), 90, 254, { c: "y", o: "k", px: 12, sc: 1 });
+  const [tx, ty, tw, th] = UI.start, bob = fl(now / 400) & 1;
+  tag(tx, ty + bob, tw, th, S("start"), true);
+  spr(SP.pointer, tx - 15 + (fl(now / 300) & 1) * 2, ty + 6 + bob);
+  if (finePointer) txt(S("space"), tx + tw + 4, ty + 8, { c: "D", a: "l" });
+  txt(S("credit"), 4, 306, { c: "D", a: "l" });
+}
+function drawPause(now) {
+  D(-PX.cx0, -PX.cy0, PX.LW, PX.LH, null, "k", 8);
+  const dy = Math.round(-30 * (1 - easeOut((T() - fx.pauseT) / 200))), y = pauseY();
+  g.translate(0, dy);
+  win(8, y, 164, 96);
+  txt(S("paused"), 90, y + 10, { c: "q", px: 14, sc: 2 });
+  tag(...UI.resume, S("resume"), true); tag(...UI.restart, S("restart")); tag(...UI.quit, S("toTitle"));
+  g.translate(0, -dy);
+}
+const pauseY = () => Math.max(84, vTop() + 20);
+const overY = () => Math.max(30, vTop() + 4);
+function drawOver(now) {
+  const r = run.result, play = state === "over", age = resAge(r, now);
+  const x = 10, w = 160, h = play ? 160 : 136, y = overY() + Math.round(-170 * (1 - easeOut(age / RES.drop))) + (age > RES.drop && age < RES.drop + 80 ? 1 : 0);
+  win(x, y, w, h);
+  if (age > RES.head) word(S("over"), 90, y + 8, "q", true);
+  if (age > RES.cause) txt(r.cause, 90, y + 30, { c: "h", px: 12, sc: 2 });
+  if (age > RES.count) {
+    const k = clamp((age - RES.count) / RES.countDur, 0, 1), shown = String(Math.round(r.score * easeOut(k)));
+    const rk = r.showRank && r.rankDone ? S("ranks")[r.rank] : "", rw = rk ? textW(rk, { px: 12, sc: 2 }) + 8 : 0, sw = textW(String(r.score)) * 4;
+    bigText(shown, r.showRank ? x + 10 + fl(sw / 2) : 90, y + 46, 4, "q", "k");
+    if (rk) { const rx = x + w - 10 - rw, ry = y + 50; nr(rx - 1, ry - 1, rw + 2, 18, "k", 1); R(rx, ry, rw, 16, "r"); R(rx + 1, ry + 1, rw - 2, 1, "h"); txt(rk, rx + 4, ry + 3, { c: "w", px: 12, sc: 2, a: "l" }); }
+  }
+  if (age > RES.rows) {
+    [["rPerf", String(run.perfects)], ["rCombo", String(run.maxCombo)]].forEach(([k, v], i) => {
+      const ry = y + 76 + i * 14;
+      txt(S(k), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" }); txt(v, x + w - 10, ry, { c: "q", sc: 2, a: "r" });
+      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 12, "b");
+    });
+    if (play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
+      const ry = y + 104;
+      txt(S("rBest"), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" });
+      if (r.newBest) { if (age > RES.best) { const t = textCanvas(S("newBest"), { c: "w", px: 12, sc: 2 }), bw = t.width + 8, bx = x + w - 10 - bw, j = age < RES.best + 90 ? -2 : 0; noteText(S("newBest"), 12); nr(bx - 1, ry - 2 + j, bw + 2, 15, "k", 1); R(bx, ry - 1 + j, bw, 13, "r"); spr(t, bx + 4, ry + 1 + j); } }
+      else { txt(String(r.best), x + 64, ry, { c: "q", sc: 2, a: "l" }); txt(r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), x + w - 10, ry, { c: "y", px: 12, sc: 2, a: "r" }); }
+      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 12, "b");
     }
   }
-
-  // ===== AI for attract and ?demo=1: taps when the ball is near the zone centre, misses now and then =====
-  function aiThink(dt) {
-    if (state !== 'play') return;
-    ai.wait -= dt;
-    if (ai.wait > 0) return;
-    const next = x + dir * speed * dt;
-    const crossing = (x - zone) * (next - zone) <= 0;   // the ball passes the zone centre this frame
-    const sloppy = rng() < 0.004;                       // rare deliberate miss so the demo also shows failure
-    if (crossing || Math.abs(x - zone) < zoneW * 0.1 || sloppy) act();
+  if (play && age > RES.goal && r.goal) {
+    const gt = S(r.goal.k, r.goal.n), tw = textW(gt, { px: 12, sc: 2 }), gx = 90 - fl((tw + 14) / 2);
+    spr(SP.pointer, gx, y + 136); txt(gt, gx + 14, y + 135, { c: "y", px: 12, sc: 2, a: "l" });
   }
-
-  // ===== update / draw =====
-  function step(dt) {
-    time += dt;
-    if (state === 'play') {
-      x += dir * speed * dt;
-      if (x > 1) { x = 2 - x; dir = -1; }
-      if (x < 0) { x = -x; dir = 1; }
-      if (mode !== 'play') aiThink(dt);
-    } else if (state === 'dead') {
-      deadTimer -= dt;
-      if (deadTimer <= 0) { if (mode === 'play') showGameOver(); else reset(); }
-    }
-    for (const p of particles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; }
-    particles = particles.filter(p => p.t < p.life);
-    for (const u of popups) u.t += dt;
-    popups = popups.filter(u => u.t < 0.8);
-    shake = Math.max(0, shake - dt * 40);
-    flash = Math.max(0, flash - dt);
+  if (play) {
+    tag(...UI.retry, S("retry"), true); tag(...UI.toTitle, S("toTitle"));
+    if (retryReady()) spr(SP.pointer, UI.retry[0] + UI.retry[2] + 2 - (fl(now / 300) & 1) * 2, UI.retry[1] + 6, true);
   }
-
-  function draw() {
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    const g = ctx.createLinearGradient(0, 0, 0, VH);
-    g.addColorStop(0, '#080a1f'); g.addColorStop(1, '#1b2160');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
-    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-
-    // soft background rings
-    for (let i = 0; i < 5; i++) {
-      ctx.strokeStyle = `rgba(154,160,207,${0.06 + i * 0.015})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(VW / 2, BAR_Y, 60 + i * 50 + Math.sin(time * 1.5 + i) * 6, 0, TAU); ctx.stroke();
-    }
-    // bar, zone, ball
-    ctx.fillStyle = '#ffffff14'; roundRect(BAR_X, BAR_Y - 14, BAR_W, 28, 14); ctx.fill();
-    const zx = BAR_X + (zone - zoneW / 2) * BAR_W, zw = zoneW * BAR_W;
-    ctx.fillStyle = `rgba(127,227,196,${0.35 + 0.15 * Math.sin(time * 6)})`; roundRect(zx, BAR_Y - 14, zw, 28, 14); ctx.fill();
-    ctx.fillStyle = 'rgba(255,211,110,.55)'; roundRect(BAR_X + (zone - zoneW / 8) * BAR_W, BAR_Y - 14, zoneW / 4 * BAR_W, 28, 6); ctx.fill();
-    if (state === 'play') {
-      ctx.save(); ctx.shadowColor = '#ffd36e'; ctx.shadowBlur = 18; ctx.fillStyle = '#fff8e6';
-      ctx.beginPath(); ctx.arc(BAR_X + x * BAR_W, BAR_Y, 11, 0, TAU); ctx.fill(); ctx.restore();
-    }
-    // lives
-    for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = i < lives ? '#ff7a6b' : '#ffffff22';
-      ctx.beginPath(); ctx.arc(VW / 2 - 30 + i * 30, BAR_Y + 60, 8, 0, TAU); ctx.fill();
-    }
-    for (const p of particles) {
-      ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
-    }
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'center';
-    for (const u of popups) {
-      ctx.globalAlpha = 1 - u.t / 0.8; ctx.fillStyle = u.color;
-      ctx.font = `900 20px ${FONT}`; ctx.fillText(u.text, u.x, u.y - u.t * 40);
-    }
-    ctx.globalAlpha = 1;
-    if (flash > 0) { ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.fillStyle = `rgba(255,248,230,${flash})`; ctx.fillRect(0, 0, VW, VH); }
+}
+function drawDemoLabel() { // ?demo=1: a small bilingual title instead of any tool, BEST or button
+  txt(STRINGS.ja.title, 90, 288, { c: "q", o: "k", px: 12 }); txt(STRINGS.en.title, 90, 304, { c: "q", o: "k" });
+}
+function draw(now) {
+  if (!run) return;
+  const c = clockNow(), sh = shakeOffset(5);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (bgC) g.drawImage(bgC, sh.x - BGM, sh.y - BGM);
+  g.setTransform(1, 0, 0, 1, PX.cx0 + sh.x, PX.cy0 + sh.y);
+  drawRound(now, c);
+  partsDraw(now);
+  if (state === "play" && hint.active && !run.round.res && c >= run.round.t0) { // first-run gesture hint at the input target
+    const r = run.round; drawTapHint(Math.round(zoneX(r, c)), RAIL_Y + 22, clamp((Math.abs(gemX(r, c) - zoneX(r, c)) - r.zw / 2) / 30, 0, 1));
   }
-
-  function roundRect(rx, ry, rw, rh, r) {
-    ctx.beginPath();
-    ctx.moveTo(rx + r, ry); ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, r); ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, r);
-    ctx.arcTo(rx, ry + rh, rx, ry, r); ctx.arcTo(rx, ry, rx + rw, ry, r); ctx.closePath();
+  g.setTransform(1, 0, 0, 1, PX.cx0, PX.cy0); // HUD and feedback never shake
+  if (!isTitle() && !isOver()) { drawSign(now); drawCall(now); }
+  if (isTitle()) drawTitleUI(now);
+  if (state === "paused") drawPause(now);
+  if (isOver()) drawOver(now);
+  if (DEMO) drawDemoLabel();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  if (!DEMO) {
+    if (!btnMute.hidden) icon(PX.LW - 17, 2, 15, 15, AU.muted ? "mute" : "sound");
+    if (!btnPause.hidden) icon(PX.LW - 17, 19, 15, 15, "pause");
+    if (isTitle() && !ovTitle.hidden) icon(2, 2, langW(), 15, S("lang"));
   }
+  let zm = zoomNow(now);
+  const r = run.round;
+  if (!zm && r.gold && !r.res && c >= r.start && c < r.t0 && !reduceMotion) zm = { x: 90 + PX.cx0, y: RAIL_Y - 8 + PX.cy0, s: 1 + 0.03 * smooth((c - r.start) / GOLD_CHARGE) }; // slow push-in, released by the punch
+  pixBlit(ctx, zm);
+}
+const langW = () => textW(S("lang"), { px: 12, sc: 2 }) + 8;
 
-  function updateHud() {
-    if (score === undefined) return;
-    $('score').textContent = score;
-    $('best').textContent = best;
-    $('mute').textContent = soundOn ? S.soundOn : S.soundOff;
-    $('mute').setAttribute('aria-pressed', String(!soundOn));
+// ---------- KEEP: screen, language, mute ----------
+const UI = { start: [57, 270, 66, 22], retry: [57, 270, 66, 22], toTitle: [4, 296, 58, 17], resume: [0, 0, 94, 22], restart: [0, 0, 66, 18], quit: [0, 0, 66, 18] };
+function layoutUI() {
+  const py = pauseY(); UI.resume = [43, py + 34, 94, 22]; UI.restart = [12, py + 66, 76, 18]; UI.quit = [92, py + 66, 76, 18];
+  const core = (el, r, p) => place(el, r[0] - p + PX.cx0, r[1] - p + PX.cy0, r[2] + 2 * p, r[3] + 2 * p);
+  core($("btnStart"), UI.start, 3); core($("btnResume"), UI.resume, 1); core($("btnRestart"), UI.restart, 1); core($("btnQuit"), UI.quit, 1);
+  core($("btnRetry"), UI.retry, 2); core($("btnToTitle"), UI.toTitle, 1);
+  place(btnMute, PX.LW - 19, 0, 19, 18); place(btnPause, PX.LW - 19, 18, 19, 18); place($("btnLang"), 0, 0, langW() + 4, 19);
+}
+function resize() {
+  const box = pixResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, CW, CH, [0, 40, 60, 80, 100, 120]);
+  for (const el of [cv, uiEl]) { el.style.width = box.w + "px"; el.style.height = box.h + "px"; el.style.left = box.left + "px"; el.style.top = box.top + "px"; }
+  buildBg(); layoutUI();
+}
+window.addEventListener("resize", resize);
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = STRINGS[lang].title + (lang === "ja" ? " / " + STRINGS.en.title : "");
+  document.querySelectorAll("[data-s]").forEach(el => { el.textContent = S(el.getAttribute("data-s")); });
+  $("btnLang").textContent = S("lang");
+  layoutUI();
+}
+function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
+
+// ---------- KEEP: flow ----------
+function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
+const newSeed = () => (Math.random() * 4294967296) >>> 0;
+function startAI(mode, seed) { state = mode === "demo" ? "demo" : "title"; newRun(mode, seed == null ? newSeed() : seed); btnPause.hidden = true; }
+function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+function startPlay() {
+  if (auInit()) auResume();
+  sfx.ui(); hideAll();
+  state = "play"; runCount++;
+  newRun("play", newSeed());
+  btnPause.hidden = false;
+  pfStart();
+}
+function showOver(now) {
+  state = "over"; run.result = makeResult(now); musicLevel("bed");
+  if (run.result.newBest) store.set("best", run.score);
+  store.set("runs", (Number(store.get("runs", 0)) || 0) + 1);
+  ovOver.hidden = false; overShownAt = T(); btnPause.hidden = true;
+  platform("gameOver", run.score);
+}
+function pauseGame(at) {
+  if (state !== "play") return;
+  state = "paused"; fx.pauseT = T();
+  run.pauseClock = (at || T()) - run.offset;
+  musicLevel("off");
+  ovPause.hidden = false; btnPause.hidden = true;
+  pfStop();
+}
+function resumeGame() {
+  if (state !== "paused") return;
+  if (auInit()) auResume();
+  run.offset = T() - run.pauseClock;
+  state = "play"; ovPause.hidden = true; btnPause.hidden = false;
+  musicLevel("play");
+  pfStart();
+}
+function holdClock() { if (run && run.holdAt == null && (state === "title" || state === "demo")) run.holdAt = T(); }
+function releaseClock() { if (run && run.holdAt != null) { run.offset += T() - run.holdAt; run.holdAt = null; } }
+function onHide() { if (state === "play") pauseGame(); else holdClock(); }
+function onShow() { releaseClock(); lastNow = performance.now(); }
+const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
+function retry() { if (state === "over" && retryReady()) startPlay(); }
+
+// ---------- KEEP: input. Gameplay on pointerdown / keydown; the response is drawn on the next frame ----------
+function press(tc) { // the core input: the mallet always swings, the judge decides the rest
+  if (!run || run.dead) return;
+  const r = run.round;
+  fx.malletT = fx.vt; fx.malletX = Math.round(gemX(r, tc));
+  if (loud()) sfx.press();
+  judge(tc);
+}
+auUnlock();
+cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") press(clockNow()); });
+cv.addEventListener("pointercancel", e => e.preventDefault()); // nothing is held, so a cancelled touch commits nothing
+ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
+ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
+ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (!skipResult(T())) retry(); });
+$("btnLang").addEventListener("click", e => { e.stopPropagation(); lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
+btnMute.addEventListener("click", e => { e.stopPropagation(); if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
+btnPause.addEventListener("click", e => { e.stopPropagation(); pauseGame(); btnPause.blur(); });
+$("btnResume").addEventListener("click", e => { e.stopPropagation(); resumeGame(); });
+$("btnRestart").addEventListener("click", e => { e.stopPropagation(); pfStop(); startPlay(); });
+$("btnQuit").addEventListener("click", e => { e.stopPropagation(); toTitle(); });
+$("btnRetry").addEventListener("click", e => { e.stopPropagation(); retry(); });
+$("btnToTitle").addEventListener("click", e => { e.stopPropagation(); if (retryReady()) toTitle(); });
+document.addEventListener("keydown", e => {
+  if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
+  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar";
+  if (ok || k.startsWith("Arrow")) e.preventDefault();
+  if (e.repeat) return;
+  if (k === "m" || k === "M") { setMute(!AU.muted); return; }
+  if (isTitle()) { if (ok) startPlay(); }
+  else if (state === "play") { if (k === "Escape" || k === "p" || k === "P") pauseGame(); else if (ok || k === "ArrowUp" || k === "ArrowDown") press(clockNow()); }
+  else if (state === "paused") { if (ok || k === "Escape" || k === "p" || k === "P") resumeGame(); }
+  else if (state === "over") { if (ok) { if (!skipResult(T())) retry(); } else if (k === "Escape") toTitle(); }
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) onHide(); else onShow(); });
+window.addEventListener("blur", () => { if (state === "play") pauseGame(); });
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+// ---------- KEEP: update and loop ----------
+function update(now, dt) {
+  if (!run) return;
+  if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) updateRun(now);
+  if (isDying()) {
+    const el = now - run.dead.at, wait = state === "dying" ? FREEZE : state === "demo-dying" ? 1100 : 1400; // the demo lingers on the failure for the clip
+    if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else startAI("attract"); }
   }
+  if (state === "demo-over" && now - run.result.at > 3600) startAI("demo"); // a short result hold, then the clip loops
+  if (isOver()) resultStep(now);
+  juiceStep(dt);
+  if (state === "paused" || (isDying() && now - run.dead.at < FREEZE)) return; // the failure freeze holds every pose
+  const vdt = Juice.stop > 0 ? dt * 0.15 : dt; // hitstop slows the visuals only; the run clock never stops
+  fx.vt += vdt * 1000;
+  partsStep(vdt);
+}
+function step(now, dt) {
+  update(now, dt);
+  if (run) fx.disp = run.score < fx.disp ? run.score : fx.disp + Math.ceil((run.score - fx.disp) * Math.min(1, dt * 12));
+  musicStep();
+}
+let lastNow = performance.now();
+function frame() {
+  requestAnimationFrame(frame);
+  if (manual) return;
+  let now = performance.now(); if (now < lastNow) now = lastNow;
+  const raw = now - lastNow, prev = lastNow; lastNow = now;
+  if (raw > 300 && state === "play") pauseGame(prev); // a long stall must not count as time the player had
+  if (raw > 250 && run && run.ai && run.holdAt == null && !isDying()) run.offset += raw - 16; // the AI never teleports
+  step(now, clamp(raw, 0, 50) / 1000);
+  draw(now);
+}
 
-  // ===== flow =====
-  function startGame() {
-    unlockAudio();
-    mode = 'play'; paused = false;
-    $('title').hidden = true; $('over').hidden = true; $('pause').hidden = true;
-    $('hud').hidden = false; $('pauseBtn').hidden = false;
-    reset();
-    cv.focus({ preventScroll: true });
-    platform('gameplayStart');
-  }
+// ---------- KEEP: test hooks (the contract in tools/README.md; tools/qa.mjs and review-kit read them) ----------
+window.__game = {
+  get state() { return state === "demo-over" || state === "demo-dying" ? "demo" : state === "title-dying" ? "title" : state; },
+  get score() { return run ? run.score : 0; },
+  get mode() { return run ? run.mode : null; },
+  snap() { // gameplay state for frame-rate parity: integers only, no wall clock
+    const r = run && run.round; if (!r) return null;
+    const c = clockNow();
+    return { state, score: run.score, lives: run.lives, combo: run.combo, hits: run.hits, perfects: run.perfects, golds: run.golds, round: r.no,
+      gem: Math.round(gemX(r, c)), zone: Math.round(zoneX(r, c)), dead: run.dead && run.dead.reason, t: Math.round(c) };
+  },
+  manual(on) { manual = !!on; simT = performance.now(); lastNow = simT; },
+  tick(ms, render) { simT += ms; step(simT, ms / 1000); if (render) draw(simT); },
+  demo(seed) { hideAll(); btnPause.hidden = true; startAI("demo", seed); },
+  tap() { if (state === "play") press(clockNow()); },
+  autoplay(on) { autopilot = !!on; },
+  fail() { if (state === "play" && !run.dead) { run.lives = 1; resolve(run.round, "late", clockNow(), 0); } },
+  audioState() { return AU.ctx ? AU.ctx.state : "none"; },
+  view() { return { K: PX.K, dpr: PX.dpr, w: PX.LW, h: PX.LH, top: PX.TOP, reduce: Juice.reduce, textMin: TXT.min }; },
+  texts() { return TXT.last.slice(); },
+  target() { const u = PX.K / PX.dpr, b = cv.getBoundingClientRect(); return { x: b.left + (PX.cx0 + CW / 2) * u, y: b.top + (PX.cy0 + RAIL_Y) * u }; }, // a fixed point on the play field, never a moving object
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); }
+};
 
-  function showGameOver() {
-    state = 'over';
-    const isBest = score > best;
-    if (isBest) { best = score; store.set('best', best); }
-    $('final').textContent = score;
-    $('newbest').hidden = !isBest || score === 0;
-    $('over').hidden = false; $('pauseBtn').hidden = true;
-    $('retry').focus({ preventScroll: true });
-    if (isBest && score > 0) { sfx.newBest(); platform('happytime'); }
-    platform('gameOver', score);
-    updateHud();
-  }
-
-  function pauseGame() {
-    if (mode !== 'play' || paused || state !== 'play') return;
-    paused = true;
-    $('pause').hidden = false; $('pauseBtn').hidden = true;
-    $('resume').focus({ preventScroll: true });
-    platform('gameplayStop');
-  }
-
-  function resumeGame() {
-    if (!paused) return;
-    paused = false; last = performance.now();
-    $('pause').hidden = true; $('pauseBtn').hidden = false;
-    cv.focus({ preventScroll: true });
-    platform('gameplayStart');
-  }
-
-  // ===== input =====
-  addEventListener('pointerdown', unlockAudio, true);
-  addEventListener('keydown', unlockAudio, true);
-  $('app').addEventListener('pointerdown', e => {
-    if (e.target.closest('button')) return;
-    e.preventDefault();
-    if (mode === 'play' && state === 'play' && !paused) act();
-    else if (!$('title').hidden) startGame();
-  });
-  addEventListener('keydown', e => {
-    if (e.code === 'Escape' || e.code === 'KeyP') { if (paused) resumeGame(); else pauseGame(); return; }
-    if (e.code !== 'Space' && e.code !== 'Enter') return;
-    e.preventDefault();
-    if (e.repeat) return;
-    if (paused) resumeGame();
-    else if (mode === 'play' && state === 'play') act();
-    else if (!$('over').hidden || !$('title').hidden) startGame();
-  });
-  $('start').addEventListener('click', startGame);
-  $('retry').addEventListener('click', startGame);
-  $('resume').addEventListener('click', resumeGame);
-  $('pauseBtn').addEventListener('click', e => { e.currentTarget.blur(); pauseGame(); });
-  $('mute').addEventListener('click', e => { e.currentTarget.blur(); soundOn = !soundOn; store.set('sound', soundOn); updateHud(); });
-  $('lang').addEventListener('click', e => {
-    e.currentTarget.blur();
-    lang = lang === 'ja' ? 'en' : 'ja'; store.set('lang', lang);
-    applyLang();
-  });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
-  addEventListener('blur', pauseGame);
-  addEventListener('resize', resize);
-  document.addEventListener('contextmenu', e => e.preventDefault());
-
-  // ===== main loop =====
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min((now - last) / 1000, 1 / 30); last = now;
-    if (!paused) step(dt);
-    draw();
-    requestAnimationFrame(frame);
-  }
-
-  // ===== debug hook for tools (qa, bots, capture). Read-only use outside the game. =====
-  window.__game = {
-    get state() { return state === 'over' ? 'over' : paused ? 'paused' : state; },
-    get mode() { return mode; },
-    get score() { return score; },
-    get seed() { return seed; },
-    step(dt = 1 / 60) { step(dt); },
-    render() { draw(); },
-    act
-  };
-
-  // ===== boot =====
-  resize();
-  reset();
-  applyLang();
-  if (DEMO) { $('title').hidden = true; $('hud').hidden = false; $('tools').hidden = true; $('brand').hidden = false; }
-  requestAnimationFrame(t => { last = t; frame(t); });
+// ---------- boot ----------
+buildSprites();
+resize();
+applyLang();
+AU.muted = !!store.get("mute", false); setMute(AU.muted);
+if (DEMO) { hideAll(); btnMute.hidden = true; btnPause.hidden = true; auInit(); startAI("demo"); } // recordings start the bus without a gesture when the browser allows it
+else toTitle();
+requestAnimationFrame(frame);
 })();
 </script>
 </body>

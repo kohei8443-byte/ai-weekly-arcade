@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Records YouTube / itch.io media for one game from its ?demo=1 attract mode.
-//   node tools/capture.mjs games/w01-orbit-hopper media/w01-orbit-hopper [--seconds 30] [--gif-start 4] [--lang ja|en] [--keep-raw]
+//   node tools/capture.mjs games/w01-orbit-hopper media/w01-orbit-hopper [--seconds 30] [--gif-start 4] [--lang ja|en] [--keep-raw] [--no-audio]
 // Writes to <outDir>:
-//   vertical.mp4      1080x1920 H.264 30 fps (rendered at 360x640, deviceScaleFactor 3)
+//   vertical.mp4      1080x1920 H.264 30 fps (rendered at 360x640, deviceScaleFactor 3), with the game's sound (AAC)
 //   horizontal.mp4    1920x1080 H.264 30 fps (portrait game centred, title and tagline at the sides)
 //   preview.gif       6 s, 480 px wide, 12 fps (palettegen)
 //   cover.png         630x500 itch.io cover (title screen composited)
 //   thumb-base.png    1280x720 YouTube thumbnail base (gameplay on the right, room for text on the left)
 //   title.png / play.png   raw 1080x1920 screenshots
-//   capture.json      what was made, durations and sizes
+//   capture.json      what was made, durations, sizes and the audio level of each MP4
+// Sound: an init script taps whatever the game connects to its AudioContext destination into a
+// MediaStreamAudioDestinationNode and records it with MediaRecorder; ffmpeg then muxes it in, aligned to
+// the trimmed video. A game that makes no sound in ?demo=1 (or --no-audio) gives silent MP4s as before.
 // Media are not committed to git; upload them as GitHub Release assets or keep them locally.
 // Needs ffmpeg on PATH (or FFMPEG=/path/to/ffmpeg) and Chromium for Playwright (or CHROMIUM_PATH).
 import fs from 'node:fs';
@@ -16,7 +19,43 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { launchBrowser, startServer, readMeta, parseArgs, sleep, escapeHtml } from './lib/common.mjs';
 
-const USAGE = 'usage: node tools/capture.mjs <gameDir> <outDir> [--seconds 30] [--gif-start 4] [--gif-seconds 6] [--lang ja|en] [--keep-raw]';
+const USAGE = 'usage: node tools/capture.mjs <gameDir> <outDir> [--seconds 30] [--gif-start 4] [--gif-seconds 6] [--lang ja|en] [--keep-raw] [--no-audio]';
+
+// Runs in every frame before the game: records the first live AudioContext's output from the moment it runs.
+const AUDIO_TAP = `(() => {
+  if (!window.AudioNode || !window.MediaStreamAudioDestinationNode || !window.MediaRecorder) return;
+  const cap = window.__capAudio = { started: null, chunks: [], mime: '', error: null, rec: null };
+  let ctx0 = null, dest = null;
+  const begin = () => {
+    if (cap.rec || !ctx0 || ctx0.state !== 'running') return;
+    try {
+      const mime = ['audio/webm;codecs=opus', 'audio/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+      const rec = new MediaRecorder(dest.stream, mime ? { mimeType: mime, audioBitsPerSecond: 160000 } : {});
+      rec.ondataavailable = e => { if (e.data && e.data.size) cap.chunks.push(e.data); };
+      rec.start(500); cap.rec = rec; cap.mime = rec.mimeType; cap.started = performance.timeOrigin + performance.now();
+    } catch (e) { cap.error = String(e); }
+  };
+  const oc = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (d, ...a) {
+    const r = oc.call(this, d, ...a);
+    try {
+      const live = !(window.OfflineAudioContext && this.context instanceof OfflineAudioContext);
+      if (live && d instanceof AudioDestinationNode) {
+        if (!ctx0) { ctx0 = this.context; dest = ctx0.createMediaStreamDestination(); ctx0.addEventListener('statechange', begin); }
+        if (this.context === ctx0) { oc.call(this, dest); begin(); }
+      }
+    } catch (e) { cap.error = String(e); }
+    return r;
+  };
+  cap.dump = async () => {
+    const rec = cap.rec;
+    if (rec && rec.state !== 'inactive') await new Promise(res => { rec.onstop = res; rec.stop(); });
+    if (!cap.chunks.length) return null;
+    const buf = new Uint8Array(await new Blob(cap.chunks, { type: cap.mime }).arrayBuffer());
+    let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return { b64: btoa(s), started: cap.started, mime: cap.mime };
+  };
+})();`;
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const DISCLOSURE_JA = 'コードはAI（Claude）、絵と音はコードで生成、判断するのは人間（kouhei）';
 
@@ -89,12 +128,13 @@ function composePage({ width, height, shot, meta, kind }) {
 }
 
 // ---------- recording ----------
-async function record(browser, origin, { url, viewport, size, seconds, tmp, locale, label, onMid }) {
+async function record(browser, origin, { url, viewport, size, seconds, tmp, locale, label, onMid, audio }) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 3, locale, recordVideo: { dir: tmp, size } });
   await context.route('**/*', r => (r.request().url().startsWith(origin) || /^(data|blob|about):/.test(r.request().url()) ? r.continue() : r.abort()));
+  if (audio) await context.addInitScript(AUDIO_TAP);
   const errors = [];
   const page = await context.newPage();
-  const t0 = Date.now();
+  const t0 = Date.now(); // the video starts with the page
   page.on('pageerror', e => errors.push(String(e.message || e)));
   await page.goto(url, { waitUntil: 'load' });
   await sleep(1500); // let the attract AI get going and fonts settle
@@ -102,16 +142,56 @@ async function record(browser, origin, { url, viewport, size, seconds, tmp, loca
   const mid = sleep(seconds * 500).then(() => onMid && onMid(page));
   await sleep(seconds * 1000 + 600);
   await mid;
+  let sound = null;
+  if (audio) {
+    for (const f of page.frames()) {
+      try {
+        const d = await f.evaluate(() => (window.__capAudio && window.__capAudio.dump ? window.__capAudio.dump() : null));
+        if (d && d.b64) {
+          const file = path.join(tmp, `${label}-audio.webm`);
+          fs.writeFileSync(file, Buffer.from(d.b64, 'base64'));
+          sound = { file, offset: (d.started - t0) / 1000 - trimStart }; // where the sound starts on the trimmed video, in s
+          break;
+        }
+      } catch (e) { /* a frame without the tap */ }
+    }
+  }
   const video = page.video();
+  const realSec = (Date.now() - t0) / 1000;
   await context.close();
   const raw = await video.path();
+  // Under load the screencast can come out longer than the time it covers (slow motion). Measure the
+  // ratio so encodeMp4 can play it back at real speed, which also keeps the recorded sound in sync.
+  const rawSec = probeDuration(raw);
+  const stretch = rawSec && realSec > 0 ? rawSec / realSec : 1;
   if (errors.length) console.warn(`capture: ${label}: page errors during recording: ${errors.slice(0, 3).join(' | ')}`);
-  return { raw, trimStart, errors };
+  return { raw, trimStart, errors, sound, stretch: Math.abs(stretch - 1) > 0.02 && stretch > 0.5 && stretch < 2 ? stretch : 1 };
 }
 
-function encodeMp4(raw, trimStart, seconds, w, h, out) {
-  ffmpeg(['-ss', trimStart.toFixed(2), '-i', raw, '-t', String(seconds),
-    '-vf', `fps=30,scale=${w}:${h}:flags=lanczos,setsar=1,format=yuv420p`,
+// Adds the recorded sound to an encoded MP4 (AAC). Returns the measured level, or null when there is no
+// sound or ffmpeg cannot read it (the silent MP4 is then kept as it is).
+function addAudio(mp4, sound, seconds, label) {
+  if (!sound) return null;
+  const tmpOut = mp4.replace(/\.mp4$/, '.with-audio.mp4');
+  const shift = sound.offset >= 0 ? `adelay=${Math.round(sound.offset * 1000)}:all=1` : `atrim=start=${(-sound.offset).toFixed(3)},asetpts=PTS-STARTPTS`;
+  try {
+    ffmpeg(['-i', mp4, '-i', sound.file, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
+      '-af', `${shift},apad,aresample=48000`, '-c:a', 'aac', '-b:a', '160k', '-ac', '2', '-t', String(seconds), '-movflags', '+faststart', tmpOut], `${label} audio`);
+    fs.renameSync(tmpOut, mp4);
+  } catch (e) {
+    fs.rmSync(tmpOut, { force: true });
+    console.warn(`capture: ${label}: kept the silent video (${e.message})`);
+    return null;
+  }
+  const r = spawnSync(FFMPEG, ['-hide_banner', '-i', mp4, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' });
+  const mean = /mean_volume:\s*(-?[\d.]+) dB/.exec(r.stderr || ''), max = /max_volume:\s*(-?[\d.]+) dB/.exec(r.stderr || '');
+  return { offsetSec: +sound.offset.toFixed(3), meanDb: mean ? Number(mean[1]) : null, maxDb: max ? Number(max[1]) : null };
+}
+
+// stretch = raw video seconds per real second (see record); 1 when the screencast kept real time.
+function encodeMp4(raw, trimStart, seconds, w, h, out, stretch = 1) {
+  ffmpeg(['-ss', (trimStart * stretch).toFixed(3), '-i', raw, '-t', (seconds * stretch).toFixed(3),
+    '-vf', `setpts=(PTS-STARTPTS)/${stretch.toFixed(5)},fps=30,scale=${w}:${h}:flags=lanczos,setsar=1,format=yuv420p`,
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart', '-an', out], path.basename(out));
 }
@@ -119,7 +199,7 @@ function encodeMp4(raw, trimStart, seconds, w, h, out) {
 async function main() {
   let args;
   try {
-    args = parseArgs(process.argv.slice(2), { seconds: 'string', 'gif-start': 'string', 'gif-seconds': 'string', lang: 'string', 'keep-raw': 'bool', help: 'bool' });
+    args = parseArgs(process.argv.slice(2), { seconds: 'string', 'gif-start': 'string', 'gif-seconds': 'string', lang: 'string', 'keep-raw': 'bool', 'no-audio': 'bool', help: 'bool' });
   } catch (e) { console.error(e.message); console.error(USAGE); process.exit(2); }
   if (args.help || args._.length !== 2) { console.error(USAGE); process.exit(args.help ? 0 : 2); }
   const [gameDir, outDir] = args._;
@@ -128,6 +208,7 @@ async function main() {
   const gifStart = Number(args['gif-start'] || 4);
   const gifSeconds = Number(args['gif-seconds'] || 6);
   const locale = args.lang === 'en' ? 'en-US' : 'ja-JP'; // games pick their language from navigator.language
+  const audio = !args['no-audio'];
   const { meta } = readMeta(gameDir);
   const m = meta || { week: 0, title_ja: path.basename(path.resolve(gameDir)), title_en: '', tagline_ja: '', tagline_en: '' };
   fs.mkdirSync(outDir, { recursive: true });
@@ -154,23 +235,25 @@ async function main() {
     let playShot = null;
     const v = await record(browser, server.origin, {
       url: `${server.origin}/index.html?demo=1`, viewport: { width: 360, height: 640 }, size: { width: 1080, height: 1920 },
-      seconds, tmp, locale, label: 'vertical',
+      seconds, tmp, locale, label: 'vertical', audio,
       onMid: async page => { playShot = await page.screenshot(); }
     });
     console.log(`capture: recording horizontal ${seconds}s ...`);
     const hz = await record(browser, server.origin, {
       url: `${server.origin}/__wide.html`, viewport: { width: 640, height: 360 }, size: { width: 1920, height: 1080 },
-      seconds, tmp, locale, label: 'horizontal'
+      seconds, tmp, locale, label: 'horizontal', audio
     });
     fs.writeFileSync(out('play.png'), playShot);
     made.play = 'play.png';
 
     console.log('capture: encoding mp4 ...');
-    encodeMp4(v.raw, v.trimStart, seconds, 1080, 1920, out('vertical.mp4'));
-    encodeMp4(hz.raw, hz.trimStart, seconds, 1920, 1080, out('horizontal.mp4'));
+    encodeMp4(v.raw, v.trimStart, seconds, 1080, 1920, out('vertical.mp4'), v.stretch);
+    encodeMp4(hz.raw, hz.trimStart, seconds, 1920, 1080, out('horizontal.mp4'), hz.stretch);
     made.vertical = 'vertical.mp4';
     made.horizontal = 'horizontal.mp4';
+    const sound = audio ? { vertical: addAudio(out('vertical.mp4'), v.sound, seconds, 'vertical'), horizontal: addAudio(out('horizontal.mp4'), hz.sound, seconds, 'horizontal') } : null;
 
+    if (sound) console.log(`capture: sound ${sound.vertical ? `vertical ${sound.vertical.meanDb} dB mean` : 'vertical none'}, ${sound.horizontal ? `horizontal ${sound.horizontal.meanDb} dB mean` : 'horizontal none'}`);
     console.log('capture: gif ...');
     ffmpeg(['-ss', String(gifStart), '-t', String(gifSeconds), '-i', out('vertical.mp4'),
       '-vf', 'fps=12,scale=480:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
@@ -196,6 +279,8 @@ async function main() {
       game: path.basename(path.resolve(gameDir)), week: m.week, seconds,
       files: Object.fromEntries(Object.entries(made).map(([k, f]) => [k, { file: f, bytes: fs.statSync(out(f)).size }])),
       durations: { vertical: probeDuration(out('vertical.mp4')), horizontal: probeDuration(out('horizontal.mp4')), gif: gifSeconds },
+      audio: sound,
+      videoStretch: { vertical: +v.stretch.toFixed(3), horizontal: +hz.stretch.toFixed(3) },
       pageErrors: [...v.errors, ...hz.errors],
       madeAt: new Date().toISOString()
     };
