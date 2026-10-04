@@ -2,14 +2,31 @@
   "slug": "hanabi-chain",
   "week": 5,
   "title_ja": "連鎖花火",
-  "title_en": "Hanabi Chain: Fireworks",
-  "tagline_ja": "タップは1回だけ。夏の夜空を、ひとつの火花で連鎖させろ。",
-  "tagline_en": "One tap per volley. Light a single spark and let the whole summer sky answer.",
-  "how_to_play_ja": "川岸から花火玉が打ち上がります（点線は行き先のヒント）。1回の打ち上げごとに使える火花は1つだけ。タップした場所ですぐに火花が弾け、範囲内の花火玉が爆発し、その爆発がさらに周りの玉を巻き込んで連鎖します。牡丹は丸く、柳は垂れ下がる光の筋で後から来る玉も拾い、分裂は4つの小さな爆発に、輪は中心が空洞の大きな輪になります。黄金玉を巻き込むと、その回の爆発範囲が2倍に。灰色の不発玉は連鎖を止めます。目標の連鎖数に届かないとちょうちんが1つ消え、3つ消えたら終了。スコアは連鎖数の2乗の合計なので、大連鎖ほど大きく稼げます。",
-  "how_to_play_en": "Shells launch from the riverbank on dotted arcs that hint where they are going. Each volley gives you exactly one spark: tap a point and it bursts there immediately. Shells inside the burst detonate, and their bursts catch more shells in a chain. Peonies burst round, willows hang glowing strands that catch late shells, crossettes split into four mini-bursts, and rings make a wide hoop with a hollow middle. A golden shell doubles every burst radius for the rest of the volley; grey duds stop the chain. Miss the volley's goal and a lantern goes out; lose all three and the festival is over. Score is the sum of each chain squared, so big chains pay off.",
-  "controls": ["tap/click", "arrow keys to aim", "space", "enter", "esc/p to pause", "m to mute"],
+  "title_en": "Hanabi Chain",
+  "tagline_ja": "火花は1回に1つ。夜空の玉を、ひと押しで連鎖させよう。",
+  "tagline_en": "One spark per volley. Light it right and the whole night sky chains.",
+  "how_to_play_ja": "花火玉が上がったら、玉があつまっている所をタップします。押しているあいだは火花のとどく輪が出て、指をはなすと火がつき、爆発がまわりの玉へ次々と連鎖します。目標の数に届かないとちょうちんが1つ消え、全部消えたらおしまいです。全部の玉を連鎖させると点が2倍になり、大きな連鎖ならちょうちんも戻ります。",
+  "how_to_play_en": "When the shells go up, tap where they bunch together. While you hold, a ring shows the spark's reach; let go to light it, and each burst catches the shells around it in a chain. Miss the volley's goal and a lantern goes out; lose them all and the show is over. Chain every shell to double the score, and a big full chain brings a lantern back.",
+  "controls": [
+    "tap/click (hold to aim, release to light)",
+    "drag to move the ring",
+    "arrow keys to aim",
+    "space/enter to light",
+    "esc/p to pause",
+    "m to mute"
+  ],
   "genre": "one-shot chain-reaction arcade",
-  "tags": ["one-tap", "chain-reaction", "fireworks", "arcade", "casual", "japanese", "high-score", "mobile-friendly"],
-  "session_length_sec": 90,
-  "video_hook_ja": "タップたった1回で、夜空ぜんぶが連鎖して爆発した。"
+  "tags": [
+    "one-tap",
+    "chain-reaction",
+    "fireworks",
+    "arcade",
+    "casual",
+    "japanese",
+    "high-score",
+    "mobile-friendly"
+  ],
+  "session_length_sec": 100,
+  "video_hook_ja": "火花ひとつで、夜空の玉がぜんぶ連鎖した。",
+  "quality_bar": 1
 }
