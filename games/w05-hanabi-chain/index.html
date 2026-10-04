@@ -1919,7 +1919,8 @@ cv.addEventListener("pointercancel", () => { aim.held = false; }); // a cancelle
 cv.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") aim.hover = false; });
 ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
 ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
-ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (!skipResult(T())) retry(); });
+// inside the lockout a press only skips the result animation; after it, one press starts the next run (bar 1.5.4)
+ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (retryReady()) retry(); else skipResult(T()); });
 $("btnLang").addEventListener("click", e => { e.stopPropagation(); lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
 btnMute.addEventListener("click", e => { e.stopPropagation(); if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
 btnPause.addEventListener("click", e => { e.stopPropagation(); pauseGame(); btnPause.blur(); });
@@ -1938,7 +1939,7 @@ document.addEventListener("keydown", e => {
   if (isTitle()) { if (ok) startPlay(); }
   else if (state === "play") { if (k === "Escape" || k === "p" || k === "P") pauseGame(); else if (ok) { aim.key = true; playerFire(aim.kx, aim.ky); } }
   else if (state === "paused") { if (ok || k === "Escape" || k === "p" || k === "P") resumeGame(); }
-  else if (state === "over") { if (ok) { if (!skipResult(T())) retry(); } else if (k === "Escape") toTitle(); }
+  else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") toTitle(); }
 });
 document.addEventListener("keyup", e => { aim.keys[e.key] = false; });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { if (state === "play") pauseGame(); } else lastNow = performance.now(); });
