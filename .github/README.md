@@ -7,12 +7,13 @@
 | --- | --- |
 | `workflows/qa.yml` | PR のゲームを自動でテストします |
 | `workflows/release.yml` | main にマージされたら、サイトを公開し、録画の素材を作ります |
-| `pull_request_template.md` | builder が PR の本文に使うひな形です |
+| `pull_request_template.md` | builder が PR の本文に使うひな形です（QUALITY_BAR.md の採点表を含みます） |
 
 ## qa.yml（PR のテスト）
 
 - すべての PR で動きます。
 - 変わったゲームのフォルダごとに `node tools/qa.mjs` を実行します。`tools/` や `package.json` が変わったときは、すべてのゲームを実行します。
+- `meta.json` に `"quality_bar": 1` があるゲームでは、QUALITY_BAR.md の強いチェックも動きます。w01 から w06 は、これまでと同じチェックです。
 - `template/` か `tools/` が変わったときは、ひな形の `template/` も同じように実行します。
 - ゲームが変わっていない PR（説明の文章だけを直した PR など）は、テストするものがないので、すぐに通ります。
 - 最後に `node tools/hub.mjs` で、ギャラリーサイトが作れることを確かめます。
@@ -29,7 +30,7 @@
 
 ### PR のゲームをスマホで遊ぶ
 
-builder と fixer は、PR に「スマホで遊ぶ」のリンクを書きます。
+builder（木曜の出荷日）と fixer は、PR に「スマホで遊ぶ」のリンクを書きます。
 
 1. プレビューページ: ルーチンにプレビューページの URL を入れた場合だけです（`routines/README.md`）。kouhei だけが開けます。
 2. 予備のリンク: `https://raw.githack.com/kohei8443-byte/ai-weekly-arcade/<コミット>/games/wNN-<slug>/index.html` の形です。

@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 // Records YouTube / itch.io media for one game from its ?demo=1 attract mode.
-//   node tools/capture.mjs games/w01-orbit-hopper media/w01-orbit-hopper [--seconds 30] [--gif-start 4] [--lang ja|en] [--keep-raw]
+//   node tools/capture.mjs games/w01-orbit-hopper media/w01-orbit-hopper [--seconds 30] [--gif-start 4] [--lang ja|en] [--keep-raw] [--no-audio]
 // Writes to <outDir>:
-//   vertical.mp4      1080x1920 H.264 30 fps (rendered at 360x640, deviceScaleFactor 3)
-//   horizontal.mp4    1920x1080 H.264 30 fps (portrait game centred, title and tagline at the sides)
+//   vertical.mp4      1080x1920 H.264 30 fps (rendered at 360x640, deviceScaleFactor 3), with the game's sound (AAC)
+//   horizontal.mp4    1920x1080 H.264 30 fps
 //   preview.gif       6 s, 480 px wide, 12 fps (palettegen)
-//   cover.png         630x500 itch.io cover (title screen composited)
-//   thumb-base.png    1280x720 YouTube thumbnail base (gameplay on the right, room for text on the left)
-//   title.png / play.png   raw 1080x1920 screenshots
-//   capture.json      what was made, durations and sizes
+//   cover.png         630x500 itch.io cover
+//   thumb-base.png    1280x720 YouTube thumbnail base
+//   title.png / play.png   raw 1080x1920 screenshots (play-wide.png: raw 1920x1080, wide games only)
+//   capture.json      what was made, durations, sizes and the audio level of each MP4
+// Wide games (meta.json quality_bar >= 1) fill a 16:9 screen by themselves (STYLE.md 2): horizontal.mp4 is
+// index.html?demo=1 recorded in a 960x540 viewport at deviceScaleFactor 2, cover.png is the game's own title
+// screen in a 630x500 viewport and thumb-base.png is a frame of the wide demo. Nothing is drawn around the game.
+// Older portrait-only games (w01 to w06) still go into a plain wrapper page: ink and washi colours, a thin
+// ink frame, no gradient, blur, shadow, rounded corner or letter spacing (STYLE.md 10; checked by plainPage).
+// Sound: an init script taps whatever the game connects to its AudioContext destination into a
+// MediaStreamAudioDestinationNode and records it with MediaRecorder; ffmpeg then muxes it in, aligned to
+// the trimmed video. A game that makes no sound in ?demo=1 (or --no-audio) gives silent MP4s as before.
 // Media are not committed to git; upload them as GitHub Release assets or keep them locally.
 // Needs ffmpeg on PATH (or FFMPEG=/path/to/ffmpeg) and Chromium for Playwright (or CHROMIUM_PATH).
 import fs from 'node:fs';
@@ -16,7 +24,43 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { launchBrowser, startServer, readMeta, parseArgs, sleep, escapeHtml } from './lib/common.mjs';
 
-const USAGE = 'usage: node tools/capture.mjs <gameDir> <outDir> [--seconds 30] [--gif-start 4] [--gif-seconds 6] [--lang ja|en] [--keep-raw]';
+const USAGE = 'usage: node tools/capture.mjs <gameDir> <outDir> [--seconds 30] [--gif-start 4] [--gif-seconds 6] [--lang ja|en] [--keep-raw] [--no-audio]';
+
+// Runs in every frame before the game: records the first live AudioContext's output from the moment it runs.
+const AUDIO_TAP = `(() => {
+  if (!window.AudioNode || !window.MediaStreamAudioDestinationNode || !window.MediaRecorder) return;
+  const cap = window.__capAudio = { started: null, chunks: [], mime: '', error: null, rec: null };
+  let ctx0 = null, dest = null;
+  const begin = () => {
+    if (cap.rec || !ctx0 || ctx0.state !== 'running') return;
+    try {
+      const mime = ['audio/webm;codecs=opus', 'audio/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+      const rec = new MediaRecorder(dest.stream, mime ? { mimeType: mime, audioBitsPerSecond: 160000 } : {});
+      rec.ondataavailable = e => { if (e.data && e.data.size) cap.chunks.push(e.data); };
+      rec.start(500); cap.rec = rec; cap.mime = rec.mimeType; cap.started = performance.timeOrigin + performance.now();
+    } catch (e) { cap.error = String(e); }
+  };
+  const oc = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (d, ...a) {
+    const r = oc.call(this, d, ...a);
+    try {
+      const live = !(window.OfflineAudioContext && this.context instanceof OfflineAudioContext);
+      if (live && d instanceof AudioDestinationNode) {
+        if (!ctx0) { ctx0 = this.context; dest = ctx0.createMediaStreamDestination(); ctx0.addEventListener('statechange', begin); }
+        if (this.context === ctx0) { oc.call(this, dest); begin(); }
+      }
+    } catch (e) { cap.error = String(e); }
+    return r;
+  };
+  cap.dump = async () => {
+    const rec = cap.rec;
+    if (rec && rec.state !== 'inactive') await new Promise(res => { rec.onstop = res; rec.stop(); });
+    if (!cap.chunks.length) return null;
+    const buf = new Uint8Array(await new Blob(cap.chunks, { type: cap.mime }).arrayBuffer());
+    let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return { b64: btoa(s), started: cap.started, mime: cap.mime };
+  };
+})();`;
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const DISCLOSURE_JA = 'コードはAI（Claude）、絵と音はコードで生成、判断するのは人間（kouhei）';
 
@@ -32,69 +76,83 @@ function probeDuration(file) {
   return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
 }
 
-const hueOf = week => Math.round((200 + week * 137.508) % 360);
-
-// ---------- wrapper pages (served from the same origin as the game) ----------
+// ---------- wrapper pages for portrait-only games (served from the same origin as the game) ----------
+// Colours from the template palette B; system fonts only (STYLE.md 6).
+const WRAP = { ink: '#1c1a24', paper: '#f4ead3', paperD: '#dbc9a6', red: '#d24a32', grey: '#6f6862' };
+const WRAP_FONT = 'system-ui,"Hiragino Sans","Noto Sans JP",sans-serif';
+const WRAP_TITLE = '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif';
 // Font size so a title of n characters fits on one line in `room` px (Japanese titles rarely have break points).
 const fitSize = (title, room, max, min) => Math.max(min, Math.min(max, Math.floor(room / Math.max(1, [...String(title || '')].length))));
+// Refuses a wrapper page whose CSS has a STYLE.md 10 look, so a later edit cannot bring one back unnoticed.
+const AI_LOOK_CSS = /gradient\(|letter-spacing|border-radius|box-shadow|text-shadow|filter\s*:|blur\(|backdrop-filter/i;
+function plainPage(html) {
+  const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>|style="([^"]*)"/g)].map(m => m[1] || m[2] || '').join('\n');
+  const bad = AI_LOOK_CSS.exec(css);
+  if (bad) throw new Error(`capture wrapper uses "${bad[0]}" (STYLE.md 10 forbids it)`);
+  return html;
+}
+// a small red seal with the week number, drawn as a plain square with an ink line
+const seal = nn => `<div class="seal">${nn}</div>`;
 
 function widePage(meta) {
-  const e = escapeHtml, h = hueOf(meta.week || 0), nn = String(meta.week || 0).padStart(2, '0');
+  const e = escapeHtml, nn = String(meta.week || 0).padStart(2, '0');
   const ts = fitSize(meta.title_ja, 170, 26, 16);
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>wide</title><style>
+  return plainPage(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>wide</title><style>
   html,body{margin:0;height:100%;overflow:hidden}
-  body{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;color:#f6efe0;
-    font-family:system-ui,"Hiragino Sans","Noto Sans JP",sans-serif;
-    background:radial-gradient(90% 120% at 50% 50%,hsl(${h} 45% 20%) 0%,hsl(${h + 30} 50% 9%) 70%)}
+  body{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;color:${WRAP.ink};background:${WRAP.paper};font-family:${WRAP_FONT}}
   /* the game keeps a real phone layout (360x640 CSS px) and is scaled down to the 360 px tall viewport */
-  .box{width:202.5px;height:360px;overflow:hidden;box-shadow:0 0 40px #0009}
+  .box{width:202.5px;height:360px;overflow:hidden;outline:1.5px solid ${WRAP.ink}}
   .frame{width:360px;height:640px;border:0;display:block;transform:scale(.5625);transform-origin:0 0}
   .side{padding:0 22px;display:flex;flex-direction:column;gap:8px;min-width:0}
   .t,.s,.ai{word-break:auto-phrase;text-wrap:balance}
   .l{align-items:flex-end;text-align:right}
-  .k{font-size:9px;font-weight:800;letter-spacing:.28em;color:hsl(${h + 60} 80% 75%)}
-  .t{font-size:${ts}px;font-weight:900;line-height:1.15}
-  .s{font-size:11px;line-height:1.6;color:#f6efe0cc;max-width:15em}
-  .en{font-size:15px;font-weight:800;line-height:1.2}
-  .ai{font-size:8px;line-height:1.5;color:#f6efe099;max-width:20em;margin-top:10px}
+  .seal{width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:${WRAP.red};color:${WRAP.paper};
+    outline:1px solid ${WRAP.ink};font-size:11px;font-weight:800}
+  .k{font-size:9px;font-weight:700;color:${WRAP.grey}}
+  .t{font-family:${WRAP_TITLE};font-size:${ts}px;font-weight:800;line-height:1.15}
+  .s{font-size:11px;line-height:1.6;max-width:15em}
+  .en{font-family:${WRAP_TITLE};font-size:15px;font-weight:800;line-height:1.2}
+  .ai{font-size:8px;line-height:1.5;color:${WRAP.grey};max-width:20em;margin-top:10px}
   </style></head><body>
-  <div class="side l"><div class="k">AI WEEKLY ARCADE #${nn}</div><div class="t">${e(meta.title_ja || '')}</div><div class="s">${e(meta.tagline_ja || '')}</div></div>
+  <div class="side l">${seal(nn)}<div class="k">AI Weekly Arcade</div><div class="t">${e(meta.title_ja || '')}</div><div class="s">${e(meta.tagline_ja || '')}</div></div>
   <div class="box"><iframe class="frame" src="index.html?demo=1" scrolling="no"></iframe></div>
   <div class="side r"><div class="en">${e(meta.title_en || '')}</div><div class="s">${e(meta.tagline_en || '')}</div><div class="ai">${e(DISCLOSURE_JA)}</div></div>
-  </body></html>`;
+  </body></html>`);
 }
 
+// cover (630x500) and thumbnail base (1280x720) for a portrait-only game: washi ground, the screen in a thin
+// ink frame on the right, the title on the left (cover only)
 function composePage({ width, height, shot, meta, kind }) {
-  const e = escapeHtml, h = hueOf(meta.week || 0), nn = String(meta.week || 0).padStart(2, '0');
+  const e = escapeHtml, nn = String(meta.week || 0).padStart(2, '0');
   const img = `data:image/png;base64,${shot.toString('base64')}`;
   const isCover = kind === 'cover';
   const phoneH = isCover ? height - 36 : height - 48;
   const phoneW = Math.round(phoneH * 9 / 16);
   const ts = fitSize(meta.title_ja, width - phoneW - 90, 34, 18);
-  const text = isCover ? `<div class="txt"><div class="k">AI WEEKLY ARCADE</div><div class="n">#${nn}</div>
+  const text = isCover ? `<div class="txt">${seal(nn)}<div class="k">AI Weekly Arcade</div>
       <div class="t">${e(meta.title_ja || '')}</div><div class="en">${e(meta.title_en || '')}</div></div>` : '';
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>compose</title><style>
-  html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:#000}
-  body{position:relative;font-family:system-ui,"Hiragino Sans","Noto Sans JP",sans-serif;color:#f6efe0}
-  .bg{position:absolute;inset:-40px;background:url(${img}) center/cover;filter:blur(24px) brightness(.5) saturate(1.2)}
-  .tint{position:absolute;inset:0;background:linear-gradient(90deg,hsl(${h} 50% 8% / .92) 0%,hsl(${h} 50% 8% / .55) ${isCover ? 55 : 60}%,transparent 100%)}
+  return plainPage(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>compose</title><style>
+  html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden;background:${WRAP.paper}}
+  body{position:relative;font-family:${WRAP_FONT};color:${WRAP.ink}}
   .phone{position:absolute;top:${(height - phoneH) / 2}px;${isCover ? 'right:28px' : `right:${Math.round(width * 0.08)}px`};width:${phoneW}px;height:${phoneH}px;
-    background:url(${img}) center/cover;border-radius:${isCover ? 14 : 22}px;box-shadow:0 12px 40px #000a,0 0 0 2px #ffffff30}
-  .txt{position:absolute;left:30px;top:0;bottom:0;width:${width - phoneW - 80}px;display:flex;flex-direction:column;justify-content:center;gap:6px}
-  .k{font-size:12px;font-weight:800;letter-spacing:.26em;color:hsl(${h + 60} 80% 75%)}
-  .n{font-size:72px;font-weight:900;line-height:1;letter-spacing:-.02em}
-  .t{font-size:${ts}px;font-weight:900;line-height:1.2;overflow-wrap:anywhere;word-break:auto-phrase;text-wrap:balance}
-  .en{font-size:18px;font-weight:700;color:#f6efe0cc}
-  </style></head><body><div class="bg"></div><div class="tint"></div><div class="phone"></div>${text}</body></html>`;
+    background:url(${img}) center/cover;outline:2px solid ${WRAP.ink}}
+  .txt{position:absolute;left:30px;top:0;bottom:0;width:${width - phoneW - 80}px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+  .seal{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:${WRAP.red};color:${WRAP.paper};
+    outline:1.5px solid ${WRAP.ink};font-size:20px;font-weight:800}
+  .k{font-size:12px;font-weight:700;color:${WRAP.grey}}
+  .t{font-family:${WRAP_TITLE};font-size:${ts}px;font-weight:800;line-height:1.2;overflow-wrap:anywhere;word-break:auto-phrase;text-wrap:balance}
+  .en{font-family:${WRAP_TITLE};font-size:18px;font-weight:700}
+  </style></head><body><div class="phone"></div>${text}</body></html>`);
 }
 
 // ---------- recording ----------
-async function record(browser, origin, { url, viewport, size, seconds, tmp, locale, label, onMid }) {
-  const context = await browser.newContext({ viewport, deviceScaleFactor: 3, locale, recordVideo: { dir: tmp, size } });
+async function record(browser, origin, { url, viewport, dsf = 3, size, seconds, tmp, locale, label, onMid, audio }) {
+  const context = await browser.newContext({ viewport, deviceScaleFactor: dsf, locale, recordVideo: { dir: tmp, size } });
   await context.route('**/*', r => (r.request().url().startsWith(origin) || /^(data|blob|about):/.test(r.request().url()) ? r.continue() : r.abort()));
+  if (audio) await context.addInitScript(AUDIO_TAP);
   const errors = [];
   const page = await context.newPage();
-  const t0 = Date.now();
+  const t0 = Date.now(); // the video starts with the page
   page.on('pageerror', e => errors.push(String(e.message || e)));
   await page.goto(url, { waitUntil: 'load' });
   await sleep(1500); // let the attract AI get going and fonts settle
@@ -102,16 +160,56 @@ async function record(browser, origin, { url, viewport, size, seconds, tmp, loca
   const mid = sleep(seconds * 500).then(() => onMid && onMid(page));
   await sleep(seconds * 1000 + 600);
   await mid;
+  let sound = null;
+  if (audio) {
+    for (const f of page.frames()) {
+      try {
+        const d = await f.evaluate(() => (window.__capAudio && window.__capAudio.dump ? window.__capAudio.dump() : null));
+        if (d && d.b64) {
+          const file = path.join(tmp, `${label}-audio.webm`);
+          fs.writeFileSync(file, Buffer.from(d.b64, 'base64'));
+          sound = { file, offset: (d.started - t0) / 1000 - trimStart }; // where the sound starts on the trimmed video, in s
+          break;
+        }
+      } catch (e) { /* a frame without the tap */ }
+    }
+  }
   const video = page.video();
+  const realSec = (Date.now() - t0) / 1000;
   await context.close();
   const raw = await video.path();
+  // Under load the screencast can come out longer than the time it covers (slow motion). Measure the
+  // ratio so encodeMp4 can play it back at real speed, which also keeps the recorded sound in sync.
+  const rawSec = probeDuration(raw);
+  const stretch = rawSec && realSec > 0 ? rawSec / realSec : 1;
   if (errors.length) console.warn(`capture: ${label}: page errors during recording: ${errors.slice(0, 3).join(' | ')}`);
-  return { raw, trimStart, errors };
+  return { raw, trimStart, errors, sound, stretch: Math.abs(stretch - 1) > 0.02 && stretch > 0.5 && stretch < 2 ? stretch : 1 };
 }
 
-function encodeMp4(raw, trimStart, seconds, w, h, out) {
-  ffmpeg(['-ss', trimStart.toFixed(2), '-i', raw, '-t', String(seconds),
-    '-vf', `fps=30,scale=${w}:${h}:flags=lanczos,setsar=1,format=yuv420p`,
+// Adds the recorded sound to an encoded MP4 (AAC). Returns the measured level, or null when there is no
+// sound or ffmpeg cannot read it (the silent MP4 is then kept as it is).
+function addAudio(mp4, sound, seconds, label) {
+  if (!sound) return null;
+  const tmpOut = mp4.replace(/\.mp4$/, '.with-audio.mp4');
+  const shift = sound.offset >= 0 ? `adelay=${Math.round(sound.offset * 1000)}:all=1` : `atrim=start=${(-sound.offset).toFixed(3)},asetpts=PTS-STARTPTS`;
+  try {
+    ffmpeg(['-i', mp4, '-i', sound.file, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
+      '-af', `${shift},apad,aresample=48000`, '-c:a', 'aac', '-b:a', '160k', '-ac', '2', '-t', String(seconds), '-movflags', '+faststart', tmpOut], `${label} audio`);
+    fs.renameSync(tmpOut, mp4);
+  } catch (e) {
+    fs.rmSync(tmpOut, { force: true });
+    console.warn(`capture: ${label}: kept the silent video (${e.message})`);
+    return null;
+  }
+  const r = spawnSync(FFMPEG, ['-hide_banner', '-i', mp4, '-map', '0:a:0', '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' });
+  const mean = /mean_volume:\s*(-?[\d.]+) dB/.exec(r.stderr || ''), max = /max_volume:\s*(-?[\d.]+) dB/.exec(r.stderr || '');
+  return { offsetSec: +sound.offset.toFixed(3), meanDb: mean ? Number(mean[1]) : null, maxDb: max ? Number(max[1]) : null };
+}
+
+// stretch = raw video seconds per real second (see record); 1 when the screencast kept real time.
+function encodeMp4(raw, trimStart, seconds, w, h, out, stretch = 1) {
+  ffmpeg(['-ss', (trimStart * stretch).toFixed(3), '-i', raw, '-t', (seconds * stretch).toFixed(3),
+    '-vf', `setpts=(PTS-STARTPTS)/${stretch.toFixed(5)},fps=30,scale=${w}:${h}:flags=lanczos,setsar=1,format=yuv420p`,
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart', '-an', out], path.basename(out));
 }
@@ -119,7 +217,7 @@ function encodeMp4(raw, trimStart, seconds, w, h, out) {
 async function main() {
   let args;
   try {
-    args = parseArgs(process.argv.slice(2), { seconds: 'string', 'gif-start': 'string', 'gif-seconds': 'string', lang: 'string', 'keep-raw': 'bool', help: 'bool' });
+    args = parseArgs(process.argv.slice(2), { seconds: 'string', 'gif-start': 'string', 'gif-seconds': 'string', lang: 'string', 'keep-raw': 'bool', 'no-audio': 'bool', help: 'bool' });
   } catch (e) { console.error(e.message); console.error(USAGE); process.exit(2); }
   if (args.help || args._.length !== 2) { console.error(USAGE); process.exit(args.help ? 0 : 2); }
   const [gameDir, outDir] = args._;
@@ -128,17 +226,20 @@ async function main() {
   const gifStart = Number(args['gif-start'] || 4);
   const gifSeconds = Number(args['gif-seconds'] || 6);
   const locale = args.lang === 'en' ? 'en-US' : 'ja-JP'; // games pick their language from navigator.language
+  const audio = !args['no-audio'];
   const { meta } = readMeta(gameDir);
   const m = meta || { week: 0, title_ja: path.basename(path.resolve(gameDir)), title_en: '', tagline_ja: '', tagline_en: '' };
+  const wide = Number(m.quality_bar) >= 1; // the game lays itself out for 16:9 (STYLE.md 2): record it as it is
   fs.mkdirSync(outDir, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(outDir, '.raw-')); // raw webm recordings, removed at the end
   const t0 = Date.now();
-  const server = await startServer(gameDir, { '/__wide.html': widePage(m) });
+  const server = await startServer(gameDir, wide ? {} : { '/__wide.html': widePage(m) });
   const browser = await launchBrowser(['--force-device-scale-factor=3']);
+  let browser2 = null; // wide games: a second browser whose screencast matches deviceScaleFactor 2
   const made = {};
   const out = name => path.join(outDir, name);
   try {
-    // title screen (no demo): source for cover.png
+    // title screen (no demo): raw 1080x1920 shot, and the cover source for portrait games
     {
       const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 3, locale });
       const p = await ctx.newPage();
@@ -148,29 +249,44 @@ async function main() {
       await ctx.close();
       made.title = 'title.png';
     }
+    // wide games: the cover is the game's own title screen at 630x500 (shot at DSF 2, scaled down)
+    if (wide) {
+      const ctx = await browser.newContext({ viewport: { width: 630, height: 500 }, deviceScaleFactor: 2, locale });
+      const p = await ctx.newPage();
+      await p.goto(`${server.origin}/index.html`, { waitUntil: 'load' });
+      await sleep(2000);
+      await p.screenshot({ path: path.join(tmp, 'cover-2x.png') });
+      await ctx.close();
+    }
 
     console.log(`capture: recording vertical ${seconds}s ...`);
     // one recording at a time so CPU contention does not drop frames
     let playShot = null;
     const v = await record(browser, server.origin, {
       url: `${server.origin}/index.html?demo=1`, viewport: { width: 360, height: 640 }, size: { width: 1080, height: 1920 },
-      seconds, tmp, locale, label: 'vertical',
+      seconds, tmp, locale, label: 'vertical', audio,
       onMid: async page => { playShot = await page.screenshot(); }
     });
-    console.log(`capture: recording horizontal ${seconds}s ...`);
-    const hz = await record(browser, server.origin, {
-      url: `${server.origin}/__wide.html`, viewport: { width: 640, height: 360 }, size: { width: 1920, height: 1080 },
-      seconds, tmp, locale, label: 'horizontal'
-    });
+    console.log(`capture: recording horizontal ${seconds}s (${wide ? "the game's own wide layout" : 'portrait game in the wrapper'}) ...`);
+    let wideShot = null;
+    if (wide) browser2 = await launchBrowser(['--force-device-scale-factor=2']);
+    const hz = await record(wide ? browser2 : browser, server.origin, wide
+      ? { url: `${server.origin}/index.html?demo=1`, viewport: { width: 960, height: 540 }, dsf: 2, size: { width: 1920, height: 1080 },
+          seconds, tmp, locale, label: 'horizontal', audio, onMid: async page => { wideShot = await page.screenshot(); } }
+      : { url: `${server.origin}/__wide.html`, viewport: { width: 640, height: 360 }, size: { width: 1920, height: 1080 },
+          seconds, tmp, locale, label: 'horizontal', audio });
     fs.writeFileSync(out('play.png'), playShot);
     made.play = 'play.png';
+    if (wideShot) { fs.writeFileSync(out('play-wide.png'), wideShot); made.playWide = 'play-wide.png'; }
 
     console.log('capture: encoding mp4 ...');
-    encodeMp4(v.raw, v.trimStart, seconds, 1080, 1920, out('vertical.mp4'));
-    encodeMp4(hz.raw, hz.trimStart, seconds, 1920, 1080, out('horizontal.mp4'));
+    encodeMp4(v.raw, v.trimStart, seconds, 1080, 1920, out('vertical.mp4'), v.stretch);
+    encodeMp4(hz.raw, hz.trimStart, seconds, 1920, 1080, out('horizontal.mp4'), hz.stretch);
     made.vertical = 'vertical.mp4';
     made.horizontal = 'horizontal.mp4';
+    const sound = audio ? { vertical: addAudio(out('vertical.mp4'), v.sound, seconds, 'vertical'), horizontal: addAudio(out('horizontal.mp4'), hz.sound, seconds, 'horizontal') } : null;
 
+    if (sound) console.log(`capture: sound ${sound.vertical ? `vertical ${sound.vertical.meanDb} dB mean` : 'vertical none'}, ${sound.horizontal ? `horizontal ${sound.horizontal.meanDb} dB mean` : 'horizontal none'}`);
     console.log('capture: gif ...');
     ffmpeg(['-ss', String(gifStart), '-t', String(gifSeconds), '-i', out('vertical.mp4'),
       '-vf', 'fps=12,scale=480:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle',
@@ -178,7 +294,13 @@ async function main() {
     made.gif = 'preview.gif';
 
     console.log('capture: cover and thumbnail base ...');
-    for (const [kind, w, h, src, file] of [['cover', 630, 500, out('title.png'), 'cover.png'], ['thumb', 1280, 720, out('play.png'), 'thumb-base.png']]) {
+    if (wide) {
+      // straight from the game: no wrapper, no text, nothing drawn around it
+      const scale = (src, w, h, file) => ffmpeg(['-i', src, '-vf', `scale=${w}:${h}:flags=lanczos`, '-frames:v', '1', out(file)], file);
+      scale(path.join(tmp, 'cover-2x.png'), 630, 500, 'cover.png'); made.cover = 'cover.png';
+      scale(out('play-wide.png'), 1280, 720, 'thumb-base.png'); made.thumb = 'thumb-base.png';
+    }
+    for (const [kind, w, h, src, file] of wide ? [] : [['cover', 630, 500, out('title.png'), 'cover.png'], ['thumb', 1280, 720, out('play.png'), 'thumb-base.png']]) {
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
       const p = await ctx.newPage();
       await p.setContent(composePage({ width: w, height: h, shot: fs.readFileSync(src), meta: m, kind }), { waitUntil: 'load' });
@@ -194,8 +316,11 @@ async function main() {
     }
     const info = {
       game: path.basename(path.resolve(gameDir)), week: m.week, seconds,
+      layout: wide ? 'wide: horizontal, cover and thumbnail are the game itself' : 'portrait game in the plain wrapper page',
       files: Object.fromEntries(Object.entries(made).map(([k, f]) => [k, { file: f, bytes: fs.statSync(out(f)).size }])),
       durations: { vertical: probeDuration(out('vertical.mp4')), horizontal: probeDuration(out('horizontal.mp4')), gif: gifSeconds },
+      audio: sound,
+      videoStretch: { vertical: +v.stretch.toFixed(3), horizontal: +hz.stretch.toFixed(3) },
       pageErrors: [...v.errors, ...hz.errors],
       madeAt: new Date().toISOString()
     };
@@ -205,6 +330,7 @@ async function main() {
     if (info.pageErrors.length) { console.error('capture: the game threw errors while recording (see capture.json)'); process.exitCode = 1; }
   } finally {
     await browser.close();
+    if (browser2) await browser2.close();
     await server.close();
     fs.rmSync(tmp, { recursive: true, force: true });
   }

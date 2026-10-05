@@ -27,7 +27,7 @@ function lineIndex(text) {
 const blank = s => s.replace(/[^\n]/g, ' ');
 
 // ---------- JS tokenizer: returns comment ranges and string literals with the code that precedes them ----------
-function scanJs(src) {
+export function scanJs(src) {
   const strings = []; // { start, end, value, before }
   const code = [];    // code text with strings/comments blanked (same length)
   let i = 0, prevSig = '';
@@ -298,6 +298,11 @@ export function staticCheck(gameDir) {
     if (errors.length) for (const e of errors) add('fail', 'meta', e);
     else add('pass', 'meta', `meta.json has all ${13} fields (week ${meta.week}, "${meta.slug}")`);
     for (const w of warnings) add('warn', 'meta', w);
+    // every week from w07 on is built to QUALITY_BAR.md, so the hard checks cannot be dropped by editing meta.json
+    const wk = /^w(\d{2,3})-/.exec(dirName);
+    if (wk && Number(wk[1]) >= 7 && !(Number.isInteger(meta.quality_bar) && meta.quality_bar >= 1)) {
+      add('fail', 'meta', `w${wk[1]} must be built to QUALITY_BAR.md: meta.json needs "quality_bar": 1 (only w01 to w06 may leave it out)`);
+    }
   }
   return results;
 }

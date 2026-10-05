@@ -5,14 +5,17 @@
 // run on a 390x780 touch phone and a 1280x720 desktop: no page errors, canvas not blank,
 // title -> start -> random play (30 s; then long press/drag "stress" input up to the game's session length
 // if it is still running) -> game over -> retry, and ?demo=1 running on its own.
+// Games with "quality_bar": 1 (or more) in meta.json also get the hard checks of QUALITY_BAR.md
+// (tools/lib/hard-checks.mjs, in parallel with the runs above); --hard forces them on any game, --no-hard skips them.
 // Exit code: 0 = pass (warnings allowed), 1 = at least one failure, 2 = usage error.
 import fs from 'node:fs';
 import path from 'node:path';
 import { staticCheck } from './lib/static-check.mjs';
 import { PROBE } from './lib/probe.mjs';
+import { runHardChecks } from './lib/hard-checks.mjs';
 import { launchBrowser, startServer, createImageAnalyzer, parseArgs, sleep } from './lib/common.mjs';
 
-const USAGE = 'usage: node tools/qa.mjs <gameDir> [--json] [--shots <dir>] [--play-sec 30] [--extra-sec N] [--demo-sec 20] [--static-only]';
+const USAGE = 'usage: node tools/qa.mjs <gameDir> [--json] [--shots <dir>] [--play-sec 30] [--extra-sec N] [--demo-sec 20] [--static-only] [--hard | --no-hard]';
 
 const PROFILES = [
   { name: 'phone', viewport: { width: 390, height: 780 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
@@ -76,6 +79,17 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
   };
   const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y]) => ({ x, y })) });
   const probe = (fn, ...a) => page.evaluate(([f, args]) => window.__qa[f](...args), [fn, a]);
+  // A long frame gap on a busy machine can make a game pause itself (the template does, so a stall is not time the
+  // player had). That pause menu is not a game over: resume it, note it once, and carry on.
+  let stallNoted = false;
+  async function resumeStall(where) {
+    if ((await probe('state')) !== 'paused') return false;
+    const rp = await probe('resume');
+    if (!rp) return false;
+    if (!stallNoted) { stallNoted = true; add('info', 'stall', `the game paused itself during ${where} (a frame gap on a busy machine); resumed and carried on`); }
+    await tap(rp); await sleep(200);
+    return true;
+  }
 
   // Long press-and-drag plus held keys: ends games that random taps cannot (timers, wear-out mechanics).
   async function stressAction() {
@@ -182,6 +196,7 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
     }
     // pause / resume (desktop only)
     if (!profile.hasTouch) {
+      await resumeStall('play');
       const pp = await probe('pause');
       if (!pp) add('warn', 'pause', 'no pause button found (expected [data-qa=pause] or #pauseBtn)');
       else {
@@ -194,18 +209,36 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
       }
     }
     const goBefore = (await page.evaluate(() => window.__qa.log.gameOver));
-    const t0 = Date.now();
+    let t0 = Date.now();
     let over = false, laterShot = null, actions = 0, stressed = false;
-    // phase 1: random input for playSec; phase 2 (only if still alive): stress input for extraSec more
-    while (Date.now() - t0 < (opts.playSec + opts.extraSec) * 1000) {
-      const st = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, resume: window.__qa.resume(), state: window.__qa.state() }));
-      if (st.retry || st.go > goBefore || st.state === 'over' || st.state === 'gameover') { over = true; break; }
-      if (st.resume) { await tap(st.resume); await sleep(200); continue; }
-      if (errors.length >= 20) break; // the game keeps throwing; no point playing on
-      if (!laterShot && Date.now() - t0 > 2500 && canvasRect) laterShot = await shot(page, '3-later', await probe('canvas') || undefined);
-      if (Date.now() - t0 < opts.playSec * 1000) await randomAction();
-      else { stressed = true; await stressAction(); }
-      actions++;
+    // An input still in flight when a run ends (a long press, a drag) can land after the game's retry lockout and start
+    // the next run, as a quick retry should. Then that run is played on (at most twice) so the retry button is tested
+    // on a game over screen that no input is touching.
+    for (let stray = 0; ; stray++) {
+      const goStart = stray ? await page.evaluate(() => window.__qa.log.gameOver) : goBefore;
+      let startsBefore = await page.evaluate(() => window.__qa.log.gameplayStart);
+      over = false;
+      // phase 1: random input for playSec; phase 2 (only if still alive): stress input for extraSec more
+      while (Date.now() - t0 < (opts.playSec + opts.extraSec) * 1000) {
+        const st = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, starts: window.__qa.log.gameplayStart, resume: window.__qa.resume(), state: window.__qa.state() }));
+        // game over is what the game says (its state hook) or a Platform.gameOver call; a visible retry button
+        // counts only for games without a state hook, so a pause menu is never taken for a game over
+        if (st.go > goStart || st.state === 'over' || st.state === 'gameover' || (st.state == null && st.retry)) { over = true; break; }
+        startsBefore = st.starts;
+        if (st.resume) { if (st.state === 'paused' && !stallNoted) { stallNoted = true; add('info', 'stall', 'the game paused itself during play (a frame gap on a busy machine); resumed and carried on'); } await tap(st.resume); await sleep(200); continue; }
+        if (errors.length >= 20) break; // the game keeps throwing; no point playing on
+        if (!laterShot && Date.now() - t0 > 2500 && canvasRect) laterShot = await shot(page, '3-later', await probe('canvas') || undefined);
+        if (Date.now() - t0 < opts.playSec * 1000) await randomAction();
+        else { stressed = true; await stressAction(); }
+        actions++;
+      }
+      if (!over || stray >= 2) break;
+      await sleep(700);
+      const s = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, starts: window.__qa.log.gameplayStart, state: window.__qa.state() }));
+      const restarted = !s.retry && s.state !== 'over' && s.state !== 'gameover' && s.starts > startsBefore;
+      if (!restarted) break;
+      add('info', 'retry', `an input still in flight when run ${stray + 1} ended started the next run after the retry lockout; playing on to test the retry button`);
+      t0 = Date.now();
     }
     const playSecs = ((Date.now() - t0) / 1000).toFixed(1);
     if (playShot && laterShot) {
@@ -304,10 +337,10 @@ function printReport(gameDir, results, secs) {
     groups.get(g).push(r);
   }
   const out = [`QA report: ${gameDir}`, ''];
-  const titles = { static: 'Static checks', phone: 'Phone 390x780 (touch)', desktop: 'Desktop 1280x720' };
+  const titles = { static: 'Static checks', phone: 'Phone 390x780 (touch)', desktop: 'Desktop 1280x720', hard: 'Quality bar hard checks (QUALITY_BAR.md item in [ ])' };
   for (const [g, rs] of groups) {
     out.push(`== ${titles[g] || g}`);
-    for (const r of rs) out.push(`  ${icon[r.level].padEnd(4)}  ${r.check.replace(/^\w+:/, '').padEnd(12)} ${r.msg}`);
+    for (const r of rs) out.push(`  ${icon[r.level].padEnd(4)}  ${r.check.replace(/^\w+:/, '').padEnd(g === 'hard' ? 16 : 12)} ${r.msg}`);
     out.push('');
   }
   const fails = results.filter(r => r.level === 'fail').length, warns = results.filter(r => r.level === 'warn').length;
@@ -318,7 +351,7 @@ function printReport(gameDir, results, secs) {
 async function main() {
   let args;
   try {
-    args = parseArgs(process.argv.slice(2), { json: 'bool', shots: 'string', 'play-sec': 'string', 'extra-sec': 'string', 'demo-sec': 'string', 'static-only': 'bool', help: 'bool' });
+    args = parseArgs(process.argv.slice(2), { json: 'bool', shots: 'string', 'play-sec': 'string', 'extra-sec': 'string', 'demo-sec': 'string', 'static-only': 'bool', hard: 'bool', 'no-hard': 'bool', help: 'bool' });
   } catch (e) { console.error(e.message); console.error(USAGE); process.exit(2); }
   if (args.help || args._.length !== 1) { console.error(USAGE); process.exit(args.help ? 0 : 2); }
   const gameDir = args._[0];
@@ -330,28 +363,41 @@ async function main() {
     extraSec: 0
   };
   // stress phase length: the game's own session length (meta.json), 20..90 s
+  let qualityBar = 0;
   {
     let len = 60;
-    try { len = Number(JSON.parse(fs.readFileSync(path.join(gameDir, 'meta.json'), 'utf8')).session_length_sec) || 60; } catch (e) { /* meta errors are reported by the static checks */ }
+    try {
+      const meta = JSON.parse(fs.readFileSync(path.join(gameDir, 'meta.json'), 'utf8'));
+      len = Number(meta.session_length_sec) || 60;
+      qualityBar = Number(meta.quality_bar) || 0;
+    } catch (e) { /* meta errors are reported by the static checks */ }
     opts.extraSec = args['extra-sec'] != null ? Number(args['extra-sec']) : Math.min(90, Math.max(20, len));
   }
+  const hard = args['no-hard'] ? false : args.hard ? true : qualityBar >= 1;
   if (opts.shots) fs.mkdirSync(opts.shots, { recursive: true });
   const t0 = Date.now();
   const results = staticCheck(gameDir);
+  if (!hard && qualityBar >= 1) results.push({ level: 'warn', check: 'hard:skipped', msg: '--no-hard: the hard checks of QUALITY_BAR.md were skipped; this run does not count for the quality gate' });
 
   if (!args['static-only'] && fs.existsSync(path.join(gameDir, 'index.html'))) {
     const server = await startServer(gameDir);
-    let browser;
+    let browser, hardBrowser;
     try {
       browser = await launchBrowser();
       const analyzer = await createImageAnalyzer(browser);
-      const per = await Promise.all(PROFILES.map(p => runProfile(browser, server.origin, p, analyzer, opts)));
+      // the hard checks get their own browser that, like a phone, needs a gesture before audio plays
+      const hardRun = hard
+        ? launchBrowser([], { autoplay: 'user-gesture-required' }).then(b => { hardBrowser = b; return runHardChecks(b, server.origin, gameDir); })
+          .catch(e => [{ level: 'fail', check: 'hard:crash', msg: `hard checks crashed: ${e.message.split('\n')[0]}` }])
+        : Promise.resolve([]);
+      const per = await Promise.all([...PROFILES.map(p => runProfile(browser, server.origin, p, analyzer, opts)), hardRun]);
       for (const r of per) results.push(...r);
       await analyzer.close();
     } catch (e) {
       results.push({ level: 'fail', check: 'browser:launch', msg: e.message.split('\n')[0] });
     } finally {
       if (browser) await browser.close();
+      if (hardBrowser) await hardBrowser.close();
       await server.close();
     }
   }

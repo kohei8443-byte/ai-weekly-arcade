@@ -23,9 +23,11 @@ export const PROBE = `(() => {
   };
   const buttons = () => [...document.querySelectorAll('button,[role=button],a.btn,.btn')].filter(vis);
   const label = b => [...new Set([b.id, b.getAttribute('data-qa'), (b.textContent || '').trim(), b.getAttribute('aria-label')].filter(Boolean))].join(' ');
+  // A button that names its role with data-qa is only ever that role: the label guess skips it for other roles
+  // (a pause menu's "restart" button must never be taken for the game over screen's retry button).
   const pick = (selectors, re) => {
     for (const s of selectors) for (const el of document.querySelectorAll(s)) if (vis(el)) return el;
-    return buttons().find(b => re.test(label(b))) || null;
+    return buttons().find(b => { const q = b.getAttribute('data-qa'); return (!q || selectors.includes('[data-qa=' + q + ']')) && re.test(label(b)); }) || null;
   };
   const center = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, label: label(el).slice(0, 40) }; };
   const area = el => { const r = el.getBoundingClientRect(); return r.width * r.height; };

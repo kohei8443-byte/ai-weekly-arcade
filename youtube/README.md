@@ -158,7 +158,7 @@ GitHub や Claude Code の画面を映すときは、次のものが映ってい
 | 縦の動画 1080x1920 | `?demo=1` から `tools/capture.mjs` で作る | GitHub Release のアセット（`wNN-<slug>-vertical.mp4`） |
 | 横の動画 1920x1080 | 同上 | 同上（`wNN-<slug>-horizontal.mp4`） |
 | GIF | 同上 | 同上（`wNN-<slug>-preview.gif`） |
-| サムネイルの元画像 | 同上（1280x720、左に文字を置く余白あり） | 同上（`wNN-<slug>-thumb-base.png`） |
+| サムネイルの元画像 | 同上（1280x720。w01 から w06 は左に文字を置く余白あり、w07 からはゲームの横長の画面そのまま） | 同上（`wNN-<slug>-thumb-base.png`） |
 
 - 表のファイル名は、マージのあとに release ワークフローが作るリリース `wNN-<slug>` のものです。
 - PR の確認用の下書きリリース `wNN-<slug>-preview` では、`vertical.mp4` のように先頭の `wNN-<slug>-` が付きません。
