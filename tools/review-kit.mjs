@@ -7,6 +7,8 @@
 //   <view>/demo/demo-SS.ss.png        ?demo=1 at 4 fps for 0-10 s, then 2 fps to 30 s
 //   <view>/play/NN-<what>.png         the naive tapper's run: early frames, the failure, the result screen
 //   <view>/contact-demo.png, <view>/contact-play.png   one image per strip, labelled with times
+// and for the 1920x1080 view (960x540 CSS px at DSF 2, the horizontal video and a full HD monitor):
+//   1920x1080/title.png, 1920x1080/demo/demo-SS.ss.png (1 fps to 10 s, then every 2 s to 30 s), 1920x1080/contact-demo.png
 // and at the top level:
 //   naive-tapper.json   every tap and what followed (state, score), per view
 //   demo-run.json       the demo timeline: score changes, failures, restarts, by run time
@@ -22,7 +24,10 @@ import { launchBrowser, startServer, readMeta, parseArgs, sleep } from './lib/co
 const USAGE = 'usage: node tools/review-kit.mjs <gameDir> <outDir> [--seed 12345] [--tapper-sec 60]';
 const VIEWS = [
   { name: '390x780', viewport: { width: 390, height: 780 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, thumb: 130, cols: 8 },
-  { name: '800x450', viewport: { width: 800, height: 450 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, thumb: 200, cols: 6 }
+  { name: '800x450', viewport: { width: 800, height: 450 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false, thumb: 200, cols: 6 },
+  // full HD wide: title and demo frames only (no tapper), so the kit stays small
+  { name: '1920x1080', viewport: { width: 960, height: 540 }, deviceScaleFactor: 2, isMobile: false, hasTouch: false, thumb: 320, cols: 4, tapper: false,
+    demoTimes: [...Array.from({ length: 10 }, (_, i) => i + 1), ...Array.from({ length: 10 }, (_, i) => 12 + i * 2)] }
 ];
 const DEMO_TIMES = [...Array.from({ length: 40 }, (_, i) => (i + 1) * 0.25), ...Array.from({ length: 40 }, (_, i) => 10.5 + i * 0.5)];
 
@@ -34,7 +39,7 @@ function rng(seed) {
 const gaussOf = r => () => Math.sqrt(-2 * Math.log(Math.max(1e-9, r()))) * Math.cos(2 * Math.PI * r());
 
 async function newPage(browser, origin, view, query, errors) {
-  const { name, thumb, cols, ...opts } = view;
+  const { name, thumb, cols, tapper, demoTimes, ...opts } = view; // the last two are ours, not Playwright's
   const context = await browser.newContext({ ...opts, locale: 'ja-JP' });
   await context.route('**/*', r => (r.request().url().startsWith(origin) || /^(data|blob|about):/.test(r.request().url()) ? r.continue() : r.abort()));
   await context.addInitScript(PROBE);
@@ -85,7 +90,7 @@ async function demoPass(browser, origin, view, dir, seed, errors, withLog) {
     if (stepped) {
       await page.evaluate(seed => { const G = window.__game; G.manual(true); G.demo(seed); }, seed);
       let cur = 0;
-      for (const t of DEMO_TIMES) {
+      for (const t of view.demoTimes || DEMO_TIMES) {
         await page.evaluate(ms => { const G = window.__game, n = Math.max(1, Math.round(ms / (1000 / 60))); for (let i = 0; i < n; i++) G.tick(ms / n, i === n - 1); }, (t - cur) * 1000);
         cur = t;
         const f = path.join(dir, `demo-${fmt(t)}.png`); await page.screenshot({ path: f }); files.push(f); labels.push(`${t.toFixed(2)} s`);
@@ -113,7 +118,7 @@ async function demoPass(browser, origin, view, dir, seed, errors, withLog) {
       // no stepped clock: real-time screenshots on a wall-clock schedule, and a sampled log
       const t0 = Date.now(), ev = []; let prev = await page.evaluate(READ);
       ev.push({ t: 0, event: 'start', ...prev });
-      for (const t of DEMO_TIMES) {
+      for (const t of view.demoTimes || DEMO_TIMES) {
         const w = t * 1000 - (Date.now() - t0); if (w > 0) await sleep(w);
         const f = path.join(dir, `demo-${fmt(t)}.png`); await page.screenshot({ path: f }); files.push(f);
         const real = (Date.now() - t0) / 1000; labels.push(`${real.toFixed(2)} s`);
@@ -245,6 +250,16 @@ async function main() {
       console.log(`review-kit: ${view.name} demo frames ...`);
       const demo = await demoPass(browser, server.origin, view, ddir, seed, errors, view === VIEWS[0]);
       if (demo.log) demoLog = demo.log;
+      if (view.tapper === false) {
+        // title screen only
+        const { page, context } = await newPage(browser, server.origin, view, '', errors);
+        try { await sleep(1500); await page.screenshot({ path: path.join(vdir, 'title.png') }); } finally { await context.close(); }
+        fs.rmSync(pdir, { recursive: true, force: true });
+        const cd = await contactSheet(browser, demo.files, demo.labels, view.thumb, view.cols, path.join(vdir, 'contact-demo.png'), `${summary.game} ?demo=1 ${view.name}`);
+        summary.views[view.name] = { demoFrames: demo.files.length, contactDemo: cd && path.relative(outDir, cd), title: path.join(view.name, 'title.png') };
+        files.push(...demo.files);
+        continue;
+      }
       console.log(`review-kit: ${view.name} naive tapper (${tapperSec} s) ...`);
       const tap = await tapperPass(browser, server.origin, view, pdir, seed, tapperSec, errors);
       tapperLog[view.name] = { taps: tap.taps, runs: tap.runs, error: tap.error || null };

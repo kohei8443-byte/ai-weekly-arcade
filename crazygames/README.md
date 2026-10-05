@@ -28,12 +28,12 @@
 
 | 条件 | 段階 | いまのゲーム | すること |
 | --- | --- | --- | --- |
-| 最初に読み込むサイズが 50MB 以下、全体で 250MB 以下、ファイル数 1500 以下 | Basic | 1 ファイルで 150KB 以下 | なし |
+| 最初に読み込むサイズが 50MB 以下、全体で 250MB 以下、ファイル数 1500 以下 | Basic | 1 ファイルで 300KB 未満 | なし |
 | スマホのトップに出るには、最初のサイズが 20MB 以下 | Full | 同上 | なし |
 | ファイルの参照は相対パスだけ | Basic | 外部のファイルを使っていない | なし |
 | Chrome と Edge で動く。4GB メモリの Chromebook でなめらかに動く | Basic | Chromium で QA 済み | 古めのパソコンでも試します |
 | マウス、キーボード、タッチで遊べる | Basic | 3 つとも対応 | なし |
-| パソコンでは横長の画面で遊べる。縦のゲームは左右に帯を付けてよい | Basic | 縦の画面を真ん中に置き、左右は帯になる | 800x450 で文字が読めるか確かめます（下のメモ） |
+| パソコンでは横長の画面で遊べる。縦のゲームは左右に帯を付けてよい | Basic | w01 から w06 は、縦の画面を真ん中に置き、左右は帯になる。新しいゲームは、左右を世界の続きとして描き、HUD を横に移す（STYLE.md の 2 章） | 800x450 で文字が読めるか確かめます（下のメモ） |
 | スマホで文字が選択されないように `user-select: none` を入れる | Basic | 入っている | なし |
 | 画面の向きは CrazyGames が決めるので、ゲームで固定しない | Basic | 固定していない | なし |
 | SDK を入れたら、遊べる状態になったときに gameplay start を送る | Basic（SDK を入れた場合） | `window.Platform.gameplayStart` を呼んでいる | 4 章の差し替えをします |
@@ -44,6 +44,7 @@
 メモ: 2026 年 10 月 4 日に、w01 から w03 を 800x450 と 1920x1080 の画面で開いて確かめました。
 どれも縦の画面が真ん中に出て、左右は帯になり、エラーはありませんでした。
 ただ、800x450 では画面の幅が 253px から 281px になり、小さな文字（たとえば金魚すくいの匹数）は読みにくくなります。
+2026 年 10 月 5 日からの新しいゲームは、横長の画面でもプレイの場所を画面の高さいっぱいに使い、点数などを左右の世界に出します。800x450 で 12 CSS px より小さい文字があると、QA が落とします（QUALITY_BAR.md の 1.4.4）。
 
 出典: [Technical requirements](https://docs.crazygames.com/requirements/technical/)
 
@@ -183,16 +184,20 @@ SDK の説明では、gameplay start は「遊び始めたときと、休憩の�
 
 - 入れてよい文字は、ゲームのタイトルだけです。「New」「Play now」なども入れません。
 - ただのスクリーンショットではなく、ゲームの世界を絵として見せるものにします。枠、アイコン、ストアのロゴは入れません。
-- `tools/capture.mjs` の `cover.png`（630x500）には「AI WEEKLY ARCADE #NN」などの文字が入っているので、そのままは使えません。
-  `thumb-base.png`（1280x720）には文字は入っていませんが、ゲームの画面をそのまま置いたものなので、「ただのスクリーンショット」に近くなります。
-  `title.png` / `play.png`（1080x1920 の画面）を元に、kouhei が作ります。作るツールがほしいときは、Claude に別の PR で頼めます。
+- `tools/capture.mjs` の画像は、どれもそのままは使えません。
+  w01 から w06 の `cover.png`（630x500）には、週の番号の判や「AI Weekly Arcade」の文字が入っています。
+  w07 からの `cover.png` はタイトル画面で、ボタンなどの文字が入っています。
+  `thumb-base.png`（1280x720）と `play-wide.png`（1920x1080、w07 から）には足した文字はありませんが、ゲームの画面そのものなので、「ただのスクリーンショット」に近くなります。
+  これらと `title.png` / `play.png`（1080x1920 の画面）を元に、kouhei が作ります。作るツールがほしいときは、Claude に別の PR で頼めます。
 
 ### 紹介動画（横と縦の 2 本とも必要）
 
 - 長さは 15 秒から 20 秒（20 秒をこえると切られます）。1 本 50MB まで。
 - 横は 1080p の 16:9、縦は 1080p の 2:3 です。
 - 音は入れません。黒い画面、ロゴの演出、黒い帯、マウスの矢印、「Play Now」などの文字も入れません。
-- `tools/capture.mjs` の `horizontal.mp4` は横に文字が入っているので、そのままは使えません。`vertical.mp4` から次のように作れます。
+- w01 から w06 の `tools/capture.mjs` の `horizontal.mp4` は、横に文字が入っているので、そのままは使えません。
+  w07 からの `horizontal.mp4` は、ゲームの横長の画面をそのまま録ったものです。音を消し、長さを切れば使えます（デモの小さなタイトルの札は、ゲームのタイトルなので入れてよい文字です）。
+  縦の動画と、w01 から w06 の横の動画は、`vertical.mp4` から次のように作れます。
 
 ```sh
 # Portrait 2:3 (1080x1620), 18 s, no audio track
@@ -200,13 +205,17 @@ ffmpeg -ss 2 -t 18 -i vertical.mp4 -an \
   -vf "crop=1080:1620:0:(ih-1620)/2" \
   -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart cg-portrait-2x3.mp4
 
-# Landscape 16:9 (1920x1080), 18 s, no audio track; blurred gameplay fills the sides instead of black bars
+# Landscape 16:9 from w07 on: the game's own wide recording, 18 s, no audio track
+ffmpeg -ss 2 -t 18 -i horizontal.mp4 -an -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart cg-landscape-16x9.mp4
+
+# Landscape 16:9 (1920x1080) for w01 to w06 only (portrait games), 18 s, no audio track;
+# blurred gameplay fills the sides instead of black bars (STYLE.md 10 forbids this look for new games)
 ffmpeg -ss 2 -t 18 -i vertical.mp4 -an -filter_complex \
   "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=30:2,eq=brightness=-0.15[bg];[0:v]scale=-2:1080[fg];[bg][fg]overlay=(W-w)/2:0" \
   -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart cg-landscape-16x9.mp4
 ```
 
-この 2 つのコマンドは、2026 年 10 月 4 日に試して、音のない 1080x1620 と 1920x1080 の 18 秒の動画ができることを確かめました（どちらも 2MB 前後）。
+縦と w01 から w06 の横の 2 つのコマンドは、2026 年 10 月 4 日に試して、音のない 1080x1620 と 1920x1080 の 18 秒の動画ができることを確かめました（どちらも 2MB 前後）。
 `?demo=1` の画面の上の小さなタイトル表示が気になるときは、`-ss` で始まりの位置を変えるか、kouhei が編集ソフトで直します。
 
 出典: [Game covers](https://docs.crazygames.com/requirements/game-covers/)

@@ -113,7 +113,7 @@ const STORAGE_THROWS = `Object.defineProperty(window, 'localStorage', { configur
 
 const BAR = {
   hooks: 'hooks', start: '1.1.1', first: '1.1.2', idle: '1.1.3', input: '1.2.1', unlock: '1.3.1', route: '1.3.2', text: '1.4.4',
-  retry: '1.5.4', storage: '1.6.5', demo: '1.9.1', parity: '1.10.2', platform: '1.10.3', flash: '1.10.4'
+  retry: '1.5.4', storage: '1.6.5', demo: '1.9.1', parity: '1.10.2', platform: '1.10.3', flash: '1.10.4', style: '1.11.3', wide: '1.11.6'
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Differences between two snap() JSON strings (60 Hz first): numbers may differ by abs or by rel (a fraction),
@@ -514,9 +514,14 @@ export async function runHardChecks(browser, origin, gameDir, { parallel = 2 } =
         const parts = [];
         let min = Infinity;
         if (r.v && r.v.K && r.v.dpr) {
-          const kitFloor = /==== PIXEL KIT START ====/.test(src) ? 5 / 0.7 : null;
-          const em = r.v.textMin != null && Number.isFinite(r.v.textMin) ? r.v.textMin : kitFloor;
-          if (em != null) { const css = em * r.v.K / r.v.dpr; min = Math.min(min, css); parts.push(`pixel text ${css.toFixed(1)} px (${r.v.textMin != null ? 'smallest drawn' : 'kit floor'} ${em.toFixed(1)} buffer px x ${r.v.K}/${r.v.dpr})`); }
+          // Fallback only when the kit has recorded no text yet (textMin missing or Infinity): assume the kit minimum
+          // TEXT_MIN (logical px). text() does not clamp, so any smaller drawn text shows up in textMin (text baked into
+          // a sprite is recorded again at its drawn size).
+          const artMin = /==== ART KIT START ====/.test(src) ? (src.match(/\bconst TEXT_MIN\s*=\s*(\d+(?:\.\d+)?)/) || [])[1] : null;
+          const kitFloor = artMin ? Number(artMin) : null;
+          const drawn = r.v.textMin != null && Number.isFinite(r.v.textMin);
+          const em = drawn ? r.v.textMin : kitFloor;
+          if (em != null) { const css = em * r.v.K / r.v.dpr; min = Math.min(min, css); parts.push(`kit text ${css.toFixed(1)} px (${drawn ? 'smallest drawn' : 'kit floor'} ${em.toFixed(1)} scene px x ${+r.v.K.toFixed(3)}/${r.v.dpr})`); }
         }
         if (Number.isFinite(r.fillMin)) { min = Math.min(min, r.fillMin); parts.push(`canvas fillText ${r.fillMin.toFixed(1)} px ("${r.fillWho}")`); }
         if (Number.isFinite(r.domMin)) { min = Math.min(min, r.domMin); parts.push(`DOM ${r.domMin.toFixed(1)} px (${r.domWho})`); }
@@ -526,6 +531,75 @@ export async function runHardChecks(browser, origin, gameDir, { parallel = 2 } =
       } finally { await context.close(); }
     });
   }
+
+  // ---- 1.11.3 STYLE.md 10 and 3: no glow, blur, gradient (except one in sheen()), CSS decoration, stray hex colours ----
+  {
+    const bad = [], lineAt = off => src.slice(0, off).split('\n').length;
+    // the block of an opening brace at code[i], with strings and comments already blanked
+    const block = (cd, i) => { let d = 0; for (let j = i; j < cd.length; j++) { if (cd[j] === '{') d++; else if (cd[j] === '}' && --d === 0) return [i, j]; } return [i, cd.length]; };
+    const palHex = new Set(); let lin = 0;
+    for (const m of src.matchAll(/(<script\b[^>]*>)([\s\S]*?)<\/script>/gi)) {
+      if (/type\s*=\s*["']?(?:application\/(?:ld\+)?json|text\/(?:template|plain))/i.test(m[1])) continue;
+      const base = m.index + m[1].length, { code: cd, strings } = scanJs(m[2]);
+      const pi = cd.search(/\bconst\s+PALS\s*=\s*\{/), pals = pi < 0 ? [-1, -1] : block(cd, cd.indexOf('{', pi));
+      const si = cd.search(/\bfunction\s+sheen\s*\(/), sheen = si < 0 ? [-1, -1] : block(cd, cd.indexOf('{', si));
+      for (const f of cd.matchAll(/\bshadowBlur\b|\bcreate(?:Radial|Conic)Gradient\b|\.filter\s*=(?!=)|\.(?:letterSpacing|borderRadius|boxShadow|textShadow)\b/g)) bad.push(`line ${lineAt(base + f.index)}: ${f[0].replace(/\s+/g, '')}`);
+      for (const f of cd.matchAll(/\bcreateLinearGradient\b/g)) { if (f.index > sheen[0] && f.index < sheen[1]) lin++; else bad.push(`line ${lineAt(base + f.index)}: createLinearGradient outside sheen()`); }
+      for (const t of strings) {
+        const v = t.value.trim(), at = `line ${lineAt(base + t.start)}`;
+        if (/^(?:plus-)?lighter$/i.test(v)) bad.push(`${at}: "${v}" (a glow blend)`);
+        if (/\bblur\(|drop-shadow\(|border-radius|box-shadow|text-shadow|letter-spacing|gradient\(/i.test(v)) bad.push(`${at}: "${v.slice(0, 40)}"`);
+        for (const h of v.matchAll(/#[0-9a-f]{3,8}\b/gi)) { if (t.start > pals[0] && t.start < pals[1]) palHex.add(h[0].toLowerCase()); else bad.push(`${at}: hex colour ${h[0]} outside PALS`); }
+      }
+    }
+    if (lin > 1) bad.push(`${lin} createLinearGradient calls in sheen() (one is allowed)`);
+    const cssHex = new Set();
+    const css = [...src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(m => [m.index + m[0].indexOf('>') + 1, m[1]])
+      .concat([...src.matchAll(/\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map(m => [m.index, m[1] ?? m[2]]));
+    for (const [at, body] of css) {
+      const c = body.replace(/\/\*[\s\S]*?\*\//g, t => t.replace(/[^\n]/g, ' '));
+      for (const f of c.matchAll(/border-radius|box-shadow|text-shadow|letter-spacing|gradient\(|(?:^|[\s;{])(?:backdrop-)?filter\s*:/gi)) bad.push(`line ${lineAt(at + f.index)}: CSS ${f[0].replace(/[\s;{]/g, '')}`);
+      for (const d of c.matchAll(/:[^;{}]*/g)) for (const h of d[0].matchAll(/#[0-9a-f]{3,8}\b/gi)) cssHex.add(h[0].toLowerCase());
+    }
+    const strayCss = [...cssHex].filter(h => !palHex.has(h));
+    if (cssHex.size > 2) bad.push(`CSS uses ${cssHex.size} colours (${[...cssHex].join(', ')}); only the background and the focus line, from PALS`);
+    else if (strayCss.length) bad.push(`CSS colour ${strayCss.join(', ')} is not a PALS colour`);
+    add(bad.length ? 'fail' : 'pass', 'style', BAR.style, bad.length
+      ? `STYLE.md 10 look found (${bad.length}): ${bad.slice(0, 6).join('; ')}`
+      : `no glow, blur, CSS decoration or stray hex colour; createLinearGradient ${lin ? 'only in sheen()' : 'not used'}; ${palHex.size} PALS colours, CSS ${[...cssHex].join(' ') || 'none'}`);
+  }
+
+  // ---- 1.11.6 a wide screen shows the world at the sides, not plain bars ----
+  check(BAR.wide, async () => {
+    if (!needs(['manual', 'tick', 'view'], 'wide-sides', BAR.wide)) return;
+    const { context, errors, ev } = await open({ viewport: { width: 1280, height: 720 } }, { wait: 600 });
+    try {
+      const r = await ev(() => {
+        const H = window.__hard, G = window.__game; H.manual();
+        H.click('[data-qa=start]'); H.run(2000, 16, true);
+        const v = G.view(), c = H.canvas(); if (!c || !v) return null;
+        const W = c.width, known = typeof v.left === 'number' && typeof v.cw === 'number';
+        const l = known ? v.left * v.K : W * 0.2, rr = known ? (v.left + v.cw) * v.K : W * 0.8;
+        // colours (4 bits a channel), the share of the commonest one and the spread of brightness in one strip
+        const strip = (x0, x1) => {
+          if (x1 - x0 < 8) return null;
+          const t = document.createElement('canvas'); t.width = 40; t.height = 72;
+          const g = t.getContext('2d', { willReadFrequently: true }); g.drawImage(c, x0, 0, x1 - x0, c.height, 0, 0, 40, 72);
+          const d = g.getImageData(0, 0, 40, 72).data, n = new Map(); let s = 0, s2 = 0;
+          for (let i = 0; i < d.length; i += 4) { const k = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | d[i + 2] >> 4; n.set(k, (n.get(k) || 0) + 1); const y = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; s += y; s2 += y * y; }
+          const N = d.length / 4, m = s / N;
+          return { distinct: n.size, dominant: Math.max(...n.values()) / N, sd: Math.sqrt(Math.max(0, s2 / N - m * m)) };
+        };
+        return { wide: v.wide, known, sides: [strip(0, l), strip(rr, W)].filter(Boolean) };
+      });
+      if (!r) { add('fail', 'wide-sides', BAR.wide, 'no canvas or view() at 1280x720'); return; }
+      const fmt = s => `${s.distinct} colours, largest ${(s.dominant * 100).toFixed(0)}%, brightness spread ${s.sd.toFixed(3)}`;
+      const flat = r.sides.filter(s => s.distinct < 12 || s.dominant > 0.6 || s.sd < 0.04);
+      const ok = r.wide === true && r.sides.length === 2 && !flat.length;
+      add(ok ? 'pass' : 'fail', 'wide-sides', BAR.wide, `1280x720: view().wide = ${r.wide}; side areas${r.known ? '' : ' (outer 20 %, no view().left)'}: ${r.sides.map(fmt).join(' | ') || 'none'} (need wide true and, on each side, 12+ colours, none over 60 %, spread 0.04+)`);
+      if (errors.length) add('fail', 'wide-errors', BAR.wide, `page errors${errText(errors)}`);
+    } finally { await context.close(); }
+  });
 
   // ---- 1.6.5 the whole loop works when localStorage throws ----
   check(BAR.storage, async () => {

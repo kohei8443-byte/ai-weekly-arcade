@@ -3,7 +3,9 @@
 //   node tools/hub.mjs [--out site] [--games games] [--skip-invalid]
 // Output (relative links only, so the same folder works on GitHub Pages and on itch.io via butler):
 //   site/index.html          Japanese-first gallery with an English toggle, newest game first
-//   site/<dir>/index.html    copy of each game with a small "← 一覧へ" link injected (originals untouched)
+//   site/<dir>/index.html    copy of each game with a small "← 一覧へ" tag injected at the bottom right (originals untouched)
+// The look follows STYLE.md (ink and washi, palette B colours, system fonts) and avoids its section 10 list:
+// no gradient, blur, shadow, rounded corner, pill or letter spacing.
 //   site/games.json          the list of games (meta + path) for other tools
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,16 +21,18 @@ export const DISCLOSURE = {
 };
 
 // ---------- back link injected into each game copy ----------
+// A plain square paper tag at the bottom right: the bottom left belongs to the game's "Made with Claude" credit
+// (STYLE.md 9) and the top corners to its system plaques.
 const BACK_LINK = `
 <!-- injected by tools/hub.mjs (site copy only) -->
 <a id="awa-back" href="../index.html">&larr; 一覧へ</a>
 <style>
-#awa-back{position:fixed;left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));z-index:2147483647;
-font:700 12px/1 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;color:#fff;background:rgba(10,12,30,.62);
-border:1px solid rgba(255,255,255,.28);padding:8px 12px;border-radius:999px;text-decoration:none;opacity:.8;
+#awa-back{position:fixed;right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));z-index:2147483647;
+font:700 12px/1 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;color:#1c1a24;background:#f4ead3;
+border:1.5px solid #1c1a24;padding:7px 10px;text-decoration:none;
 -webkit-tap-highlight-color:transparent;touch-action:manipulation;-webkit-user-select:none;user-select:none}
-#awa-back:hover,#awa-back:focus-visible{opacity:1}
-#awa-back:focus-visible{outline:2px solid #ffd36e;outline-offset:2px}
+#awa-back:hover{background:#f1dcac}
+#awa-back:focus-visible{outline:2px solid #d24a32;outline-offset:2px}
 </style>
 <script>
 (function () {
@@ -51,14 +55,14 @@ export function injectBackLink(html) {
 }
 
 // ---------- gallery page ----------
-// Golden-angle steps give neighbouring weeks clearly different colours.
-const hueOf = week => Math.round((200 + week * 137.508) % 360);
+// Each week's card head gets one flat palette colour, in turn, so neighbouring weeks differ.
+const HEADS = ['#2f4a86', '#94302a', '#a37a34', '#5b4233', '#d24a32'];
 
 function card(g, i) {
   const m = g.meta;
   const e = escapeHtml;
   const nn = String(m.week).padStart(2, '0');
-  const hue = hueOf(m.week);
+  const head = HEADS[((m.week % HEADS.length) + HEADS.length) % HEADS.length];
   const href = `${encodeURI(g.dir)}/index.html`;
   const mins = Math.max(1, Math.round(m.session_length_sec / 60));
   // Below 2 minutes, seconds read better than a rounded "about 2 min" (90 s would round up to 2).
@@ -66,7 +70,7 @@ function card(g, i) {
     ? { ja: `1回 約${m.session_length_sec}秒`, en: `~${m.session_length_sec} s per run` }
     : { ja: `1回 約${mins}分`, en: `~${mins} min per run` };
   return `
-  <article class="card${i === 0 ? ' newest' : ''}" style="--h:${hue}">
+  <article class="card${i === 0 ? ' newest' : ''}" style="--head:${head}">
     <a class="art" href="${href}" tabindex="-1" aria-hidden="true">
       <span class="num">#${nn}</span>
       ${i === 0 ? '<span class="badge"><span class="ja">最新作</span><span class="en">NEW</span></span>' : ''}
@@ -89,14 +93,14 @@ function card(g, i) {
 }
 
 function galleryHtml(games, builtAt) {
-  const favicon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#141a4a"/><circle cx="32" cy="32" r="13" fill="#ffd36e"/><circle cx="32" cy="32" r="23" fill="none" stroke="#7fe3c4" stroke-width="4" stroke-dasharray="6 6"/></svg>');
+  const favicon = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1c1a24"/><rect x="5" y="5" width="54" height="54" fill="#d24a32"/><path d="M18 21h28M18 32h28M18 43h28" stroke="#f4ead3" stroke-width="5"/></svg>');
   const count = games.length;
   return `<!doctype html>
 <html lang="ja" data-lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d1030">
+<meta name="theme-color" content="#f4ead3">
 <title>AI Weekly Arcade | AIが毎週つくるゲーム</title>
 <meta name="description" content="Claude が毎週1本つくる、スマホで遊べる小さなブラウザゲーム集です。${escapeHtml(DISCLOSURE.ja)}。">
 <meta property="og:title" content="AI Weekly Arcade | AIが毎週つくるゲーム">
@@ -104,72 +108,69 @@ function galleryHtml(games, builtAt) {
 <link rel="icon" href="${favicon}">
 <style>
 :root {
-  --bg: #0d1030; --bg2: #151a46; --card: #1a1f52; --ink: #f6efe0; --dim: #a5aad6; --line: #ffffff1f;
-  --accent: #ffd36e; --accent-ink: #1a1405; --mint: #7fe3c4; --coral: #ff7a6b;
+  --paper: #f4ead3; --pane: #f2e7cd; --tagL: #f1dcac; --tag: #dfbb80; --ink: #1c1a24; --dim: #6f6862; --line: #1c1a24;
+  --red: #d24a32; --plank: #5b4233;
   --font: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
-  color-scheme: dark;
+  --title: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  color-scheme: light;
 }
 [hidden] { display: none !important; }
 html[data-lang="ja"] .en, html[data-lang="en"] .ja { display: none !important; }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; min-height: 100vh; background: radial-gradient(120% 60% at 50% 0%, var(--bg2) 0%, var(--bg) 60%) var(--bg) fixed;
-  color: var(--ink); font-family: var(--font); line-height: 1.6;
-}
+body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.6; }
 a { color: inherit; }
 .wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 header { padding-top: 28px; padding-bottom: 8px; }
 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.kicker { font-size: 12px; font-weight: 800; letter-spacing: .28em; color: var(--mint); }
-h1 { margin: 4px 0 0; font-size: clamp(26px, 7.8vw, 52px); text-wrap: balance; line-height: 1.1; font-weight: 900; letter-spacing: .01em; }
-h1 b { color: var(--accent); }
+.kicker { font-size: 13px; font-weight: 700; color: var(--dim); }
+h1 { margin: 4px 0 0; font-family: var(--title); font-size: clamp(26px, 7.8vw, 52px); text-wrap: balance; line-height: 1.15; font-weight: 800; }
+h1 b { color: var(--red); font-weight: 800; }
 .nb { display: inline-block; }
-.lead { margin: 12px 0 0; color: var(--dim); font-size: 15px; max-width: 40em; }
+.lead { margin: 12px 0 0; font-size: 15px; max-width: 40em; }
 .toggle {
-  flex: none; font: 800 13px/1 var(--font); color: var(--ink); background: #ffffff14; border: 1px solid var(--line);
-  border-radius: 999px; padding: 10px 14px; cursor: pointer; min-width: 52px; min-height: 40px;
+  flex: none; font: 800 13px/1 var(--font); color: var(--paper); background: var(--plank); border: 1.5px solid var(--ink);
+  padding: 10px 14px; cursor: pointer; min-width: 52px; min-height: 40px;
 }
-.toggle:focus-visible, .play:focus-visible, summary:focus-visible, h2 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.toggle:focus-visible, .play:focus-visible, summary:focus-visible, h2 a:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
 .meta-line { margin: 18px 0 0; font-size: 13px; color: var(--dim); }
 main { padding-top: 16px; padding-bottom: 8px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 18px; }
+/* a card is a sheet of paper with an ink rule; the corners are cut, not rounded */
 .card {
-  position: relative; display: flex; flex-direction: column; background: var(--card); border-radius: 18px; overflow: hidden;
-  border: 1px solid var(--line); box-shadow: 0 10px 30px #00000040;
+  position: relative; display: flex; flex-direction: column; background: var(--ink); padding: 1.5px;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
 }
-.card.newest { border-color: #ffd36e66; }
-.art {
-  position: relative; display: block; aspect-ratio: 16 / 7; text-decoration: none; overflow: hidden;
-  background:
-    radial-gradient(circle at 78% 30%, hsl(calc(var(--h) + 40) 85% 70% / .9) 0 14%, transparent 15%),
-    radial-gradient(circle at 78% 30%, transparent 0 24%, hsl(calc(var(--h) + 40) 85% 75% / .35) 24.5% 25.5%, transparent 26%),
-    radial-gradient(circle at 20% 120%, hsl(var(--h) 80% 60% / .55) 0 35%, transparent 36%),
-    linear-gradient(135deg, hsl(var(--h) 60% 26%), hsl(calc(var(--h) + 60) 55% 18%));
-}
-.num { position: absolute; left: 16px; bottom: 8px; font-size: 56px; font-weight: 900; line-height: 1; color: #ffffffe6; letter-spacing: -.02em; text-shadow: 0 3px 0 #00000040; font-variant-numeric: tabular-nums; }
-.badge { position: absolute; right: 12px; top: 12px; font-size: 12px; font-weight: 900; letter-spacing: .1em; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 4px 10px; }
+.card > * { background: var(--pane); }
+.card > .art { background: var(--head); }
+.card .art, .card .body { clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px), 0 9px); }
+.card .art { clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%, 0 9px); border-bottom: 1.5px solid var(--ink); }
+.card .body { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 9px 100%, 0 calc(100% - 9px)); }
+.art { position: relative; display: block; aspect-ratio: 16 / 7; text-decoration: none; overflow: hidden; }
+.num { position: absolute; left: 16px; bottom: 6px; font-family: var(--title); font-size: 56px; font-weight: 800; line-height: 1; color: var(--paper); font-variant-numeric: tabular-nums; }
+.badge { position: absolute; right: 14px; top: 14px; font-size: 13px; font-weight: 800; color: var(--red); background: var(--paper); border: 1.5px solid var(--ink); padding: 3px 8px; }
 .body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; flex: 1; }
-.week { font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--mint); }
-.genre { color: var(--dim); font-weight: 700; letter-spacing: 0; }
-h2 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 900; }
+.week { font-size: 13px; font-weight: 700; color: var(--red); }
+.genre { color: var(--dim); font-weight: 700; }
+h2 { margin: 0; font-family: var(--title); font-size: 23px; line-height: 1.3; font-weight: 800; }
 h2 a { text-decoration: none; }
-.tagline { margin: 0; font-size: 15px; color: var(--ink); }
+.tagline { margin: 0; font-size: 15px; }
 details { font-size: 14px; color: var(--dim); }
 summary { cursor: pointer; font-weight: 800; color: var(--ink); padding: 4px 0; min-height: 32px; }
-details p { margin: 4px 0 8px; }
-.controls { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.controls li { font-size: 12px; font-weight: 700; color: var(--ink); background: #ffffff12; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; }
+details p { margin: 4px 0 8px; color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--ink); }
+.controls li + li::before { content: "・"; color: var(--dim); }
 .foot { margin-top: auto; padding-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .len { font-size: 13px; color: var(--dim); font-weight: 700; }
+/* the play link is a wooden tag with an ink rule, like the buttons in the games */
 .play {
-  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 26px; border-radius: 999px;
-  background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 16px; text-decoration: none; letter-spacing: .04em;
-  box-shadow: 0 4px 0 #c99a2e;
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 24px;
+  background: var(--tag); color: var(--ink); border: 1.5px solid var(--ink); font-weight: 800; font-size: 16px; text-decoration: none;
 }
-.play:active { transform: translateY(2px); box-shadow: 0 2px 0 #c99a2e; }
+.play:hover { background: var(--tagL); }
+.play:active { transform: translateY(2px); }
 .empty { color: var(--dim); padding: 40px 0; text-align: center; }
-footer { padding-top: 24px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); margin-top: 24px; }
+footer { padding-top: 24px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); color: var(--dim); font-size: 13px; border-top: 1.5px solid var(--ink); margin-top: 24px; }
 footer .ai { color: var(--ink); font-weight: 800; font-size: 14px; }
 footer p { margin: 6px 0; }
 @media (prefers-reduced-motion: reduce) { .play:active { transform: none; } }
@@ -179,7 +180,7 @@ footer p { margin: 6px 0; }
 <header class="wrap">
   <div class="top">
     <div>
-      <div class="kicker">AI WEEKLY ARCADE</div>
+      <div class="kicker">AI Weekly Arcade</div>
       <h1><span class="ja"><span class="nb">AIが<b>毎週</b></span><span class="nb">つくるゲーム</span></span><span class="en">A new <b>AI-made</b> game every week</span></h1>
     </div>
     <button class="toggle" id="langToggle" type="button" aria-label="English / 日本語">EN</button>
