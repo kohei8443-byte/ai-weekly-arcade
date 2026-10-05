@@ -692,7 +692,8 @@ const CHARMS = [
     const body = pSmooth([[-0.99, 0.08], [-0.9, -0.48], [-0.5, -0.8], [-0.02, -0.62], [0.48, -0.8], [0.9, -0.5], [0.99, 0.06], [0.78, 0.62], [0.22, 0.86], [-0.4, 0.82], [-0.86, 0.56]]);
     d.fill(body, c.beanL);
     if (!d.flat) d.tone(body, pEll(0.34, 0.5, 0.95, 0.5, -0.3), c.bean);
-    d.ink(pSmooth([[-0.5, 0.26], [-0.18, 0.4], [0.06, 0.3]], true), 0.8, c.beanD);   // the crack in the roasted skin
+    d.ink(pSmooth([[-0.86, 0.02], [-0.7, 0.36], [-0.42, 0.56]], true), 0.7, c.beanD);   // the seam line round the bean's side
+    d.text('福', 0.12, 0.24, 0.62, c.beanD);   // the 'fuku' mark: a lucky bean, not a pebble (bar 1.11.2)
     const eye = pSmooth([[-0.36, -0.5], [-0.02, -0.62], [0.36, -0.52], [0.02, -0.34]]);
     d.part(eye, c.beanE, 0.7);
     d.ink(pSmooth([[-0.24, -0.5], [0, -0.53], [0.24, -0.5]], true), 0.55, c.beanL);   // the seam down the hilum
@@ -1517,11 +1518,11 @@ function fingerSprite(st, S) {
   return bake(46, 84, S, q => {
     q.translate(23, 2);
     const skin = (path, ox, oy) => { st.fill(q, path, p.tag); if (ox || oy) st.shade(q, path, p.tagG, ox, oy); st.edge(q, path, 1.05); };
-    const sleeve = pSmooth([[-11, 47], [-1, 42.5], [11.5, 44], [14.5, 55], [18, 68], [14, 79.5], [2, 81], [-10.5, 77], [-14, 66], [-12.5, 56]]);
+    const sleeve = pSmooth([[-11, 47], [-1, 42.5], [11.5, 44], [13.5, 53], [13, 62], [8.5, 70], [1, 73.5], [-6.5, 71], [-11.5, 63], [-12.5, 54]]);   // tapers away from the wrist
     st.fill(q, sleeve, p.sky3); st.shade(q, sleeve, p.far, 2.2, 2.2); st.edge(q, sleeve, 1.2);   // a light indigo yukata sleeve
-    st.line(q, pSmooth([[-4, 51], [-5.5, 62], [-3, 74]], true), 0.75, p.far);   // cloth folds down the sleeve
-    st.line(q, pSmooth([[8, 52], [9.5, 63], [8, 72]], true), 0.75, p.far);
-    for (const [mx, my] of [[-8.5, 59], [3, 57], [-1, 69], [11, 66], [5.5, 76], [-9, 72]]) {   // little paper crosses: the yukata's woven pattern
+    st.line(q, pSmooth([[-4, 51], [-5, 60], [-2.5, 68]], true), 0.75, p.far);   // cloth folds down the sleeve
+    st.line(q, pSmooth([[8, 52], [9, 60], [6.5, 67]], true), 0.75, p.far);
+    for (const [mx, my] of [[-8.5, 57], [3, 56], [-1, 65], [9.5, 60], [3.5, 69], [-7, 65]]) {   // little paper crosses: the yukata's woven pattern
       st.line(q, pPoly([[mx - 1.7, my], [mx + 1.7, my]], true), 0.85, p.paper); st.line(q, pPoly([[mx, my - 1.7], [mx, my + 1.7]], true), 0.85, p.paper);
     }
     const inside = pSmooth([[-8.5, 47], [0, 44.2], [9.5, 45.2], [7, 49.5], [-6, 50]]); st.fill(q, inside, p.shadeK); st.edge(q, inside, 0.6);
@@ -1679,7 +1680,11 @@ const PHASES = [
 const WAVE_AT = 58, WAVE_EVERY = 40, WAVE_LEN = 8, WAVE_DIP = 12, WAVE_T = 3.8, ROPE_V = 12, CALM_LEN = 10, CALM_W = [6, 5, 3, 1, 0, 0];
 // per wave (the last row repeats): the gap the rope stops short of the heap, and the catch's weights for levels 0..6
 const WAVES = [{ gap: 25, w: [0, 0, 1, 2, 3, 3, 2] }, { gap: 25, w: [0, 0, 1, 2, 3, 3, 2] }];
+// A first small sag (bar 1.5.2, 1.5.5): MINI.len drops from drop MINI.at, the rope coming down faster (MINI.v px/s) to
+// MINI.gap px over the heap, so the first minute has a moment of danger too. No calm and no mallet follow it.
+const MINI = { at: 30, len: 5, gap: 15, v: 24, w: [3, 3, 3, 3, 2, 0, 0], k: -1, mini: true };
 function waveAt(d) {
+  if (d >= MINI.at && d < MINI.at + MINI.len) return Object.assign({}, MINI);
   if (d < WAVE_AT) return null;
   const k = Math.floor((d - WAVE_AT) / WAVE_EVERY);
   return d - WAVE_AT - k * WAVE_EVERY < WAVE_LEN ? Object.assign({ k }, WAVES[Math.min(k, WAVES.length - 1)]) : null;
@@ -1775,7 +1780,7 @@ function Run(mode, seed, o) {
   this.maxLv = 0; this.made = new Array(11).fill(0); this.seen = new Array(11).fill(0); this.offered = 0; this.bestChain = 1;
   this.hold = mode === 'demo' ? DEMO_HOLD : OVER_HOLD; this.phase = 0; this.malletDue = false; this.over = 0; this.warned = false; this.dead = null; this.spilling = false;
   this.hitstop = 0; this.floaters = []; this.lastOffender = null; this.fillI = 0; this.peakOver = 0; this.slowT = 0; this.slowAcc = 0;
-  this.rope = 0; this.ropeBase = 0; this.ropeUp = 0; this.rimY = this.rimT = F.rimY; this.wave = null; this.dip = 0; this.waves = 0; this.calmTo = 0; this.firstShip = true; this.offX = 180; this.lastSafe = null; this.malletIn = 0; this.aimed = 0;
+  this.rope = 0; this.ropeBase = 0; this.ropeUp = 0; this.rimY = this.rimT = F.rimY; this.wave = null; this.dip = 0; this.waves = 0; this.calmTo = 0; this.firstShip = true; this.offX = 180; this.lastSafe = null; this.malletIn = 0; this.malletCyc = -1; this.aimed = 0;
   this.ai = mode !== 'play'; this.auto = false; this.kdir = 0; this.keep = null; this.saves = 0; this.saving = null; this.nearT = -9;
   this.hang = { x: 180, tx: 180, v: 0, loaded: false, reload: o.warm != null ? o.warm : 0.5, lv: 0, timer: 0, tmax: 1, wait: 0, tick: 4, planRow: null };
   this.plan = mode === 'demo' ? DEMO_PLAN.map(r => r.slice()) : [];
@@ -1824,7 +1829,7 @@ RN.landing = function (x, r) {
   return { y, b: hb };
 };
 RN.pick = function () {
-  if (this.malletDue) { this.malletDue = false; return MALLET; }
+  if (this.malletDue) { this.malletDue = false; this.malletCyc = this.waves; return MALLET; }
   if (this.mode === 'demo' && this.runT > DEMO_SLOPPY - 1.5) {   // the clip's middle: big fill charms, and every DEMO_MATCH-th a twin
     this.fillI = (this.fillI || 0) + 1;
     if (this.fillI % DEMO_MATCH === 0 && !this.saves) { const m = this.demoMatch(); if (m) { this.matchB = m; return m.lv; } }
@@ -1972,7 +1977,7 @@ RN.release = function () {
   this.events.push({ type: 'drop', x: h.x, lv: h.lv, auto: h.timer <= 0 });
   const ph = phaseAt(this.drops, this.mode === 'demo');
   if (ph.i > this.phase) {
-    this.phase = ph.i; if (ph.mallet) this.malletDue = true;
+    this.phase = ph.i; if (ph.mallet) this.giveMallet();
     if (ph.rope !== this.ropeBase) { this.ropeBase = ph.rope; this.setRope(); }
     if (ph.note) this.events.push({ type: 'phase', note: ph.note, i: ph.i });
   }
@@ -1981,11 +1986,12 @@ RN.release = function () {
     // DEMO_WAVE[0] s, with the rope sagging to DEMO_WAVE[1] px over the heap, so its overflow comes from a sag too.
     const demo = this.mode === 'demo', wv = demo ? (this.waves && !this.wave ? null : this.wave || Object.assign({ k: 0 }, WAVES[0], { gap: DEMO_WAVE[1] })) : waveAt(this.drops);
     if (wv && !this.wave) {
-      this.wave = wv; wv.end = this.drops + (demo ? DEMO_WAVE[2] : WAVE_LEN); this.waves++; this.dip = demo ? 0 : Math.max(0, Math.min(WAVE_DIP, Math.floor((this.headroom() - wv.gap) / ROPE_STEP)));
+      this.wave = wv; wv.end = this.drops + (demo ? DEMO_WAVE[2] : wv.mini ? MINI.len : WAVE_LEN); if (!wv.mini) this.waves++; this.dip = demo ? 0 : Math.max(0, Math.min(wv.mini ? ROPE_MAX + WAVE_DIP : WAVE_DIP, Math.floor((this.headroom() - wv.gap) / ROPE_STEP)));
       if (demo) this.demoSag(); else this.setRope();
       this.next = this.pick(); this.events.push({ type: 'wave', k: wv.k, dip: this.dip });
     } else if (this.wave && (demo ? this.drops >= this.wave.end : !wv)) {
-      const up = this.dip > 0; this.wave = null; this.dip = 0; this.setRope(); this.malletDue = true; this.calmTo = this.drops + CALM_LEN;
+      const up = this.dip > 0, mini = this.wave.mini; this.wave = null; this.dip = 0; this.setRope();
+      if (!mini) { this.giveMallet(); this.calmTo = this.drops + CALM_LEN; }
       this.events.push({ type: 'calm', up });
     } else if (demo && this.wave && !this.warned) this.demoSag();
   }
@@ -2010,7 +2016,7 @@ RN.step = function () {
   this.dropper();
   W.step();
   this.mergeAll();
-  if (this.rimY < this.rimT) this.rimY = Math.min(this.rimT, this.rimY + (this.mode === 'demo' ? DEMO_ROPE_V : ROPE_V) * DT);
+  if (this.rimY < this.rimT) this.rimY = Math.min(this.rimT, this.rimY + (this.mode === 'demo' ? DEMO_ROPE_V : this.wave && this.wave.v || ROPE_V) * DT);
   for (let i = W.bodies.length - 1; i >= 0; i--) {
     const b = W.bodies[i];
     b.age += DT;
@@ -2127,6 +2133,12 @@ RN.spawn = function (L, x, y, vx, vy, a, ch, how, aimed) {
   // is within a stranger's reach (after that the phase table's mallets are the only ones)
   if (L === 8 && this.mode === 'play' && this.offered === 0 && this.malletIn === 0 && !this.malletDue) { this.malletIn = SHIP_MALLET; this.events.push({ type: 'shipMallet' }); }
 };
+// The 鏡餅 peak stays rare (bar 1.2.8, 1.6.3): once a run has offered one, the phase table's and the calms' mallets
+// share one per wave cycle (a rescue mallet counts too), so a long run no longer hands out a mallet every few drops.
+RN.giveMallet = function () {
+  if (this.mode === 'play' && this.offered > 0 && this.malletCyc === this.waves) return;
+  this.malletDue = true;
+};
 // A finished 鏡餅 rests for a moment, then is offered: it rises out of the kumade and leaves room behind.
 RN.lift = function (b) {
   this.world.remove(b); this.world.wakeAll();
@@ -2156,7 +2168,9 @@ RN.checkOver = function () {
       // a wave's sagging rope stops where the heap first touches it
       if (this.wave && this.rimT > this.rimY) { this.dip = Math.max(0, (this.rimY - F.rimY) / ROPE_STEP - Math.max(0, this.ropeBase - this.ropeUp)); this.setRope(); }
       // RESCUE (play only): the cord's next charm is a twin of the one sticking out, or the mallet for a treasure ship
-      if (this.mode === 'play' && top.lv < TOP && this.next !== MALLET) { this.next = top.lv <= RESCUE_MAX ? top.lv : MALLET; this.events.push({ type: 'rescue', lv: this.next }); }
+      // (a treasure ship's mallet is rationed like the others once a 鏡餅 has been offered: one per wave cycle)
+      const lv = top.lv <= RESCUE_MAX ? top.lv : this.offered > 0 && this.malletCyc === this.waves ? -1 : MALLET;
+      if (this.mode === 'play' && top.lv < TOP && this.next !== MALLET && lv >= 0) { this.next = lv; if (lv === MALLET) this.malletCyc = this.waves; this.events.push({ type: 'rescue', lv }); }
     }
     if (this.warned) this.peakOver = Math.max(this.peakOver, this.over);
     if (this.over >= this.hold) this.kill(top);
@@ -2199,7 +2213,7 @@ const finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) an
 Juice.reduce = reduceMotion;
 const store = makeStore(SLUG + "-");
 const FREEZE = 450;               // ms the failure holds every pose, the cause on screen (bar 1.4.1)
-const RANKS = [0, 2000, 5000, 10000, 18000, 30000, 50000, 80000];
+const RANKS = [0, 2000, 5000, 10000, 27000, 45000, 75000, 120000];   // x1.5 above 10000 (panel 4: ranks came in one sitting)
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
 
 // ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
@@ -2210,7 +2224,7 @@ const STRINGS = {
     chain: "{n}れんさ!", warn: "あふれる!", safe: "セーフ!", left: "あと{n}秒", over: "あふれた!", best: "ベスト", toGo: "あと {n}", newBest: "新記録", passBest: "ベストをこえた!", offer: "鏡餅を奉納!", ropeUp: "奉納! 縄が1段上がった",
     n_mallet: "打ち出の小槌が来る!", n_koban: "小判も落ちてくる", n_faster: "ひもが早く切れる", n_bigger: "大きいのが来る", n_daruma: "だるまも落ちてくる", n_rope: "縄が下がった!",
     wave: "福の波! 縄がたるむ", calm: "波が引いた!", calmUp: "波が引いた! 縄が戻った", ropeBack: "奉納! 縄が戻った", rescue: "つぎは{n}! 上に重ねよう", rescueMallet: "つぎは小槌! 宝船に当てよう",
-    malletHow: "小槌でさわると大きくなる", newCharm: "{n}ができた!", newMany: "新しく{k}つ! {n}まで", kagamiDone: "鏡餅ができた!", ship: "宝船! 鏡餅まで あと一歩", shipMallet: "宝船! もうすぐ小槌が来る", malletShip: "小槌を宝船に当てよう", aimed: "ねらいどおり ×2", goal: "目標", goalMake: "{n}を作る", goalRank: "{n}点で つぎのランク",
+    malletHow: "小槌でさわると大きくなる", newCharm: "{n}ができた!", newMany: "新しく{k}つ! {n}まで", kagamiDone: "鏡餅ができた!", kagamiSeal: "鏡餅!", ship: "宝船! 鏡餅まで あと一歩", shipMallet: "宝船! もうすぐ小槌が来る", malletShip: "小槌を宝船に当てよう", aimed: "ねらいどおり ×2", goal: "目標", goalMake: "{n}を作る", goalRank: "{n}点で つぎのランク",
     goalChain: "{n}れんさを出す", stats: "奉納 {o} 回　最高 {c} れんさ", nextGoal: "つぎの目標", biggest: "いちばん大きく育てた", entered: "図鑑に入った", rank: "ランク",
     ranks: ["見習い", "なかなか", "上手", "名人", "達人", "福まねき", "宝船の主", "福の神"], bookTitle: "縁起物 図鑑", unknown: "まだ 見つけていません", credit: "Made with Claude",
     names: ["福豆", "鈴", "梅", "独楽", "小判", "だるま", "招き猫", "鯛", "宝船", "鏡餅", "打ち出の小槌"],
@@ -2223,7 +2237,7 @@ const STRINGS = {
     chain: "{n} CHAIN!", warn: "SPILLING!", safe: "SAFE!", left: "{n}s to spare", over: "SPILLED!", best: "BEST", toGo: "{n} to go", newBest: "NEW BEST", passBest: "Past your best!", offer: "Mochi offered!", ropeUp: "Offered! The rope goes up",
     n_mallet: "Lucky mallet ahead!", n_koban: "Gold coins now fall", n_faster: "The cord is quicker", n_bigger: "Bigger ones coming", n_daruma: "Daruma now fall", n_rope: "The rope came down!",
     wave: "Lucky rush! The rope sags", calm: "The rush is over!", calmUp: "Rush over! Rope back up", ropeBack: "Offered! Rope back up", rescue: "Next: {n}. Drop it on top!", rescueMallet: "Next: mallet. Hit the ship!",
-    malletHow: "Mallet: one size up", newCharm: "New: {n}!", newMany: "{k} new, up to {n}!", kagamiDone: "Mirror mochi made!", ship: "Ship! The mochi is next", shipMallet: "Ship! A mallet is on its way", malletShip: "Drop the mallet on the ship", aimed: "ON TARGET x2", goal: "Goal", goalMake: "Make a {n}", goalRank: "Next rank at {n}",
+    malletHow: "Mallet: one size up", newCharm: "New: {n}!", newMany: "{k} new, up to {n}!", kagamiDone: "Mirror mochi made!", kagamiSeal: "MOCHI!", ship: "Ship! The mochi is next", shipMallet: "Ship! A mallet is on its way", malletShip: "Drop the mallet on the ship", aimed: "ON TARGET x2", goal: "Goal", goalMake: "Make a {n}", goalRank: "Next rank at {n}",
     goalChain: "Make a {n} chain", stats: "Offered {o}   Best chain {c}", nextGoal: "NEXT GOAL", biggest: "Biggest you made", entered: "New in the book", rank: "RANK",
     ranks: ["Novice", "Not bad", "Skilled", "Master", "Expert", "Lucky one", "Captain", "Luck god"], bookTitle: "Book of Charms", unknown: "Not found yet", credit: "Made with Claude",
     names: ["Lucky bean", "Bell", "Plum flower", "Spinning top", "Gold coin", "Daruma", "Beckoning cat", "Sea bream", "Treasure ship", "Mirror mochi", "Lucky mallet"],
@@ -2289,7 +2303,7 @@ function layout() {
   // buttons a phone video player lays over the bottom fifth. The score tag hangs top right at a size a Short can
   // read and the title slip sits top left; the ema chain (all lit from the demo's first second) stays off, so the
   // band holds two things and the cord's next charm.
-  if (!V.wide && DEMO) Object.assign(LY, { ema: [5, 17, 21, 0, 10, 0.76], emaOff: true, score: [292, 10, 0.9], scoreTop: true, label: [92, 30] });
+  if (!V.wide && DEMO) Object.assign(LY, { ema: [5, 17, 21, 0, 10, 0.76], emaOff: true, score: [290, 10, 1], scoreTop: true, label: [92, 30] });
   else LY.emaOff = false;
 }
 function buildKit() {   // everything with lettering: rebuilt on resize and on a language change
@@ -2406,7 +2420,7 @@ function onEvents(now) {
       }
       burst(e, tier);
       fx.tagV += (e.ch % 2 ? 0.4 : -0.4) * Math.min(2.4, 0.5 + e.lv * 0.15 + e.ch * 0.2);
-      if (tier >= 2) fx.rings.push({ x: e.x, y: e.y, r: e.r, t: 0, gold: tier === 3 });
+      if (tier >= 2 && e.lv !== TOP) fx.rings.push({ x: e.x, y: e.y, r: e.r, t: 0, gold: tier === 3 });   // no rings over the 鏡餅 (it must read)
       if (tier === 3) { addTrauma(e.lv >= 7 ? [0.35, 0.5, 0.7][e.lv - 7] : 0.2); fx.bursts.push({ x: e.x, y: e.y, r: e.r, t: 0 }); }
       if (e.lv === TOP) zoomPunch(e.x, e.y, 1.05, 480, now);
       if (e.ch >= 3) mus.kane = mus.i + 8;
@@ -2419,9 +2433,13 @@ function onEvents(now) {
       if (e.lv < 10 && !fx.ema[e.lv].on) fx.ema[e.lv] = { on: true, t: 0 };
       // the seal sits over the charm it is about, but never on the 鏡餅: that one is pressed beside it (bar 1.4.5)
       const sy = e.lv === TOP ? e.y - e.r * 0.25 : e.y - e.r - 14, sa = e.lv === TOP ? e.r + 4 : 0;
-      if (e.ch >= 2) stamp(S("chain", e.ch), e.x, sy, e.ch >= 4, "", sa);
-      else if (e.aimed && run.mode !== "attract") {   // the seal only for gold coin and up or the run's first aimed merge
-        if (e.lv >= 4 || !fx.aimSeal) { fx.aimSeal = true; stamp(S("aimed"), e.x, sy, false, "", sa); } else if (!newsNow() && T() - (fx.aimSaid || -1e9) > 4000) { fx.aimSaid = T(); say(S("aimed"), 1.2, "red"); }
+      // the 鏡餅 gets its own big seal over it (the chain rides under it), so the money shot reads at phone size (bar 1.9.3)
+      if (e.lv === TOP && run.mode !== "attract") { stamp(S("kagamiSeal"), e.x, e.y - e.r - 34, 2, e.ch >= 2 ? S("chain", e.ch) : "", 0); fx.chainT = T(); }
+      else if (e.ch >= 2) { stamp(S("chain", e.ch), e.x, sy, e.ch >= 4, "", sa); fx.chainT = T(); }
+      else if (e.aimed && run.mode !== "attract") {   // the seal only for gold coin and up or the run's first aimed merge,
+        // at most once per 6 s and never in the 1.5 s after a chain's seal (bar 1.4.5)
+        const now2 = T(), free = now2 - (fx.aimT || -1e9) > 6000 && now2 - (fx.chainT || -1e9) > 1500;
+        if ((e.lv >= 4 || !fx.aimSeal) && free) { fx.aimSeal = true; fx.aimT = now2; stamp(S("aimed"), e.x, sy, false, "", sa); } else if (!newsNow() && now2 - (fx.aimSaid || -1e9) > 4000) { fx.aimSaid = now2; say(S("aimed"), 1.2, "red"); }
       }
     } else if (e.type === "drop") { if (loud()) sfx.drop(e.lv); fx.ld = 1; fx.lift = 0; fx.liftV = -60; if (e.lv === 0 && !BOOK[0] && play) { BOOK[0] = 1; store.set("book", BOOK); } }
     else if (e.type === "land") {
@@ -2476,7 +2494,7 @@ function burst(e, tier) {
 // varies a little each time (pitch about +-30 to 45 cents, level about +-10 %, bar 1.3.4).
 const PENTA = [293.66, 329.63, 392.0, 440.0, 493.88];
 const pz = d => PENTA[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5));
-const at = () => AU.ctx.currentTime;
+const at = () => AU.ctx.currentTime + (AU.offline ? 0.3 : 0);   // the peak test plays its voices 0.3 s in, as in real playback
 const kane = (f, w, peak, dest) => { tone("sine", f, f, 0.5, peak, w, dest); tone("sine", f * 2.76, f * 2.76, 0.22, peak * 0.4, w, dest); hiss("highpass", 5000, 1, 0.03, peak * 0.5, w, dest); };   // a small temple bell
 // a koto-like pluck, shared by the merges and the music so a chain and the tune sound like one instrument:
 // a bright string attack that dulls fast over a soft triangle body
@@ -2495,7 +2513,7 @@ function taiko(w, peak, dest, f) {
 const sfx = {
   drop(lv) { // the cord lets go: a short swish and the hook's wooden tick, a little lower for bigger charms
     if (!audioOn()) return; const w = at(), q = vary(40, 0.1), s = 1 - Math.min(lv, 9) * 0.035;
-    hiss("bandpass", 2400 * q.f, 2.4, 0.1, 1.1 * q.g, w, null, 800); tone("triangle", 640 * s * q.f, 400 * s, 0.07, 0.9 * q.g, w, null, 0.002, 1800);
+    hiss("bandpass", 2400 * q.f, 2.4, 0.1, 0.78 * q.g, w, null, 800); tone("triangle", 640 * s * q.f, 400 * s, 0.07, 0.64 * q.g, w, null, 0.002, 1800);   // about 3 dB under a small merge
   },
   land(lv, sp) { // a wooden knock in the basket: a triangle body that deepens with size, louder for faster landings
     if (!audioOn()) return; const w = at(), q = vary(45, 0.1), k = clamp((sp - 60) / 500, 0.4, 1), f = (350 - Math.min(lv, 10) * 18) * q.f;
@@ -2513,11 +2531,13 @@ const sfx = {
     const d = Math.min(13, ch >= 2 ? mus.chain0 + ch - 1 : Math.min(6, lv)), f = pz(d) * q.f;
     pluck(f, w, 0.3 * q.g); tone("triangle", 240 * q.f, 110, 0.1, 0.22 * q.g, w, null, 0.002, 700); hiss("highpass", 4200, 1, 0.035, 0.07, w);
     if (tier >= 2) { pluck(pz(d + 2) * q.f, w + 0.07, 0.14); kane(pz(d + 5) * q.f, w + 0.07, 0.04); }
+    else if (lv <= 3) pluck(f * 2, w + 0.01, 0.08);   // an octave on top so a small merge tops the drop on a phone
   },
   big(lv, ch) { // taiko and a chord under the merge's note, for the big ones and long chains
     if (!audioOn()) return; const w = at(), q = vary(20, 0.06), b = Math.min(10, Math.max(lv, 4 + ch) - 2);
     taiko(w, 0.36 * q.g); tone("sine", 100 * q.f, 42, 0.45, 0.3 * q.g, w);
     [0, 2, 4].forEach((n, i) => tone("triangle", pz(n + b) * q.f, pz(n + b) * q.f, 0.5, 0.08, w + 0.03 + i * 0.04));
+    kane(pz(b + 7) * q.f, w + 0.02, 0.08); tone("triangle", 900 * q.f, 600, 0.06, 0.3 * q.g, w, null, 0.002, 2000);   // a bell and a knock a phone plays, so tier 3 tops tier 2
   },
   kagami() { // the peak: two taiko hits and the home chord (D, A, D) spread upward, a bell shimmer on top
     if (!audioOn()) return; const w = at();
@@ -2531,11 +2551,12 @@ const sfx = {
   },
   roll(sec) { // the build-up while the 鏡餅 rests: a drum roll that speeds up until it is offered (the music hushes for it)
     if (!audioOn()) return; const w = at() + 0.45, n = Math.round(6 + sec * 8);
-    for (let i = 0; i < n; i++) { const k = i / n, t = w + (sec - 0.45) * (1 - Math.pow(1 - k, 1.7)); tone("triangle", 200 + k * 40, 130, 0.1, 0.08 + 0.12 * k, t, null, 0.002, 800); tone("sine", 110, 55, 0.12, 0.06 + 0.1 * k, t); hiss("bandpass", 3000, 1.4, 0.012, 0.04 + 0.05 * k, t); }
+    for (let i = 0; i < n; i++) { const k = i / n, t = w + (sec - 0.45) * (1 - Math.pow(1 - k, 1.7)); tone("triangle", 200 + k * 40, 130, 0.1, 0.08 + 0.12 * k, t, null, 0.002, 800); tone("sine", 110, 55, 0.12, 0.06 + 0.1 * k, t); hiss("bandpass", 3000, 1.4, 0.012, 0.04 + 0.05 * k, t);
+      tone("triangle", 1900 + 600 * k, 1500, 0.015, 0.05 + 0.12 * k, t, null, 0.001, 3200); }   // the stick's click, rising: the build-up carries on a phone
   },
   cheer(k) { // the crowd: hand claps spread over a moment and a rising "wa" of voices
     if (!audioOn()) return; const w = at() + 0.05;
-    for (let i = 0; i < 14; i++) hiss("bandpass", 1400 + Math.random() * 900, 3, 0.035, (0.11 + Math.random() * 0.05) * k, w + Math.random() * 0.9 * (0.4 + k * 0.6));
+    for (let i = 0; i < 14; i++) hiss("bandpass", 1400 + Math.random() * 900, 3, 0.035, (0.28 + Math.random() * 0.08) * k, w + Math.random() * 0.9 * (0.4 + k * 0.6));
     hiss("bandpass", 650, 2.5, 0.9, 0.1 * k, w, null, 950); hiss("bandpass", 1150, 3, 0.7, 0.05 * k, w + 0.1, null, 1500);
   },
   mallet() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); tone("square", 880 * q.f, 600, 0.06, 0.12, w, null, 0, 1800); tone("square", 1180 * q.f, 900, 0.07, 0.1, w + 0.07, null, 0, 1800); hiss("bandpass", 3000, 2, 0.05, 0.14, w); },
@@ -2566,7 +2587,7 @@ const sfx = {
   count(i) { if (!audioOn()) return; const q = vary(25, 0.1), f = (900 + (i % 12) * 40) * q.f; tone("sine", f, f, 0.035, 0.4 * q.g, at()); },
   stamp() { if (!audioOn()) return; const w = at(), q = vary(30, 0.1); tone("sine", 140 * q.f, 60, 0.15, 0.45 * q.g, w); tone("triangle", 260 * q.f, 160, 0.08, 0.2 * q.g, w, null, 0.002, 900); hiss("lowpass", 1200, 1, 0.08, 0.3, w); tone("triangle", 820 * q.f, 600, 0.05, 0.35 * q.g, w, null, 0.002, 2400); hiss("bandpass", 900, 2, 0.03, 0.25, w);
     tone("triangle", 1150 * q.f, 700, 0.035, 0.3 * q.g, w + 0.005, null, 0.001, 2600); hiss("bandpass", 1000, 3, 0.03, 0.3, w); },   // a wooden clack a phone plays
-  ui() { if (!audioOn()) return; const w = at(), q = vary(40, 0.1); tone("sine", 1320 * q.f, 1320 * q.f, 0.12, 0.34 * q.g, w); tone("sine", 1980 * q.f, 1980 * q.f, 0.1, 0.11, w + 0.02); }
+  ui() { if (!audioOn()) return; const w = at(), q = vary(40, 0.1); tone("sine", 1320 * q.f, 1320 * q.f, 0.12, 0.18 * q.g, w); tone("sine", 1980 * q.f, 1980 * q.f, 0.1, 0.11, w + 0.02); }
 };
 const PEAK_SET = ["kagami", "big", "fail", "warn", "spill", "land", "stamp", "merge"]; // the 8 loudest, for the peak test
 
@@ -2623,7 +2644,7 @@ function musicVoices(i, w, s) {
   const bus = mus.bus, lay = s.lay, danger = s.danger, quiet = s.hushed || s.bed;
   if (i % 16 === 0) { const d = s.step * 16 + 0.6; pad(pz(-5), w, d, 0.04, "triangle", 650); pad(pz(-2), w + 0.03, d, 0.024, "triangle", 650); pad(pz(-10), w + 0.05, d, 0.012); }
   const beat = danger ? i % 2 === 0 : i % 8 === 0 || i % 8 === 3 || (lay >= 2 && i % 16 === 14);
-  if (!quiet && beat) { taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1); if (danger) hiss("bandpass", 2000, 3, 0.025, 0.12, w, bus); }   // a rim click: urgent on a phone
+  if (!quiet && beat) { taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1); if (danger) hiss("bandpass", 3000, 3, 0.025, 0.18, w, bus); }   // a rim click: urgent on a phone
   if (s.wave && !danger && !quiet) {   // a rush of luck: the drums answer on the off-beats and a hand cymbal rattles
     if (i % 8 === 5 || i % 8 === 6) taiko(w, 0.09, bus, 1.25);
     if (i % 2 === 1) hiss("bandpass", 5200, 3, 0.04, 0.05, w, bus);
@@ -2631,12 +2652,12 @@ function musicVoices(i, w, s) {
   if (lay >= 1 && !s.hushed && i % 4 === 2) hiss("bandpass", 2400, 4, 0.03, 0.07, w, bus);
   const ph = Math.floor(i / 32) % 4, m = SONG[ph][i % 32];
   if (lay >= 1 && !s.hushed) {
-    if (danger) pluck(pz(KOTO_D[i % 8]), w, 0.11, bus, 0.18);
+    if (danger) { pluck(pz(KOTO_D[i % 8]), w, 0.11, bus, 0.18); if (i % 2) pluck(pz(KOTO_D[i % 8] + 5), w, 0.08, bus, 0.15); }   // and its octave, so danger is louder than calm on a phone
     else { const k = (ph === 2 ? KOTO_B : KOTO)[i % 16]; if (k >= 0) pluck(pz(k), w, i % 4 === 0 ? 0.1 : 0.075, bus, 0.32); }
   }
   if (lay >= 2 && !danger && !s.hushed && m >= 0) flute(pz(m + 5), w, 0.36, 0.05);
-  if (lay >= 3 && i % 2 === 1) tone("sine", 2350 + (i % 6) * 120, 2350 + (i % 6) * 120, 0.06, 0.02, w, bus);
-  if (danger && i % 2 === 0) kane(pz(10 + (i >> 1) % 3), w, 0.04, bus);
+  if (lay >= 3 && i % 2 === 1) tone("sine", 2350 + (i % 6) * 120, 2350 + (i % 6) * 120, 0.06, 0.05, w, bus);
+  if (danger && i % 2 === 0) kane(pz(10 + (i >> 1) % 3), w, 0.07, bus);
   if (s.kane && i % 4 === 0) kane(pz(10 + (i % 8 ? 2 : 0)), w, 0.035, bus);
 }
 function musicStep() {
@@ -2662,7 +2683,7 @@ function die(now) {
   const R = run.R, c = clockNow();
   run.dead = { at: now, c, x: R.dead.x, y: R.dead.y, r: R.dead.r, lv: R.dead.lv, id: R.dead.id };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
-  fx.held = false; R.kdir = 0;
+  fx.held = false; R.kdir = 0; fx.line = null;   // the news line ends with the run (no 'Next: ...' under SPILLED!)
   if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
   stamp(S("over"), R.dead.x, R.rimY - 20, true, "", R.dead.r);
   if (loud()) sfx.fail();
@@ -2886,7 +2907,8 @@ function drawHanger(x, ts) {
   cordLine(x, pPoly([[px, piv], [cx - Math.sin(sw * 0.6) * r * 0.9, cy - r * 0.9]], true), 1.5, p.cord, p.ink, 0.5);
   drawCharm(x, h.lv, cx, cy, -sw * 0.6, Math.max(0.2, fx.ld), null);
   if (fx.held) arcRing(x, cx, cy, r + 3.5, 1, 1.6, p.paper, false);
-  const f = clamp(h.timer / h.tmax, 0, 1), last = h.timer <= 3 && run.mode === "play";
+  // one countdown at a time (bar 1.4.5): while a charm sticks out over the rope, the cord's own count stays quiet
+  const f = clamp(h.timer / h.tmax, 0, 1), last = h.timer <= 3 && run.mode === "play" && !R.warned;
   arcRing(x, cx, cy, r + 7.5, f, 2.2, last ? p.red : p.paper, true);
   if (last) {
     const side = h.x > 180 ? -1 : 1, nx = cx + side * (r + 22), s = fz(15);
@@ -2910,14 +2932,26 @@ function drawFloaters(x) {
 // The judgement stamp: a red seal with a paper border, pressed in with a small overshoot; one at a time.
 function drawStamp(x, now) {
   const s = fx.stamp; if (!s) return;
-  const age = (now - s.t) / 1000, life = s.big ? 1.3 : 0.95;
+  const age = (now - s.t) / 1000, life = s.big === 2 ? 1.8 : s.big ? 1.3 : 0.95;
   if (age > life || age < 0) { if (age > life) fx.stamp = null; return; }
-  const pop = age < 0.12 ? 1.4 - 0.4 * easeOut(age / 0.12) : 1, a = age > life - 0.25 ? (life - age) / 0.25 : 1, size = fz(s.big ? 21 : 17), sub = fz(13);
-  x.save(); x.globalAlpha = a; x.translate(s.x, s.y); x.rotate(-0.06); x.scale(pop, pop);
+  const pop = age < 0.12 ? 1.4 - 0.4 * easeOut(age / 0.12) : 1, a = age > life - 0.25 ? (life - age) / 0.25 : 1, size = fz(s.big === 2 ? 36 : s.big ? 21 : 17), sub = fz(s.big === 2 ? 15 : 13);
   x.font = "700 " + size + "px " + fontOf(s.text); const w1 = x.measureText(s.text).width;
   x.font = "700 " + sub + "px " + fontOf(s.sub); const w2 = s.sub ? x.measureText(s.sub).width : 0;
   const w = Math.max(w1, w2) + size * 0.9, h = size * 1.4 + (s.sub ? sub * 1.2 : 0);
-  if (s.ar) { const side = s.x > 180 ? -1 : 1; x.translate(clamp(s.x + side * (w / 2 + s.ar + 6), w / 2 + 4, 356 - w / 2) - s.x, 0); }
+  let sx = s.x;
+  if (s.ar) { const side = s.x > 180 ? -1 : 1; sx = clamp(s.x + side * (w / 2 + s.ar + 6), w / 2 + 4, 356 - w / 2); }
+  else if (s.big === 2) sx = clamp(s.x, w / 2 + 4, 356 - w / 2);
+  // keep the seal off the cord's landing marker (the dashed ring under the cord), sliding it aside (bar 1.4.5)
+  const R = run.R, hg = R && R.hang;
+  if (hg && hg.loaded && !R.dead) {
+    const rr = LV[hg.lv].r, L = R.landing(hg.x, rr), top = s.y - size * 0.72, bot = top + h;
+    if (L.y + rr + 4 > top && L.y - rr - 4 < bot && Math.abs(sx - hg.x) < w / 2 + rr + 4) {
+      const side = sx >= hg.x ? 1 : -1, want = hg.x + side * (w / 2 + rr + 8), alt = hg.x - side * (w / 2 + rr + 8);
+      sx = want - w / 2 >= 4 && want + w / 2 <= 356 ? want : alt - w / 2 >= 4 && alt + w / 2 <= 356 ? alt : sx;
+    }
+  }
+  s.dx = s.dx == null ? sx : s.dx + (sx - s.dx) * 0.35;
+  x.save(); x.globalAlpha = a; x.translate(s.dx, s.y); x.rotate(-0.06); x.scale(pop, pop);
   const seal = pPoly([[-w / 2, -size * 0.72], [w / 2 + 1, -size * 0.75], [w / 2, h - size * 0.72], [-w / 2 - 1, h - size * 0.7]]);
   STYLE.fill(x, seal, PAL.red); STYLE.edge(x, seal, 1.3);
   x.strokeStyle = PAL.paper; x.lineWidth = 1; x.strokeRect(-w / 2 + 3, -size * 0.72 + 3, w - 6, h - 6);
@@ -3179,7 +3213,7 @@ function draw(now) {
   if (isOver()) {
     drawResult(x, now);
     setWorld(x, sh, null); drawParts(x); setUI(x);
-    if (state === "over" && ba < 0.5) { tagAt(x, k.retry, LY.retry, fx.tagA, 1, V.wide ? V.y0 : null); tagAt(x, k.small2, LY.toTitle, 0, 1, V.wide ? LY.retry[1] + 56 * LY.retry[2] : null); tagAt(x, k.book, LY.bookR, 0, 1, V.wide ? LY.toTitle[1] + 44 * LY.toTitle[2] : null); }
+    if (state === "over" && ba < 0.5 && resAge(run.result, now) > RES.head + 260) { tagAt(x, k.retry, LY.retry, fx.tagA, 1, V.wide ? V.y0 : null); tagAt(x, k.small2, LY.toTitle, 0, 1, V.wide ? LY.retry[1] + 56 * LY.retry[2] : null); tagAt(x, k.book, LY.bookR, 0, 1, V.wide ? LY.toTitle[1] + 44 * LY.toTitle[2] : null); }
   }
   if (ba > 0) drawBook(x, ba);
   if (state === "demo" || state === "demo-dying") drawDemoLabel(x);   // hidden while the result card is up
@@ -3410,7 +3444,7 @@ window.__game = {
   view() { return { K: V.S, dpr: V.dpr, w: V.Wd / V.S, h: V.Hd / V.S, top: -V.y0, left: -V.x0, cw: 360, reduce: Juice.reduce, textMin: TXT.min / V.S, wide: V.wide }; },
   texts() { return TXT.last.slice(); },
   target() { const b = cv.getBoundingClientRect(); return { x: b.left + (180 - V.x0) * V.k, y: b.top + (300 - V.y0) * V.k }; }, // a fixed point in the kumade, never a moving object
-  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](7, 3))); }
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](7, 3)), 2); }
 };
 
 // ---------- boot ----------
