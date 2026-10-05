@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 
-export const MAX_GAME_BYTES = 150 * 1024;
+export const MAX_GAME_BYTES = 300 * 1024; // one self-contained index.html (CLAUDE.md section 4, QUALITY_BAR.md 1.10.1)
 
 // ---------- meta.json ----------
 
