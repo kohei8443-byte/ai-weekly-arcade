@@ -5,21 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>連鎖花火 / Hanabi Chain</title>
 <style>
-/* 連鎖花火 / Hanabi Chain (AI Weekly Arcade w05), pixel house style (STYLE.md, QUALITY_BAR.md).
-   Everything the player sees is drawn into one pixel buffer on the canvas. The DOM only holds
-   transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
+/* 連鎖花火 / Hanabi Chain (AI Weekly Arcade w05), house style 「墨と和紙」 (STYLE.md, QUALITY_BAR.md).
+   Everything the player sees is drawn on one canvas at device resolution. The DOM only holds transparent hit
+   areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
 [hidden]{display:none!important}
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#161736}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#3f5498}
 body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
 #wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
-#cv{position:absolute;left:0;top:0;display:block;touch-action:none;image-rendering:pixelated}
-#ui{position:absolute;left:0;top:0;pointer-events:none}
+#cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:absolute;inset:0;pointer-events:none}
 .ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
-/* every control is drawn in pixels on the canvas; these buttons are invisible hit areas on top of the drawings */
 #ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
 #ui button:focus{outline:none}
-#ui button:focus-visible{outline:2px dashed #f6e2a6;outline-offset:1px}
+#ui button:focus-visible{outline:2px dashed #f4ead3;outline-offset:1px}
 </style>
 </head>
 <body>
@@ -32,12 +31,12 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
   </section>
   <section id="ovPause" class="ov" hidden>
     <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
-    <button id="btnRestart" type="button" data-s="restart"></button>
-    <button id="btnQuit" type="button" data-s="toTitle"></button>
+    <button id="btnRestart" type="button" data-qa="restart" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-qa="quit" data-s="toTitle"></button>
   </section>
   <section id="ovOver" class="ov" hidden>
     <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
-    <button id="btnToTitle" type="button" data-s="toTitle"></button>
+    <button id="btnToTitle" type="button" data-qa="title" data-s="toTitle"></button>
   </section>
   <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
   <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
@@ -51,30 +50,47 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
 window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
 const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
 
-// ==== PIXEL KIT START ====
-// The pixel house style (STYLE.md) as reusable code. Nothing in this block knows about the game: the game
-// passes its core size, sprites, glyph tables, strings and sounds. Copy it unchanged into every game; the
-// only allowed edit is swapping up to ~6 palette hues for the theme. tools/qa.mjs relies on TXT and auPeak.
+// ==== ART KIT START ====
+// The house style 「墨と和紙」 (STYLE.md) as code. It knows nothing about the game: copy it unchanged (a week may retune
+// palette values, or add a name to both B and A, 40 names at most). Style A 「つやつや細工」: useStyle("A").
+// tools/qa.mjs relies on TXT, place(), auPeak().
 
-// ---------- palette: 24 colours, one letter each (a game may swap up to ~6 hues) ----------
-const PAL = {
-  k: "#2b1b17", n: "#262b52", b: "#3d5a98", s: "#8db7dc", p: "#5c4689", w: "#fbf6ea", m: "#e2d3b6", c: "#372a5e",
-  r: "#d6402b", R: "#8a2232", h: "#f4609c", f: "#f1c597", F: "#c98b5e", o: "#dba268", O: "#a5653a", D: "#6a3b22",
-  y: "#ecc659", Y: "#b4832d", g: "#3f7b3b", G: "#161736", l: "#62d6b6", a: "#ef8834", e: "#87838e", q: "#f6e2a6"
+// ---------- palettes: one table per style, same names (the only hex colours in the script) ----------
+const PALS = {
+  B: { // 「墨と和紙」 (default): a bright evening printed on washi
+    ink: "#1c1a24", paper: "#f4ead3", paperD: "#dbc9a6", grey: "#b3aa9c", greyD: "#6f6862",
+    tag: "#dfbb80", tagL: "#f1dcac", tagD: "#ae8752", tagG: "#c8a068", plank: "#5b4233", plankL: "#7c5c47", plankD: "#35271f",
+    pane: "#f2e7cd", paneL: "#d9c6a0", paneT: "#1c1a24", paneS: "#9a3328",
+    red: "#e04a37", redD: "#97302b", redL: "#f47ea6", gold: "#f0bd45", goldD: "#a8792f", goldL: "#fbe39c", orange: "#f39036", indigo: "#2b3d74",
+    sky0: "#3f5498", sky1: "#4c63a7", sky2: "#5f76b5", sky3: "#8290c8", mist: "#e7ae92", far: "#3c4683", mid: "#283062",
+    ground: "#323b6a", groundL: "#5b6491", poolA: "#6b6589", poolB: "#a38c89", lit: "#f7c47c", warm: "#ffdfa2", shadeK: "#1b1530", hlK: "#fff6df",
+    mint: "#63d3b1"
+  },
+  A: { // 「つやつや細工」: a dusk in real materials (lacquer, brass, glaze) under one light
+    ink: "#21161d", paper: "#f7ecd4", paperD: "#d8c49e", grey: "#bdb4aa", greyD: "#6c6470",
+    tag: "#dcb47a", tagL: "#f4dcab", tagD: "#a77a46", tagG: "#c39a62", plank: "#4b3027", plankL: "#704c3b", plankD: "#2b1b1a",
+    pane: "#1c1418", paneL: "#35262c", paneT: "#f7ecd4", paneS: "#fde3a0",
+    red: "#d03a2c", redD: "#8b1e1d", redL: "#f08466", gold: "#e4ae3e", goldD: "#a0691c", goldL: "#fde3a0", orange: "#f28b2e", indigo: "#2b3b7a",
+    sky0: "#1d1c40", sky1: "#3a2c62", sky2: "#7a4470", sky3: "#e08a5a", mist: "#b4607a", far: "#4f3768", mid: "#2f2549",
+    ground: "#4a3030", groundL: "#6a4639", poolA: "#6e4a3a", poolB: "#98694a", lit: "#e8a65a", warm: "#ffb45e", shadeK: "#231a3c", hlK: "#fff8e8",
+    mint: "#4fc4a0"
+  }
 };
 
 // ---------- small helpers ----------
-const fl = Math.floor;
+const TAU = Math.PI * 2, fl = Math.floor;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
 const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
-const newCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+const easeBack = x => { x = clamp(x, 0, 1) - 1; return 1 + 2.7 * x * x * x + 1.7 * x * x; };   // overshoots about 10 %
+const wob = (k, f, d) => k < 0 || k > 1 ? 0 : Math.exp(-k * d) * Math.cos(k * f);           // damped wobble 1 -> 0
+const cnv = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
 // seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
 function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
 
-// ---------- storage: one JSON record under "<prefix>save"; never throws, keeps working in memory when blocked ----------
+// ---------- storage: one JSON record under "<prefix>save"; never throws, works in memory when blocked ----------
 function makeStore(prefix) {
   const KEY = prefix + "save"; let data = {};
   try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
@@ -84,252 +100,371 @@ function makeStore(prefix) {
   };
 }
 
-// ---------- pixel buffer: one small canvas, integer upscale, never stretched ----------
-const PX = { B: newCanvas(1, 1), K: 1, LW: 1, LH: 1, dpr: 1, TOP: 0, cx0: 0, cy0: 0 };
-let g = PX.B.getContext("2d");
-// Fit a cw x ch core scene at the largest integer scale; extra space shows more world around it.
-// Landscape screens may crop `tops` rows of sky when that buys a bigger scale and okTop(sideBay) agrees.
-function pixResize(cv, cssW, cssH, cw, ch, tops, okTop) {
-  const dpr = PX.dpr = Math.min(2, window.devicePixelRatio || 1);
-  const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
-  let best = null;
-  for (const top of devW > devH * 1.15 ? tops : [0]) {
-    const k = Math.max(1, fl(Math.min(devW / cw, devH / (ch - top))));
-    if (top && okTop && !okTop(fl((Math.ceil(devW / k) - cw) / 2))) continue;
-    if (!best || k > best.k) best = { k, top };
-  }
-  PX.K = best.k; PX.TOP = best.top; PX.LW = Math.ceil(devW / PX.K); PX.LH = Math.ceil(devH / PX.K);
-  PX.B.width = PX.LW; PX.B.height = PX.LH; g = PX.B.getContext("2d"); g.imageSmoothingEnabled = false;
-  cv.width = PX.LW * PX.K; cv.height = PX.LH * PX.K;
-  PX.cx0 = fl((PX.LW - cw) / 2); PX.cy0 = fl((PX.LH - (ch - PX.TOP)) * 0.6) - PX.TOP;
-  const w = PX.LW * PX.K / dpr, h = PX.LH * PX.K / dpr;
-  return { w, h, left: fl((cssW - w) / 2), top: fl((cssH - h) / 2) };
+// ---------- styles: how ink, fills, shade and light look; ST and PAL are the active style ----------
+const SANS = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,"Noto Sans JP","Noto Sans CJK JP",system-ui,sans-serif';
+const SERIF = '"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP","Noto Serif CJK JP",IPAPMincho,serif';
+let PAL = PALS.B, ST = null, MONO = false;
+// palette name -> colour. Under MONO (bake(..., mono)) colours print as the inactive greys and the ink stays ink:
+// a locked or spent thing keeps its full outline and opacity, it never fades.
+function C(c) {
+  const v = PAL[c] || c; if (!MONO || v === PAL.ink) return v;
+  const n = parseInt(v.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255;
+  return l > 0.72 ? PAL.paperD : l > 0.55 ? PAL.grey : PAL.greyD;
 }
-// one drawImage per frame; zoom = { x, y, s } is a short camera punch toward buffer point (x, y)
-function pixBlit(ctx, zoom) {
-  const K = PX.K, W = PX.LW * K, H = PX.LH * K;
-  TXT.last = TXT.seen; TXT.seen = []; // the strings of the frame just drawn (window.__game.texts())
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
-  if (!zoom || zoom.s <= 1.001) { ctx.drawImage(PX.B, 0, 0, W, H); return; }
-  ctx.drawImage(PX.B, Math.round(zoom.x * K * (1 - zoom.s)), Math.round(zoom.y * K * (1 - zoom.s)), Math.round(W * zoom.s), Math.round(H * zoom.s));
-}
-// place a transparent DOM hit area over something drawn at buffer rect (x, y, w, h)
-function place(el, x, y, w, h) {
-  const u = PX.K / PX.dpr;
-  el.style.left = x * u + "px"; el.style.top = y * u + "px"; el.style.width = w * u + "px"; el.style.height = h * u + "px";
-}
-
-// ---------- primitives: integer rectangles and spans from the palette ----------
-function R(x, y, w, h, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
-function P(x, y, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), 1, 1); }
-function line(x0, y0, x1, y1, c, t) { // Bresenham with a square brush of t px
-  t = t || 1; x0 = fl(x0); y0 = fl(y0); x1 = fl(x1); y1 = fl(y1);
-  const o = t >> 1, dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-  let e = dx + dy; g.fillStyle = PAL[c];
-  for (let i = 0; i < 400; i++) {
-    g.fillRect(x0 - o, y0 - o, t, t);
-    if (x0 === x1 && y0 === y1) break;
-    const e2 = 2 * e;
-    if (e2 >= dy) { e += dy; x0 += sx; }
-    if (e2 <= dx) { e += dx; y0 += sy; }
-  }
-}
-const hw = (rx, ry, dy) => Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / (ry + 0.5)) ** 2)));
-// filled ellipse / ring from horizontal spans; part: 0 all, -1 top half, 1 bottom half
-function ell(cx, cy, rx, ry, c, part) {
-  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
-  for (let dy = -ry; dy <= ry; dy++) { if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue; const w = hw(rx, ry, dy); g.fillRect(cx - w, cy + dy, 2 * w + 1, 1); }
-}
-function ring(cx, cy, rxo, ryo, rxi, ryi, c, part) {
-  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
-  for (let dy = -ryo; dy <= ryo; dy++) {
-    if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue;
-    const wo = hw(rxo, ryo, dy);
-    if (Math.abs(dy) > ryi) { g.fillRect(cx - wo, cy + dy, 2 * wo + 1, 1); continue; }
-    const wi = hw(rxi, ryi, dy);
-    g.fillRect(cx - wo, cy + dy, wo - wi, 1); g.fillRect(cx + wi + 1, cy + dy, wo - wi, 1);
-  }
-}
-// scanline polygon fill; c may be a function (y) -> palette letter or pattern for per-row cel shading
-function poly(pts, c) {
-  let y0 = 1e9, y1 = -1e9;
-  for (const p of pts) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-  for (let y = fl(y0); y <= Math.ceil(y1); y++) {
-    const sy = y + 0.5, xs = [];
-    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) xs.push(a.x + (sy - a.y) / (b.y - a.y) * (b.x - a.x)); }
-    xs.sort((a, b) => a - b);
-    for (let j = 0; j + 1 < xs.length; j += 2) {
-      const xa = Math.round(xs[j]), xb = Math.round(xs[j + 1]);
-      if (xb > xa) { const v = typeof c === "function" ? c(y) : c; g.fillStyle = typeof v === "string" ? PAL[v] : v; g.fillRect(xa, y, xb - xa, 1); }
-    }
-  }
-}
-// ordered dithering: 4x4 Bayer tile of two palette colours (null = transparent), level 0..16 = share of b
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], patCache = {};
-function pat(a, b, lv) {
-  const key = a + b + lv;
-  if (!patCache[key]) {
-    const t = newCanvas(4, 4), x = t.getContext("2d");
-    for (let i = 0; i < 16; i++) { const col = BAYER[i] < lv ? b : a; if (col) { x.fillStyle = PAL[col]; x.fillRect(i % 4, i >> 2, 1, 1); } }
-    patCache[key] = g.createPattern(t, "repeat");
-  }
-  return patCache[key];
-}
-function D(x, y, w, h, a, b, lv) { g.fillStyle = pat(a, b, lv); g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
-function band(x, y, w, h, a, b) { for (let i = 0; i < h; i++) D(x, y + i, w, 1, a, b, Math.round((i + 0.5) / h * 16)); }
-
-// ---------- sprites: char maps ("..kffk..", one palette letter per pixel) baked once into canvases ----------
-function mk(rows, swap) {
-  const c = newCanvas(Math.max(...rows.map(r => r.length)), rows.length), x = c.getContext("2d");
-  rows.forEach((r, y) => { for (let i = 0; i < r.length; i++) { let ch = r[i]; if (swap && swap[ch]) ch = swap[ch]; if (ch !== "." && PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, y, 1, 1); } } });
-  return c;
-}
-function spr(c, x, y, flip, sx, sy) {
-  sx = sx || 1; sy = sy || sx;
-  const w = c.width * sx, h = c.height * sy;
-  if (!flip) { g.drawImage(c, fl(x), fl(y), w, h); return; }
-  g.save(); g.translate(fl(x) + w, fl(y)); g.scale(-1, 1); g.drawImage(c, 0, 0, w, h); g.restore();
-}
-function outline(src, col) { // 1 px border (8 neighbours) in one colour
-  const c = newCanvas(src.width + 2, src.height + 2), x = c.getContext("2d"), m = newCanvas(src.width, src.height), mx = m.getContext("2d");
-  mx.drawImage(src, 0, 0); mx.globalCompositeOperation = "source-in"; mx.fillStyle = PAL[col]; mx.fillRect(0, 0, m.width, m.height);
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) x.drawImage(m, i, j);
-  x.drawImage(src, 1, 1);
-  return c;
-}
-
-// ---------- type: 3x5 bitmap font (Latin, digits) and crisp system text (Japanese, >= 12 buffer px) ----------
-// each glyph: width digit, then one base-32 digit per row (bit = pixel, MSB left); a 6th row is a descender
-const GL = {
-  "0": "375557", "1": "326227", "2": "371747", "3": "371317", "4": "355711", "5": "374717", "6": "374757", "7": "371222", "8": "375757", "9": "375717",
-  A: "325755", B: "365656", C: "334443", D: "365556", E: "374647", F: "374644", G: "334553", H: "355755", I: "372227", J: "311152",
-  K: "355655", L: "344447", M: "5hrlhh", N: "49db99", O: "325552", P: "365644", Q: "325563", R: "365655", S: "334216", T: "372222",
-  U: "355557", V: "355552", W: "5hhlla", X: "355255", Y: "355222", Z: "371247",
-  a: "303553", b: "346556", c: "303443", d: "313553", e: "303563", f: "312722", g: "3035316", h: "346555", i: "110111", j: "2101112",
-  k: "345665", l: "222221", m: "50qlll", n: "306555", o: "302552", p: "3065644", q: "3035311", r: "305644", s: "303616", t: "327221",
-  u: "305553", v: "305552", w: "50hlla", x: "305225", y: "3055316", z: "307127",
-  " ": "200000", "!": "111101", "?": "361202", ".": "100001", ",": "100011", ":": "101010", "/": "311244", "-": "300700", "+": "302720",
-  "×": "305250", "=": "307070", "'": "111000", "~": "405a00", "♩": "311176", "(": "212221", ")": "221112", ">": "342124"
+function rgba(c, a) { const n = parseInt(C(c).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
+const shade = (x, p, c, ox, oy) => celShade(x, p, C(c), ox, oy);
+const STYLES = {
+  B: { id: "B", lit: false, grain: true, lw: 1.8, ui: SERIF, title: SERIF, shade, light() {},
+    // flat colour laid a little off the key block, like a hand-registered woodblock (u: units per logical px)
+    fill(x, p, c, rule, u) { u = u || 1; x.save(); x.translate(0.6 * u, 0.45 * u); x.fillStyle = C(c); x.fill(p, rule || "nonzero"); x.restore(); },
+    // brush ink: a thin stroke, then a heavier one pressed toward the lower right
+    edge(x, p, w) { w = w || this.lw; x.save(); x.lineJoin = x.lineCap = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w * 0.58; x.stroke(p); x.translate(w * 0.3, w * 0.4); x.lineWidth = w * 0.7; x.stroke(p); x.restore(); },
+    line(x, p, w, c) { x.save(); x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w * 0.75; x.stroke(p); x.translate(w * 0.18, w * 0.24); x.lineWidth = w * 0.6; x.stroke(p); x.restore(); } },
+  A: { id: "A", lit: true, grain: false, lw: 1.3, ui: SANS, title: SERIF, shade, // one fixed light (upper left), one crisp highlight
+    fill(x, p, c, rule) { x.fillStyle = C(c); x.fill(p, rule || "nonzero"); },
+    edge(x, p, w) { x.lineJoin = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w || this.lw; x.stroke(p); },
+    line(x, p, w, c) { x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w; x.stroke(p); },
+    light(x, p, c, ox, oy, w, mx, my, mr) { glint(x, p, C(c), ox, oy, w, mx, my, mr); } }
 };
-// TXT: every string drawn this frame and the smallest text size drawn so far, in buffer px of font size
-// (a 5 px Latin cap reads like a 7 px font). tools/qa.mjs turns it into CSS px with view().K / view().dpr.
-const TXT = { min: Infinity, seen: [], last: [] };
-function noteText(str, em) { if (em < TXT.min) TXT.min = em; if (TXT.seen.length < 300) TXT.seen.push(String(str)); }
-const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",Meiryo,system-ui,sans-serif';
-const isLatin = s => [...s].every(ch => GL[ch]);
-const tcache = new Map();
-function cached(key, make) { let c = tcache.get(key); if (!c) { if (tcache.size > 600) tcache.clear(); c = make(); tcache.set(key, c); } return c; }
-function bitmapText(str, col) {
-  const gl = [...str].map(ch => GL[ch]); let w = -1;
-  gl.forEach(q => { w += +q[0] + 1; });
-  const c = newCanvas(w, 6), x = c.getContext("2d"); x.fillStyle = PAL[col];
-  let px = 0;
-  gl.forEach(q => { const gw = +q[0]; for (let r = 1; r < q.length; r++) { const bits = parseInt(q[r], 32); for (let i = 0; i < gw; i++) if (bits & (1 << (gw - 1 - i))) x.fillRect(px + i, r - 1, 1, 1); } px += gw + 1; });
-  return c;
-}
-const tcv = newCanvas(8, 8), tctx = tcv.getContext("2d", { willReadFrequently: true });
-function crispText(str, px, col) { // never below 12 buffer px: smaller kanji turn to mush
-  px = Math.max(12, px);
-  const thr = px <= 12 ? 120 : 100, font = `${px <= 12 ? 700 : 800} ${px}px ${FONT}`;
-  tctx.font = font;
-  const w = Math.ceil(tctx.measureText(str).width) + 2, h = Math.ceil(px * 1.4) + 2;
-  tcv.width = w; tcv.height = h;
-  tctx.font = font; tctx.textBaseline = "middle"; tctx.fillStyle = "#000"; tctx.fillText(str, 1, Math.round(h / 2));
-  const d = tctx.getImageData(0, 0, w, h).data;
-  let top = h, bot = -1;
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) { top = Math.min(top, j); bot = j; }
-  if (bot < 0) return newCanvas(1, 1);
-  const c = newCanvas(w, bot - top + 1), x = c.getContext("2d"); x.fillStyle = PAL[col];
-  for (let j = top; j <= bot; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) x.fillRect(i, j - top, 1, 1);
-  return c;
-}
-// o: { c colour, o outline colour, sc integer scale for Latin (baked before the 1 px outline), px size for other text, a "l"|"c"|"r" }
-function textCanvas(str, o) {
-  const col = o.c || "k", ol = o.o || "", lat = isLatin(str), sc = lat ? (o.sc || 1) : 1, px = Math.max(12, o.px || 12);
-  return cached(str + "|" + col + ol + (lat ? "x" + sc : px), () => {
-    let c = lat ? bitmapText(str, col) : crispText(str, px, col);
-    if (sc > 1) { const s = newCanvas(c.width * sc, c.height * sc), x = s.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, s.width, s.height); c = s; }
-    return ol ? outline(c, ol) : c;
-  });
-}
-function txt(str, x, y, o) {
-  o = o || {}; let maxW = 0;
-  String(str).split("\n").forEach((ln, i) => {
-    const c = textCanvas(ln, o), w = c.width, lx = o.a === "l" ? x : o.a === "r" ? x - w : x - fl(w / 2);
-    noteText(ln, isLatin(ln) ? 5 * (o.sc || 1) / 0.7 : Math.max(12, o.px || 12));
-    spr(c, lx, y + i * (o.lh || (c.height + 2))); maxW = Math.max(maxW, w);
-  });
-  return maxW;
-}
-const textW = (str, o) => textCanvas(str, o || {}).width;
-// big chunky Latin: glyphs scaled by sx/sy with a 1 px (unscaled) outline, optional second ring ol2
-function bigText(str, x, y, sc, fill, ol, sx, sy, ol2) {
-  sx = sx || sc; sy = sy || sc;
-  const f = textCanvas(str, { c: fill }), w = f.width * sx, x0 = fl(x - w / 2);
-  noteText(str, (isLatin(str) ? 5 / 0.7 : 12) * Math.min(sx, sy));
-  if (ol2) { const o = textCanvas(str, { c: ol2 }); for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const m = Math.abs(dx) + Math.abs(dy); if (m > 1 && m < 4) spr(o, x0 + dx, y + dy, false, sx, sy); } }
-  if (ol) { const o = textCanvas(str, { c: ol }); for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) spr(o, x0 + dx, y + dy, false, sx, sy); }
-  spr(f, x0, y, false, sx, sy);
-  return w;
-}
-// signature words from hand-placed glyph grids ("#" = ink). They are pictures, so call noteText(word, 12)
-// when you draw one; the tools read the demo title label from TXT.
-// kanaArt: bold 2 px strokes, ring outline(s), glyph cut points for stamping the word in letter by letter.
-function kanaArt(table, str, fill, ol, ol2) {
-  return cached("K" + str + fill + ol + (ol2 || ""), () => {
-    const gl = [...str].map(ch => table[ch]), gw = q => Math.max(...q.map(r => r.length));
-    const c = newCanvas(gl.reduce((a, q) => a + gw(q) + 1, 0), 15), x = c.getContext("2d"), cuts = [];
-    x.fillStyle = PAL[fill]; let px = 0;
-    gl.forEach((q, i) => {
-      const jy = [1, 0, 2, 0, 1, 2][i % 6]; // hand-lettered bounce: each glyph sits at its own height
-      q.forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j, y + jy, 1, 1); });
-      px += gw(q) + 1; cuts.push(px + 1);
-    });
-    const o = ol2 ? outline(outline(c, ol), ol2) : outline(c, ol); o.cuts = ol2 ? cuts.map(v => v + 1) : cuts;
-    return o;
-  });
-}
-// inkArt: 1 px strokes inked twice 1 px apart (flat brush) over a carved shadow; draw it at x2
-function inkArt(table, str, jys, ink, shade) {
-  return cached("I" + str + (ink || "k") + (shade || "D"), () => {
-    const chars = [...str], gw = ch => Math.max(...table[ch].map(r => r.length)), H = Math.max(...chars.map(ch => table[ch].length)) + 3;
-    const c = newCanvas(chars.reduce((a, ch) => a + gw(ch) + 1, 0) + 2, H), x = c.getContext("2d");
-    const pass = (col, ox, oy) => { x.fillStyle = PAL[col]; let px = 0; chars.forEach((ch, i) => { const jy = jys ? jys[i % jys.length] : 0; table[ch].forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j + ox, y + jy + oy, 1, 1); }); px += gw(ch) + 1; }); };
-    pass(shade || "D", 1, 1); pass(shade || "D", 2, 1); pass(ink || "k", 0, 0); pass(ink || "k", 1, 0);
-    return c;
-  });
-}
+function useStyle(id) { ST = STYLES[id] || STYLES.B; PAL = PALS[ST.id]; SPR.clear(); }   // call before the first resize
 
-// ---------- UI pieces: wooden tags, noren windows, small wood icons ----------
-function nr(x, y, w, h, c, n) { R(x + n, y, w - 2 * n, h, c); R(x, y + n, w, h - 2 * n, c); if (n > 1) R(x + 1, y + 1, w - 2, h - 2, c); }
-function tag(x, y, w, h, label, big) { // cut corners on the left, a string hole, an uneven right edge
-  for (let j = 0; j < h; j++) {
-    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j)), rj = (j % 5 === 2) ? 1 : 0;
-    R(x + cut, y + j, w - cut - rj, 1, "k");
-    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - cut - rj - 2, 1, j === 1 ? "q" : j >= h - 3 ? "O" : "o");
+// ---------- screen layout: a cw x ch logical scene drawn at device resolution ----------
+// K = device px per logical px (one uniform scale, devicePixelRatio capped at 2). Space around the scene shows more
+// world, never bars; (L.x0, L.y0) is the scene's (0, 0). L.wide: the side areas can take the HUD while the play area
+// keeps the full height. L.u scales UI and text up on small landscape screens (TEXT_MIN, bar 1.4.4).
+const TEXT_MIN = 14;
+const L = { K: 1, dpr: 1, kc: 1, W: 360, H: 640, x0: 0, y0: 0, u: 1, wide: false };
+function artResize(cv, cssW, cssH, cw, ch, sideMin) {
+  const dpr = L.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dw = Math.max(2, Math.round(cssW * dpr)), dh = Math.max(2, Math.round(cssH * dpr)), K = Math.min(dw / cw, dh / ch);
+  if (K !== L.K) SPR.clear();
+  cv.width = dw; cv.height = dh;
+  Object.assign(L, { K, kc: K / dpr, W: dw / K, H: dh / K });
+  L.x0 = (L.W - cw) / 2; L.y0 = (L.H - ch) * 0.6;   // extra height goes mostly to the sky
+  L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1);
+  L.wide = L.x0 >= (sideMin || 200) * L.u;
+}
+// scene coords -> device px, with a shake (sx, sy in logical px) and a camera zoom z = { x, y, s } around a scene point
+function view(x, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  x.setTransform(K * s, 0, 0, K * s, K * (fx * (1 - s) + s * (L.x0 + (sx || 0))), K * (fy * (1 - s) + s * (L.y0 + (sy || 0))));
+}
+// a cached layer: the whole screen plus a margin m for the shake; fn(x, X0, Y0, W, H) fills that rect in scene coords
+function layer(m, fn) {
+  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = c.getContext("2d");
+  x.setTransform(K, 0, 0, K, K * (m + L.x0), K * (m + L.y0));
+  c.txt = baking(() => fn(x, -L.x0 - m, -L.y0 - m, L.W + 2 * m, L.H + 2 * m));
+  c.m = m; return c;
+}
+function putLayer(x, c, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  let ox = K * (fx * (1 - s) + s * ((sx || 0) - c.m)), oy = K * (fy * (1 - s) + s * ((sy || 0) - c.m));
+  if (s === 1) { ox = Math.round(ox); oy = Math.round(oy); }   // whole device px: a plain copy without filtering
+  x.setTransform(s, 0, 0, s, ox, oy); x.drawImage(c, 0, 0); carry(x, c.txt, s);
+}
+// a transparent DOM hit area over something drawn at scene rect (x, y, w, h)
+function place(el, x, y, w, h) { const k = L.kc; el.style.left = (x + L.x0) * k + "px"; el.style.top = (y + L.y0) * k + "px"; el.style.width = w * k + "px"; el.style.height = h * k + "px"; }
+// draw fn in a frame moved to (X, Y), scaled by s and turned by a
+function at(x, X, Y, s, a, fn) { x.save(); x.translate(X, Y); if (s !== 1) x.scale(s, s); if (a) x.rotate(a); fn(); x.restore(); }
+
+// ---------- paths: shapes drawn by hand with curves, never compass-made clip art ----------
+const P2 = () => new Path2D();
+const mtx = (dx, dy) => new DOMMatrix([1, 0, 0, 1, dx, dy]);
+function pEll(cx, cy, rx, ry, rot) { const p = P2(); p.ellipse(cx, cy, rx, ry, rot || 0, 0, TAU); return p; }
+function pRR(x, y, w, h, r) {
+  const p = P2(); r = Math.min(r, w / 2, h / 2);
+  p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r); p.closePath();
+  return p;
+}
+function pPoly(pts, open) { const p = P2(); p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]); if (!open) p.closePath(); return p; }
+const pLine = (x0, y0, x1, y1) => pPoly([[x0, y0], [x1, y1]], true);
+const pCut = (x, y, w, h, c) => pPoly([[x + c, y], [x + w - c, y], [x + w, y + c], [x + w, y + h - c], [x + w - c, y + h], [x + c, y + h], [x, y + h - c], [x, y + c]]);
+// a smooth curve through the midpoints of the points: reads as drawn by hand
+function pSmooth(pts, open) {
+  const p = P2(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (open) { p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n - 1; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[i + 1])); p.lineTo(pts[n - 1][0], pts[n - 1][1]); return p; }
+  p.moveTo(...mid(pts[n - 1], pts[0]));
+  for (let i = 0; i < n; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[(i + 1) % n]));
+  p.closePath(); return p;
+}
+function pPolar(cx, cy, rx, ry, fn, n) { const pts = []; for (let i = 0; i < n; i++) { const t = i / n * TAU, f = fn(t); pts.push([cx + Math.cos(t) * rx * f, cy + Math.sin(t) * ry * f]); } return pSmooth(pts); }
+// a disc whose edge wanders a little, like something cut or turned by hand
+function pBlob(cx, cy, rx, ry, amp, seed) { const r = seeded(seed), k1 = r() * TAU, k2 = r() * TAU, k3 = r() * TAU; return pPolar(cx, cy, rx, ry, t => 1 + amp * (Math.sin(2 * t + k1) * 0.5 + Math.sin(3 * t + k2) * 0.3 + Math.sin(5 * t + k3) * 0.2), 40); }
+function pStar(cx, cy, ro, ri, n, rot) { const pts = []; for (let i = 0; i < 2 * n; i++) { const a = (rot || 0) + i * Math.PI / n, r = i % 2 ? ri : ro; pts.push([cx + Math.sin(a) * r, cy - Math.cos(a) * r]); } return pPoly(pts); }
+// crescent: half a circle back along a narrower half ellipse (k: 0 thin .. 1 half moon), turned by rot
+function pMoon(cx, cy, r, k, rot) { const p = P2(); p.ellipse(cx, cy, r, r, rot, -Math.PI / 2, Math.PI / 2); p.ellipse(cx, cy, r * k, r, rot, Math.PI / 2, -Math.PI / 2, true); p.closePath(); return p; }
+function chaikin(pts, k) {
+  for (let j = 0; j < k; j++) {
+    const o = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+    o.push(pts[pts.length - 1]); pts = o;
   }
-  R(x + 4, y + fl(h / 2) - 1, 2, 2, "D");
-  const tc = textCanvas(label, { c: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
-  spr(tc, fl(x + 4 + (w - 4 - tc.width) / 2), fl(y + (h - tc.height) / 2));
+  return pts;
 }
-function win(x, y, w, h) { // indigo window: notched corners, ink / cream / ink border, dithered cloth
-  nr(x, y, w, h, "k", 2); nr(x + 1, y + 1, w - 2, h - 2, "q", 2); nr(x + 2, y + 2, w - 4, h - 4, "k", 1);
-  R(x + 3, y + 3, w - 6, h - 6, "n"); D(x + 3, y + 3, w - 6, h - 6, "n", "b", 1);
-}
-function icon(x, y, w, h, kind) { // low-contrast dark-wood system icon
-  nr(x, y, w, h, "k", 1); R(x + 1, y + 1, w - 2, h - 2, "D"); R(x + 1, y + h - 2, w - 2, 1, "k");
-  const cx = x + fl(w / 2), cy = y + fl(h / 2) - 1;
-  if (kind === "pause") { R(cx - 3, cy - 3, 2, 7, "o"); R(cx + 1, cy - 3, 2, 7, "o"); }
-  else if (kind === "sound" || kind === "mute") {
-    R(cx - 5, cy - 1, 2, 3, "o"); R(cx - 3, cy - 2, 1, 5, "o"); R(cx - 2, cy - 3, 1, 7, "o");
-    if (kind === "sound") { R(cx, cy - 1, 1, 3, "o"); R(cx + 2, cy - 2, 1, 5, "o"); R(cx + 4, cy - 3, 1, 7, "o"); }
-    else for (let i = 0; i < 5; i++) { P(cx + i, cy - 2 + i, "h"); P(cx + 4 - i, cy - 2 + i, "h"); }
-  } else { const t = textCanvas(kind, { c: "o", px: 12, sc: 2 }); noteText(kind, isLatin(kind) ? 10 / 0.7 : 12); spr(t, cx - fl(t.width / 2), cy - fl(t.height / 2) + 1); }
-}
-const POINTER = [".kkkk", "kwwwwkkkkkk", "kwwwwwwwwwwk", "kwwwwkkkkkk", "kwwwwwwk", "kwwwwkk", "kwwwwwwk", ".kkkkkk"];
-const FINGER = ["..kk.....", ".kwwk....", ".kwwk....", ".kwwkkk..", ".kwwkwwkk", "kkwwkwwkwk", "kwkwwwwwwk", "kwwwwwwwwk", ".kwwwwwwk.", "..kwwwwk..", "...kkkk..."];
 
-// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch, particle pool ----------
+// ---------- drawing helpers ----------
+// one inked shape: flat colour, an optional shade tone sc (the shape moved ox, oy away from the light), the light
+// lt = [colour, ox, oy, w, mx, my, mr] (style A only, see glint), brush ink of width w
+function shape(x, p, c, w, sc, ox, oy, lt) { ST.fill(x, p, c); if (sc) ST.shade(x, p, sc, ox, oy); if (lt) ST.light(x, p, ...lt); ST.edge(x, p, w); return p; }
+// one flat shade tone: the part of a shape not covered by itself moved toward the light
+function celShade(x, path, col, ox, oy) {
+  x.save(); x.clip(path);
+  const p = P2(); p.rect(-4e3, -4e3, 8e3, 8e3); p.addPath(path, mtx(-ox, -oy));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// one crisp highlight (style A): a band just inside the lit edge, kept near the lit corner by a mask circle
+function glint(x, path, col, ox, oy, w, mx, my, mr) {
+  x.save(); x.clip(path); x.beginPath(); x.arc(mx, my, mr, 0, TAU); x.clip();
+  const p = P2(); p.addPath(path, mtx(ox, oy)); p.addPath(path, mtx(ox + w, oy + w * 1.2));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// material sheen (style A only): the one gradient in the kit, only while baking a sprite (metal, lacquer, glaze)
+function sheen(x, p, kind, x0, y0, x1, y1) {
+  if (!ST.lit) return;
+  const s = kind === "metal" ? [0, rgba("hlK", 0.42), 0.3, rgba("hlK", 0), 0.5, rgba("goldD", 0.22), 0.6, rgba("goldL", 0.24), 0.74, rgba("goldD", 0), 1, rgba("plankD", 0.3)]
+    : kind === "lacquer" ? [0, rgba("hlK", 0.16), 0.36, rgba("hlK", 0), 0.7, rgba("shadeK", 0.16), 1, rgba("shadeK", 0.26)]
+    : [0, rgba("hlK", 0.2), 0.45, rgba("hlK", 0), 1, rgba("shadeK", 0.16)];
+  const g = x.createLinearGradient(x0, y0, x1, y1);
+  for (let i = 0; i < s.length; i += 2) g.addColorStop(s[i], s[i + 1]);
+  x.save(); if (p) x.clip(p); x.fillStyle = g; x.fillRect(Math.min(x0, x1) - 99, Math.min(y0, y1) - 99, Math.abs(x1 - x0) + 198, Math.abs(y1 - y0) + 198); x.restore();
+}
+// tapered brush stroke along points: thin at both ends, full in the middle
+function brush(x, pts, w, col) {
+  const s = chaikin(pts, 3), n = s.length, A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = s[Math.max(0, i - 1)], b = s[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const k = w * 0.5 * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * i / (n - 1))), 0.6) / d, dx = (b[0] - a[0]) * k, dy = (b[1] - a[1]) * k;
+    A.push([s[i][0] - dy, s[i][1] + dx]); B.push([s[i][0] + dy, s[i][1] - dx]);
+  }
+  x.fillStyle = C(col || "ink"); x.fill(pPoly(A.concat(B.reverse())));
+}
+// inked cord: a dark line with a coloured core (cords, stems, rope ends)
+function cordLine(x, path, w, col, iw) {
+  x.lineCap = x.lineJoin = "round";
+  x.strokeStyle = C("ink"); x.lineWidth = w + 2 * (iw == null ? 0.5 : iw); x.stroke(path);
+  x.strokeStyle = C(col); x.lineWidth = w; x.stroke(path);
+}
+// cords from points straight up to a beam at y = top: how boards, tags and lanterns hang in the world
+function cords(x, pts, top, col) { for (const [px, py] of pts) cordLine(x, pLine(px, top, px, py), 1.5, col || "red"); }
+// twisted rope along a polyline: base strand, ink edge, slanted strands of the second colour
+function rope(x, pts, w, c1, c2, iw) {
+  cordLine(x, pSmooth(pts, true), w, c1, iw);
+  const s = chaikin(pts, 3), h = w * 0.42; let acc = 0;
+  x.strokeStyle = C(c2); x.lineWidth = h; x.lineCap = "butt";
+  for (let i = 1; i < s.length; i++) {
+    const a = s[i - 1], b = s[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]); acc += d;
+    if (acc < w * 1.15 || !d) continue;
+    acc = 0; const dx = (b[0] - a[0]) / d * h, dy = (b[1] - a[1]) / d * h;
+    x.beginPath(); x.moveTo(b[0] - dy - dx * 0.7, b[1] + dx - dy * 0.7); x.lineTo(b[0] + dy + dx * 0.7, b[1] - dx + dy * 0.7); x.stroke();
+  }
+}
+// flat light pool: hard-edged ellipses stepping from the ground colour to warm lit ground, all opaque palette
+// colours (an alpha wash over the ground mixes to an off-palette grey that reads as a puddle, never as light)
+function pool(x, cx, cy, rx, ry, cols) {
+  cols = cols || ["ground", "poolA", "poolB"];
+  cols.forEach((c, i) => { x.fillStyle = C(c); x.fill(pEll(cx, cy, rx * (1 - i * 0.27), ry * (1 - i * 0.27))); });
+}
+// grain lines of wood inside a clip path (vert: along a post instead of along a board)
+function grain(x, clip, X, Y, w, h, gap, col, seed, vert) {
+  const r = seeded(seed); x.save(); x.clip(clip); x.strokeStyle = C(col); x.lineWidth = 0.6;
+  if (vert) { x.translate(X + w, Y); x.rotate(Math.PI / 2); [w, h] = [h, w]; X = Y = 0; }
+  for (let i = 0; i < h / gap; i++) {
+    const y = Y + 2 + i * gap + r() * 1.4, k = r() * 6;
+    x.beginPath(); x.moveTo(X, y); x.bezierCurveTo(X + w * 0.3, y + Math.sin(k) * 1.6, X + w * 0.6, y - Math.cos(k) * 1.6, X + w, y + Math.sin(k * 2) * 1.2); x.stroke();
+  }
+  x.restore();
+}
+// wooden tag: a plank with cut corners, grain, cord holes, one shade tone (A: a lit edge) and the style's ink
+function woodTag(x, X, Y, w, h, o) {
+  o = o || {};
+  const d = o.dark, c = o.cut || 5, p = pPoly([[X + c, Y], [X + w - c * 0.7, Y + 0.5], [X + w, Y + c * 0.9], [X + w - 0.6, Y + h], [X + 1.5, Y + h - 0.6], [X, Y + c]]);
+  ST.fill(x, p, d ? "plank" : "tag"); grain(x, p, X, Y, w, h, 3.2, d ? "plankL" : "tagG", o.seed || 5);
+  ST.shade(x, p, d ? "plankD" : "tagD", 2.2, 2.6); ST.light(x, p, d ? "plankL" : "tagL", 0.9, 0.9, 1.1, X, Y, Math.max(w, h) * 0.7); ST.edge(x, p);
+  x.fillStyle = C("ink"); for (const hx of o.holes || []) x.fill(pEll(hx, Y + 5, 1.6, 1.6));
+  return p;
+}
+// bamboo pole between two points: base, flat shade side, (A) a light stripe, nodes, ink
+function bamboo(x, x0, y0, x1, y1, w, node) {
+  const len = Math.hypot(x1 - x0, y1 - y0), p = pRR(0, -w / 2, len, w, w * 0.42), bar = (c, X, Y, W, H) => { x.fillStyle = C(c); x.fillRect(X, Y, W, H); };
+  x.save(); x.translate(x0, y0); x.rotate(Math.atan2(y1 - y0, x1 - x0));
+  ST.fill(x, p, "tag"); x.save(); x.clip(p);
+  bar("tagD", 0, w * 0.16, len, w * 0.34); if (ST.lit) bar("tagL", 0, -w * 0.32, len, w * 0.14);
+  for (let s = node * 0.6; s < len - 4; s += node) { bar("tagD", s, -w / 2, 1.1, w); bar("tagL", s + 1.1, -w / 2, 0.8, w); }
+  x.restore(); ST.edge(x, p); x.restore();
+}
+// rim light on a baked canvas: the band of its silhouette facing (dx, dy) device px, in one flat colour
+function rimLight(c, col, dx, dy, a) {
+  const t = cnv(c.width, c.height), tx = t.getContext("2d"), x = c.getContext("2d");
+  tx.drawImage(c, 0, 0); tx.globalCompositeOperation = "destination-out"; tx.drawImage(c, -dx, -dy);
+  tx.globalCompositeOperation = "source-in"; tx.fillStyle = C(col); tx.fillRect(0, 0, t.width, t.height);
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = a; x.globalCompositeOperation = "source-atop"; x.drawImage(t, 0, 0); x.restore();
+}
+// washi grain (style B): laid lines, fibres and specks, laid over the finished frame in screen space (grainOver last
+// in every frame), so it stays put while things roll or shake, like the paper a picture is printed on
+function washiTex(w, h, S, seed) {
+  const c = cnv(w * S, h * S), x = c.getContext("2d"), r = seeded(seed);
+  x.scale(S, S);
+  // laid lines with uneven spacing and strength, broken into short runs, so they never read as a screen pattern
+  for (let i = r() * 3; i < w; i += 2.4 + r() * 3) { x.fillStyle = rgba("paper", 0.01 + r() * 0.025); for (let y = -r() * 30; y < h; y += 12 + r() * 36) x.fillRect(i, y, 0.6, 6 + r() * 28); }
+  x.lineCap = "round";
+  for (let i = 0; i < w * h / 260; i++) {
+    const fx = r() * w, fy = r() * h, a = r() * TAU, l = 4 + r() * 16;
+    x.strokeStyle = r() < 0.7 ? rgba("paper", 0.1) : rgba("ink", 0.09); x.lineWidth = 0.3 + r() * 0.5;
+    x.beginPath(); x.moveTo(fx, fy); x.quadraticCurveTo(fx + Math.cos(a) * l * 0.5 + (r() - 0.5) * 5, fy + Math.sin(a) * l * 0.5 + (r() - 0.5) * 5, fx + Math.cos(a) * l, fy + Math.sin(a) * l); x.stroke();
+  }
+  for (let i = 0; i < w * h / 80; i++) { const s = 0.3 + r() * 0.8; x.fillStyle = r() < 0.5 ? rgba("paper", 0.1) : rgba("ink", 0.12); x.fillRect(r() * w, r() * h, s, s); }
+  return c;
+}
+const GRAIN = {};
+function grainOver(x) {
+  if (!ST.grain) return;
+  const k = L.K.toFixed(3);
+  if (!GRAIN[k]) GRAIN[k] = x.createPattern(washiTex(256, 256, L.K, 3), "repeat");   // 256: never lines up with the 360 scene
+  x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = GRAIN[k]; x.fillRect(0, 0, x.canvas.width, x.canvas.height);
+}
+
+// ---------- sprite cache: a drawing is made once per size at device resolution, then drawn turned and scaled ----------
+const SPR = new Map();
+// Text drawn while baking (bake, lit, layer) is kept with the picture and recorded again, at its on-screen size,
+// each time the picture is drawn (carry), so QA measures a baked sign the way the player sees it.
+let BAKED = null;
+function baking(fn) { const keep = BAKED, t = BAKED = []; try { fn(); } finally { BAKED = keep; } return t.length ? t : null; }
+function carry(x, txt, k) { if (!txt) return; k = k || Math.hypot(x.getTransform().c, x.getTransform().d) / L.K; for (const t of txt) noteText(t.str, t.px * k); }
+// bake: fn draws in logical px with (0, 0) at (ox, oy) in a w x h box; mono prints it locked (greys, full ink)
+function bake(key, w, h, ox, oy, fn, mono) {
+  let b = SPR.get(key);
+  if (!b) {
+    const K = L.K, c = cnv(w * K + 2, h * K + 2), x = c.getContext("2d");
+    x.setTransform(K, 0, 0, K, 1 + ox * K, 1 + oy * K);
+    const txt = baking(() => { MONO = !!mono; try { fn(x); } finally { MONO = false; } });
+    b = { c, w: c.width / K, h: c.height / K, ox: ox + 1 / K, oy: oy + 1 / K, txt }; SPR.set(key, b);
+  }
+  return b;
+}
+function put(x, b, X, Y, a, sx, sy) {
+  if (!a && !sx) { x.drawImage(b.c, X - b.ox, Y - b.oy, b.w, b.h); carry(x, b.txt); return; }
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); if (a) x.rotate(a); x.drawImage(b.c, -b.ox, -b.oy, b.w, b.h); carry(x, b.txt); x.restore();
+}
+// Lit sprites: round things that turn while the light stays put (upper left). art(x, u) draws in a unit circle
+// (u = units per logical px). Each rotation step gets its own frame: the flat shade tone, then B a heavier ink rim
+// lower right, A the sheen, a crisp highlight and a warm bounce. MAT: [shade share, highlight share, sheen kind].
+const LIT_STEPS = 32, MAT = { wood: [0.34, 0.4, 0], paper: [0.2, 0.3, 0], lacquer: [0.4, 0.75, "lacquer"], metal: [0.42, 0.9, "metal"], glaze: [0.3, 0.75, "glaze"] };
+function lit(key, r, mat, art, mono) {
+  let s = SPR.get(key);
+  if (!s) {
+    const k = r * L.K, N = Math.ceil(2.3 * k) + 4, c = cnv(N, N), x = c.getContext("2d");
+    x.translate(N / 2, N / 2); x.scale(k, k);
+    const txt = baking(() => { MONO = !!mono; try { art(x, 1 / r); } finally { MONO = false; } });
+    s = { c, N, k, m: MAT[mat] || mat, f: [], txt }; SPR.set(key, s);
+  }
+  return s;
+}
+let TMP = null;
+function litFrame(s, ang) {
+  const N = s.N, k = s.k, m = s.m, c = cnv(N, N), x = c.getContext("2d"), H = N / 2;
+  x.translate(H, H); x.rotate(ang); x.drawImage(s.c, -H, -H); x.setTransform(1, 0, 0, 1, 0, 0);
+  if (!TMP || TMP.width < N) TMP = cnv(Math.max(N, 256), Math.max(N, 256));
+  const t = TMP.getContext("2d"), op = o => { t.globalCompositeOperation = o; };
+  const band = (ax, ay, bx, by) => { op("copy"); t.drawImage(c, ax, ay); op("destination-out"); t.drawImage(c, bx, by); op("destination-in"); t.drawImage(c, 0, 0); };
+  const paint = (col, a) => { op("source-in"); t.fillStyle = C(col); t.fillRect(0, 0, N, N); x.globalAlpha = a; x.drawImage(TMP, 0, 0, N, N, 0, 0, N, N); };
+  op("copy"); t.drawImage(c, 0, 0); op("destination-out"); t.fill(pEll(H - 0.3 * k, H - 0.36 * k, 1.06 * k, 1.06 * k));
+  x.globalCompositeOperation = "source-atop"; paint("shadeK", m[0]);
+  if (ST.lit) {
+    x.globalAlpha = 1; if (m[2]) sheen(x, null, m[2], 0, 0, N, N);
+    band(0.07 * k, 0.085 * k, 0.15 * k, 0.18 * k); op("destination-in"); t.fill(pEll(H - 0.42 * k, H - 0.5 * k, 0.64 * k, 0.64 * k)); paint("hlK", m[1]);
+    band(0, 0, -0.07 * k, -0.02 * k); op("destination-in"); t.fillRect(H + 0.1 * k, 0, N, N); paint("warm", 0.42);
+  } else { band(0, 0, -0.045 * k, -0.06 * k); paint("ink", 1); }
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; op("source-over"); t.clearRect(0, 0, TMP.width, TMP.height);
+  return c;
+}
+// draw a lit sprite at (X, Y) turned by a; sx, sy squash it in screen space (the light does not turn)
+function drawLit(x, s, X, Y, a, sx, sy) {
+  const st = TAU / LIT_STEPS, i0 = Math.round(a / st), i = ((i0 % LIT_STEPS) + LIT_STEPS) % LIT_STEPS, img = s.f[i] || (s.f[i] = litFrame(s, i * st)), D = s.N / L.K;
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); x.rotate(a - i0 * st); x.drawImage(img, -D / 2, -D / 2, D, D); carry(x, s.txt); x.restore();
+}
+
+// ---------- text: system fonts, an optional ink outline; TXT records each string and the smallest size (logical px) ----------
+const TXT = { min: Infinity, seen: [], last: [] };
+function textEnd() { TXT.last = TXT.seen; TXT.seen = []; }   // call once at the end of every drawn frame
+function noteText(str, px) { if (BAKED) BAKED.push({ str, px }); else { if (px < TXT.min) TXT.min = px; if (TXT.seen.length < 300) TXT.seen.push(str); } }
+// o: { a align, f font, w weight, ol outline colour, ow its share of size, deep: a second print down right, max: fit width }
+function text(x, str, X, Y, size, col, o) {
+  o = o || {}; str = String(str);
+  const font = s => (o.w || 800) + " " + s + "px " + (o.f || ST.ui);
+  x.font = font(size);
+  if (o.max) { const w = x.measureText(str).width; if (w > o.max) x.font = font(size *= o.max / w); }
+  const m = x.getTransform(), px = size * Math.hypot(m.c, m.d) / L.K;
+  noteText(str, px);
+  x.textAlign = o.a || "center"; x.textBaseline = "middle";
+  if (o.deep) { x.fillStyle = C(o.deep); x.fillText(str, X + size * 0.035, Y + size * 0.06); }
+  if (o.ol) { x.lineJoin = "round"; x.miterLimit = 2; x.lineWidth = size * (o.ow || 0.2); x.strokeStyle = C(o.ol); x.strokeText(str, X, Y); }
+  x.fillStyle = C(col); x.fillText(str, X, Y);
+}
+function textW(x, str, size, o) { x.font = ((o && o.w) || 800) + " " + size + "px " + ((o && o.f) || ST.ui); return x.measureText(String(str)).width; }
+
+// ---------- in-world UI (cx, y = top centre): wooden tag buttons, boards, plaques, a seal, a pointing hand ----------
+function tagBtn(x, cx, y, w, h, label, size, dark) {
+  put(x, bake("tag" + w + "x" + h + (dark ? "d" : ""), w + 4, h + 16, w / 2 + 2, 13, q => {
+    for (const hx of [-w * 0.3, w * 0.3]) cordLine(q, pLine(hx, -12, hx, 5), 1.4, "red");
+    woodTag(q, -w / 2, 0, w, h, { holes: [-w * 0.3, w * 0.3], dark, seed: w + h });
+  }), cx, y);
+  text(x, label, cx, y + h / 2 + 2, size || 20, dark ? "paper" : "ink", { deep: dark ? "plankD" : "tagD" });
+}
+// board: a dark wood frame round the style's pane (B washi, A lacquer); text on it uses paneT and paneS
+function board(x, cx, y, w, h) {
+  put(x, bake("board" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 3, q => {
+    const pn = pCut(-w / 2 + 9, 9, w - 18, h - 18, 5);
+    woodTag(q, -w / 2, 0, w, h, { dark: 1, cut: 8, seed: 21 });
+    ST.fill(q, pn, "pane"); sheen(q, pn, "lacquer", -w / 2, 0, w / 2, h);
+    if (!ST.lit) ST.line(q, pCut(-w / 2 + 15, 15, w - 30, h - 30, 3), 0.9, "paneL");
+    ST.shade(q, pn, "paneL", -2, -2.4); ST.edge(q, pn, 1.1); ST.edge(q, pCut(-w / 2, 0, w, h, 8), 1.5);
+    for (const [ax, ay, sx, sy] of [[-w / 2 + 9, 9, 1, 1], [w / 2 - 9, 9, -1, 1], [-w / 2 + 9, h - 9, 1, -1], [w / 2 - 9, h - 9, -1, -1]]) {
+      const f = pPoly([[ax, ay], [ax + 22 * sx, ay], [ax + 22 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 22 * sy], [ax, ay + 22 * sy]]);
+      ST.fill(q, f, "gold"); sheen(q, f, "metal", ax, ay, ax + 22 * sx, ay + 22 * sy); ST.shade(q, f, "goldD", 1.2, 1.4); ST.edge(q, f, 0.9);
+    }
+  }), cx, y);
+}
+// plaque: a small dark wood board for a system control (pause, sound, mute) or a short label
+function plaque(x, cx, y, w, kind, label) {
+  put(x, bake("pq" + kind + w, w + 4, 50, w / 2 + 2, 2, q => {
+    cordLine(q, pLine(0, 0, 0, 9), 1.3, "red", 0.45);
+    woodTag(q, -w / 2, 6, w, 34, { dark: 1, cut: 6, holes: [0], seed: 3 });
+    q.fillStyle = q.strokeStyle = C("tagL"); q.lineCap = "round"; q.lineWidth = 1.8;
+    if (kind === "pause") { q.fill(pRR(-6, 15, 4.4, 16, 1)); q.fill(pRR(1.6, 15, 4.4, 16, 1)); }
+    if (kind === "sound" || kind === "mute") q.fill(pPoly([[-10, 20], [-6, 20], [-1, 15], [-1, 31], [-6, 26], [-10, 26]]));
+    if (kind === "sound") for (const r of [5, 9]) { q.beginPath(); q.arc(-1, 23, r, -0.8, 0.8); q.stroke(); }
+    if (kind === "mute") { q.stroke(pLine(3, 19, 10, 27)); q.stroke(pLine(10, 19, 3, 27)); }
+  }), cx, y);
+  if (label) text(x, label, cx, y + 25, 16, "tagL", {});
+}
+// a red seal; it lands from 1.5x with a thump (age = ms since it was pressed)
+function seal(x, X, Y, label, age, size) {
+  size = size || 17;
+  const s = 1 + 0.5 * (1 - easeOut(age / 140)), w = textW(x, label, size) + size * 1.2, h = size * 1.75;
+  at(x, X, Y, s, -0.08, () => {
+    shape(x, pCut(-w / 2, -h / 2, w, h, 4), "red", 1.2, "redD", 1.5, 2);
+    x.lineWidth = 1.2; x.strokeStyle = C("paper"); x.stroke(pCut(-w / 2 + 3.5, -h / 2 + 3.5, w - 7, h - 7, 3));
+    text(x, label, 0, 1, size, "paper", {});
+  });
+}
+// a pointing hand drawn like a print (fingertip at X, Y; a = 0 points up): a tapered index finger with a nail and a
+// knuckle crease, the other fingers folded as separate lobes, the thumb, and a kimono sleeve with a stitched hem
+function hand(x, X, Y, a, s) {
+  put(x, bake("hand", 46, 62, 23, 2, q => {
+    const skin = (p, ox, oy) => shape(q, p, "paper", 1.2, "paperD", ox, oy);
+    skin(pSmooth([[-10, 35], [-18.5, 28], [-17, 21.5], [-12.5, 22], [-7, 28]]), 1.5, 1.8);                    // thumb
+    skin(pSmooth([[-11, 21], [-4, 18.5], [7, 19.5], [13, 25], [12.5, 40], [5, 46], [-8, 45.5], [-12.5, 36]]), 2.4, 2.4);
+    for (const [y, w] of [[24, 5], [30.4, 5.6], [36.8, 4.6]]) skin(pSmooth([[2, y - 3.1], [5 + w, y - 3.4], [8.4 + w, y + 0.1], [5 + w, y + 3.4], [2, y + 3.1]]), 1.2, 1.4);
+    skin(pSmooth([[-3.6, 24], [-3.4, 9], [-2.6, 1.2], [0, -0.2], [2.6, 1], [3.6, 9], [4.4, 24]]), 1.6, 0);        // index finger
+    shape(q, pSmooth([[-1.7, 2.4], [0, 1.4], [1.8, 2.4], [1.5, 6.4], [-1.4, 6.4]]), "paperD", 0.6);           // nail
+    ST.line(q, pSmooth([[-2.6, 13.5], [0, 12.4], [2.8, 13.6]], true), 0.8);                                         // knuckle crease
+    const sleeve = pSmooth([[-17, 43.5], [-2, 41.5], [15, 42.5], [19.5, 58], [6, 60.5], [-8, 59], [-20.5, 59.5]]);
+    shape(q, sleeve, "indigo", 1.3, "ink", 2, 2);
+    q.setLineDash([2.2, 2]); ST.line(q, pSmooth([[-16, 46.5], [-2, 44.8], [14.5, 45.6]], true), 0.9, "paper"); q.setLineDash([]);
+  }), X, Y, a, s);
+}
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch ----------
 const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
 function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
 function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
@@ -337,51 +472,52 @@ function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s
 function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
 const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
 function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
-function shakeOffset(maxPx) {
-  const a = Juice.trauma * Juice.trauma * maxPx * (Juice.reduce ? 0.3 : 1);
-  return a < 0.5 ? { x: 0, y: 0 } : { x: Math.round(vnoise(Juice.t * 24) * a), y: Math.round(vnoise(Juice.t * 24 + 57.3) * a) };
+function shakeOffset(max) { // logical px
+  const a = Juice.trauma * Juice.trauma * max * (Juice.reduce ? 0.3 : 1);
+  return a < 0.05 ? { x: 0, y: 0 } : { x: vnoise(Juice.t * 24) * a, y: vnoise(Juice.t * 24 + 57.3) * a };
 }
 function zoomNow(now) {
   const z = Juice.zoom; if (!z) return null;
   const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
   return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
 }
-const PARTS = [], PART_MAX = 300;
-function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "w", kind: "dot", s: 1 }, o)); }
-function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random() * 0.8), life = 0.45 + Math.random() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 300, life, max: life }, o)); } }
+
+// ---------- particles: a capped pool of small turning shapes (dot, chip, spark, star) ----------
+const PARTS = [], PART_MAX = 300, rnd = () => Math.random(); // looked up on each call, so tools can seed it
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "paper", kind: "dot", s: 2, rot: 0, vr: 0 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.4 + rnd() * 0.8), life = 0.45 + rnd() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 600, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 14 }, o)); } }
 function partsStep(dt) {
   for (let i = PARTS.length - 1; i >= 0; i--) {
     const p = PARTS[i]; p.life -= dt;
     if (p.life <= 0) { PARTS.splice(i, 1); continue; }
-    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    if (p.kind === "steam") p.vx += Math.sin(p.life * 4 + p.y) * 6 * dt;
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
   }
 }
-function partsDraw(now) {
+function partsDraw(x) {
+  const m = x.getTransform(); x.lineWidth = 0.6; x.strokeStyle = C("ink");
   for (const p of PARTS) {
-    const a = p.life / p.max, x = fl(p.x), y = fl(p.y);
-    if (p.kind === "steam") { const s = a > 0.6 ? 3 : a > 0.3 ? 2 : 1; if (a > 0.45) R(x, y, s, s, p.col); else D(x, y, s, s, null, p.col, 8); }
-    else if (p.kind === "spr") { if (a > 0.3 || (fl(now / 50) & 1)) spr(p.spr, x - (p.spr.width >> 1), y - (p.spr.height >> 1)); }
-    else if (p.kind === "drop") R(x, y, 1, 2, p.col);
-    else R(x, y, p.s, p.s, p.col);
+    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind;
+    const q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
+      : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+    x.setTransform(m); x.translate(p.x, p.y); x.rotate(p.rot); x.fillStyle = C(p.col); x.fill(q);
+    if (k !== "dot" && s > 2) x.stroke(q);
   }
+  x.setTransform(m);
 }
 
 // ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
 const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
 function auBuild(ctx) {
-  const comp = ctx.createDynamicsCompressor();
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; }, comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
-  const master = ctx.createGain(); master.gain.value = AU.muted ? 0 : AU.vol;
+  const master = g(AU.muted ? 0 : AU.vol), sfx = g(0.8), music = g(0.75);
   master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
-  const sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
-  const music = ctx.createGain(); music.gain.value = 0.75; music.connect(master);
-  // one shared echo send, so dry voices sit in a small room: music fully, sfx at a lower level
-  const echo = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), sendS = ctx.createGain();
-  echo.delayTime.value = 0.15; fb.gain.value = 0.3; wet.gain.value = 0.16; sendS.gain.value = 0.45;
-  echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(sendS); sendS.connect(echo);
+  sfx.connect(master); music.connect(master);
+  // one shared echo, so dry voices sit in a small room: music fully, sfx through a lower send
+  const echo = ctx.createDelay(1), fb = g(0.3), wet = g(0.16), send = g(0.45);
+  echo.delayTime.value = 0.15; echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(send); send.connect(echo);
   const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
   Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
 }
 function auInit() {
@@ -400,16 +536,16 @@ function auUnlock() {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
 }
 function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
-function auDuck(node, depth, back) { if (!node || !AU.ctx) return; const t = AU.ctx.currentTime, gn = node.gain; gn.cancelScheduledValues(t); gn.setTargetAtTime(depth, t, 0.02); gn.setTargetAtTime(1, t + 0.2, back || 0.4); }
 const cents = c => Math.pow(2, c / 1200);
-function vary(c, gv) { return { f: cents((Math.random() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (Math.random() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
-// one oscillator voice: starts and ends at silence, always has stop() scheduled; square/saw go through a lowpass
+function vary(c, gv) { return { f: cents((rnd() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (rnd() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// envelope from silence to peak and back to silence (the default gain of 1 would leak a click)
+function env(gn, peak, when, att, dur) { gn.gain.value = 0; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + att); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur); }
+// one oscillator voice with stop() always scheduled; square and saw go through a lowpass
 function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
   const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
-  gn.gain.value = 0; // silent until its envelope starts (the default gain of 1 would leak a click)
   o.type = type; o.frequency.setValueAtTime(f0, when);
   if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
-  gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + (att || 0.004)); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  env(gn, peak, when, att || 0.004, dur);
   let head = o;
   if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
   head.connect(gn); gn.connect(dest || AU.sfx);
@@ -417,15 +553,14 @@ function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
 }
 function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
   const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
-  gn.gain.value = 0;
-  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when);
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when); f.Q.value = q;
   if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
-  f.Q.value = q; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + 0.002); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  env(gn, peak, when, 0.002, dur);
   s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
-  s.start(when, Math.random() * 0.5); s.stop(when + dur + 0.05);
+  s.start(when, rnd() * 0.5); s.stop(when + dur + 0.05);
 }
-// Fire some voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak
-// sample (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+// Fire voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak sample
+// (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
 async function auPeak(fire, sec) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
   const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
@@ -436,8 +571,7 @@ async function auPeak(fire, sec) {
   return p;
 }
 
-// ---------- tap hint: an animated finger at the input target, per player (not per run) ----------
-// shown until the first success; comes back after two quick deaths (< 5 s); works when storage is blocked
+// ---------- tap hint per player: shown until the first success, back after two quick deaths (< 5 s) ----------
 function makeHint(store, key) {
   let quick = 0;
   return {
@@ -447,30 +581,29 @@ function makeHint(store, key) {
     runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
   };
 }
-let FINGER_C = null;
-function drawTapHint(x, y, k) { // (x, y) = fingertip; k = 0 when a tap would succeed now .. 1 far from it
-  if (!FINGER_C) FINGER_C = mk(FINGER);
-  const lift = Math.round(clamp(k, 0, 1) * 6);
-  if (k < 0.3) { const r = 4 + fl((0.3 - k) * 40); ring(x, y + 1, r + 1, fl(r / 2) + 1, r, fl(r / 2), "w"); }
-  spr(FINGER_C, x - 3, y - FINGER_C.height - lift + 1);
+function drawTapHint(x, X, Y, k) { // (X, Y) = where to press; k = 0 when a press would succeed now .. 1 far from it
+  if (k < 0.3) { const r = 10 + (0.3 - k) * 70; cordLine(x, pEll(X, Y, r, r * 0.4), 2, "paper", 0.7); }   // an inked paper ring
+  hand(x, X, Y + 10 + clamp(k, 0, 1) * 14, 0);
 }
-// ==== PIXEL KIT END ====
+// ==== ART KIT END ====
 
 // =====================================================================================================
-// 連鎖花火 / Hanabi Chain (w05). One spark per volley: light it in the night sky and let the shells chain.
-// Logic runs on a fixed 1/120 s step, so a run replays the same at any frame rate (bar 1.10.2).
+// 連鎖花火 / Hanabi Chain (w05). One spark per volley: light it in the evening sky and let the shells chain.
+// Logic runs on a fixed 1/120 s step in its own 180 x 320 game units, so a run replays the same at any frame
+// rate (bar 1.10.2). The art draws that field at 2x into the kit's 360 x 640 scene.
 // =====================================================================================================
 
-// ---------- identity, scene, tuning ----------
+// ---------- GAME-SPECIFIC: identity, scene size, tuning ----------
 const SLUG = "hanabi-chain", WEEK = 5;
-const CW = 180, CH = 320;          // the core 9:16 scene in buffer px (STYLE.md 2)
+const CW = 180, CH = 320;          // the play field in game units (what the rules, the planner and the AI use)
+const SW = 360, SH = 640, GU = 2;  // the core 9:16 scene in logical px (STYLE.md 2); one game unit = 2 logical px
+useStyle("B");                     // the house style 「墨と和紙」
 const DEMO = /[?&]demo=1(&|$)/.test(location.search);
 const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 const finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
 Juice.reduce = reduceMotion;
 const store = makeStore(SLUG + "-");
 AU.vol = 0.5; // headroom: a gold, a full chain and tamaya over the music stay under 1.0
-const TAU = Math.PI * 2;
 const TITLE_JA = "連鎖花火", TITLE_EN = "HANABI CHAIN", CREDIT = "Made with Claude";
 
 const HORIZON = 238, RIVER_Y = 241, LAUNCH_Y = 246, BANK_Y = 266, SKY_MAX = 234;
@@ -529,7 +662,6 @@ const MISSIONS = [
   { k: "score", n: 1800 }, { k: "stars", n: 30 }, { k: "volley", n: 20 }, { k: "chain", n: 18 }, { k: "all", n: 6 },
   { k: "score", n: 4000 }, { k: "volley", n: 26 }, { k: "chain", n: 22 }, { k: "stars", n: 60 }, { k: "score", n: 8000 }
 ];
-
 // ---------- strings (every visible text, ja first, en is its translation) ----------
 const STRINGS = {
   ja: {
@@ -566,62 +698,10 @@ const STRINGS = {
 let lang = store.get("lang", null);
 if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
 const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; return n == null || typeof v !== "string" ? v : v.replace("{n}", n); };
-
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
-const wrap = $("wrap"), cv = $("cv"), uiEl = $("ui"), ctx = cv.getContext("2d");
+const wrap = $("wrap"), cv = $("cv"), ctx = cv.getContext("2d", { alpha: false });
 const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
-
-// ---------- sprites (char maps, one palette letter per pixel; every one is inked with k) ----------
-const SH_PEONY = [".kkk.", "kyqyk", "kyyak", "kyaak", ".kkk."];
-const SH_WILLOW = [".kkk.", "kaqak", "kaaak", "kYaYk", ".kYk.", "..k.."];
-const SH_CROSS = ["..kkk..", "..kwk..", "kkklkkk", "kwlqlwk", "kkklkkk", "..kwk..", "..kkk.."];
-const SH_RING = ["..kkk..", ".khhhk.", "khkkkhk", "khk.khk", "khkkkhk", ".khhhk.", "..kkk.."];
-const SH_GOLD = ["..kkk..", ".kyqyk.", "kyqwqyk", "kyyqyyk", "kYyyyYk", ".kYYYk.", "..kkk.."];
-const SH_DUD = [".kkk.", "kemek", "kkkkk", "keeek", ".kkk."];
-const LANTERN = ["..kkkkk..", ".kDDDDDk.", "krrrrrrrk", "kRRRRRRRk", "krrraarrk", "krrayarrk", "kRRaaaRRk", "krrrarrrk", "kRRRRRRRk", "krrrrrrrk", ".kDDDDDk.", "..kkkkk..", "....k...."];
-const MOON = ["...kkk...", ".kkqqqk..", ".kqqmk...", "kqqmk....", "kqqmk....", "kqqmk....", ".kqqmk...", ".kkqqqk..", "...kkk..."];
-const STAR = ["..k..", ".kyk.", "kyqyk", ".kyk.", "..k.."];
-// the hanabishi (fireworks master): big head, a red hachimaki knotted on one side, an indigo happi coat
-const MASTER = [
-  "....kkkkk.....", "...kDDDDDk....", "..kDDDDDDDk...", "..krrrrrrrkrk.", "..kffffffffkrk", "..kfkffffkfk..", "..kffffffffk..",
-  "..kFffRRfffk..", "...kFfffffk...", "....kkkkkk....", "...kbwbbbwbk..", "..kbbbwbwbbbk.", "..kbbbbwbbbbk.", "..kbbbbbbbbbk.",
-  "...kRRRRRRRk..", "...knnnknnnk..", "...knnk.knnk..", "...kkkk.kkkk.."
-];
-const MASTER_SAD = MASTER.slice(); MASTER_SAD[5] = "..kffffffffk.."; MASTER_SAD[6] = "..kfkkffkkfk.."; MASTER_SAD[7] = "..kFfffffffk..";
-const MASTER_JOY = MASTER.slice(); MASTER_JOY[5] = "..kfkkffkkfk.."; MASTER_JOY[7] = "..kFfRRRRffk..";
-// crowd silhouettes: x is the rim light (it takes the colour of the latest big burst)
-const CROWD = [
-  ["...xxxx...", "..xkkkkx..", ".xkkkkkkx.", ".xkkkkkkx.", ".xkkkkkkx.", "..xkkkkx..", "...kkkk...", ".xxkkkkxx.", "xkkkkkkkkx", "kkkkkkkkkk", "kkkkkkkkkk", "kkkkkkkkkk", "kkkkkkkkkk"],
-  ["....xx......", "...xkkx.....", "..xxkkxx....", ".xkkkkkkx...", ".xkkkkkkkx..", ".xkkkkkkkx..", "..xkkkkkx...", "...xkkkx....", "..xkkkkkxx..", ".xkkkkkkkkx.", "xkkkkkkkkkkx", "kkkkkkkkkkkk", "kkkkkkkkkkkk"],
-  ["...xxx....", "..xkkkx...", "..xkkkx...", "..xkkkx...", ".xxkkkxx..", "xkkkkkkkx.", "xkkxxxkkx.", "kkxkkkxkk.", ".xkkkkkkx.", ".xkkkkkkx.", ".xkkkkkkx.", "..xkkkkx..", ".xkkkkkkkx", "xkkkkkkkkk", "kkkkkkkkkk", "kkkkkkkkkk", "kkkkkkkkkk"],
-  [".......xxx.", "......xkkkx", "......xkkkx", "..xxx..xkx.", ".xkkkx..k..", "xkkkkkx.k..", "xkkkkkx.k..", "xkkkkkx.k..", ".xkkkx..k..", "..kkk..xk..", ".xkkkxxkk..", "xkkkkkkkk..", "kkkkkkkkk..", "kkkkkkkk...", "kkkkkkkk..."]
-];
-// signature words: hand-placed brush glyphs for the title, drawn with inkArt at x2 (STYLE.md 6)
-const KANJI = {
-  "連": [".#.......#.....", "..#..#########.", ".........#.....", "......#######..", "###...#..#..#..", "..#...#######..", "..#...#..#..#..", "..#...#######..",
-    "..#......#.....", "..#..#########.", "..#......#.....", ".##......#.....", "#..#...........", "....#######....", "...........####"],
-  "鎖": ["...#.......#...", "..#.#..#...#..#", ".#...#..#..#.#.", "#.....#........", ".#####..#######", "...#....#.....#", ".#####..#######", "...#....#.....#",
-    ".#.#.#..#######", "..###...#.....#", "...#....#.....#", "#######.#.....#", ".......#......#", "......#.....##.", "..............."],
-  "花": ["....#.....#....", "###############", "....#.....#....", "...............", ".....#.....#...", "....#......#...", "...##......#..#", "..#.#......#.#.",
-    ".#..#......##..", "....#.....##...", "....#....#.#...", "....#......#...", "....#......#..#", "....#......#..#", "....#.......##."],
-  "火": [".......#.......", ".......#.......", "..#....#....#..", "..#....#...#...", "...#...#..#....", "...#...#.......", ".......#.......", "......#.#......",
-    "......#.#......", ".....#...#.....", ".....#...#.....", "....#.....#....", "...#.......#...", "..#.........#..", "##...........##"]
-};
-// the stamp words, hand-placed like the title (STYLE.md 6)
-const STAMP_ART = {"全":[".......#.......","......#.#......",".....#...#.....","....#.....#....","..##.......##..","##...........##","...#########...",".......#.......",".......#.......","....#######....",".......#.......",".......#.......",".......#.......","..###########..","..............."],"部":["...#....####...",".#####..#...#..","..#.#...#..#...","..#.#...#.#....","#######.#..#...","........#...#..",".#####..#...#..",".#...#..#..#...",".#...#..#.#....",".#...#..#......",".#####..#......","........#......","........#......","........#......","..............."],"た":["....#..........","....#..........",".########......","....#..........","...#...######..","...#...........","..#............","..#............",".#......#......",".#......#......","#........#.....","#.........####.","..............."],"ま":["......#........",".###########...","......#........","......#........","..#########....","......#........","......#........","...#####.......","..#....##......","..#....#.#.....","...####...##...",".............#.","..............."],"や":["..........#....","..#........#...","..#..#####.....","..##.......#...","..#.#.......#..","....#.......#..","....#......#...","....#...###....",".....#.........",".....#.........","......#........","......#........","..............."],"!":[".##",".##",".##",".##",".#.",".#.","...",".##",".##"]};
-const SP = {};
-function buildSprites() {
-  SP.shell = { peony: mk(SH_PEONY), willow: mk(SH_WILLOW), cross: mk(SH_CROSS), ring: mk(SH_RING), gold: mk(SH_GOLD), dud: mk(SH_DUD) };
-  SP.lit = { peony: mk(SH_PEONY, { y: "w", a: "q" }), willow: mk(SH_WILLOW, { a: "q", Y: "y" }), cross: mk(SH_CROSS, { l: "w" }), ring: mk(SH_RING, { h: "w" }), gold: mk(SH_GOLD, { y: "w", Y: "q" }), dud: mk(SH_DUD, { e: "m" }) };
-  // past the apex a shell dims a step: the sky shows that the best moment has gone by
-  SP.fall = { peony: mk(SH_PEONY, { y: "a", q: "y" }), willow: mk(SH_WILLOW, { q: "a", Y: "a" }), cross: mk(SH_CROSS, { w: "m", q: "m" }), ring: mk(SH_RING, { h: "r" }), gold: mk(SH_GOLD, { q: "y", w: "q" }), dud: SP.shell.dud };
-  SP.lantern = mk(LANTERN); SP.lanternOff = mk(LANTERN, { r: "e", R: "k", a: "e", y: "e", D: "k" }); SP.lanternDim = mk(LANTERN, { r: "R", a: "r", y: "a" });
-  SP.moon = mk(MOON); SP.star = mk(STAR); SP.pointer = mk(POINTER);
-  SP.master = mk(MASTER); SP.masterSad = mk(MASTER_SAD); SP.masterJoy = mk(MASTER_JOY);
-  SP.crowd = {};
-  for (const rim of ["n", "b", "y", "h", "l", "s", "a", "q"]) SP.crowd[rim] = CROWD.map(m => mk(m, { x: rim }));
-}
 
 // ---------- state ----------
 // title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
@@ -637,7 +717,7 @@ function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop")
 const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its one-shot sounds to itself
 const aim = { held: false, id: null, x: 90, y: 160, kx: 90, ky: 165, key: false, hover: false, hx: 90, hy: 160, keys: {}, moved: false };
 
-function newFx() { return { vt: 0, pose: "idle", poseT: -9, call: null, scoreT: -9, chainT: -9, disp: 0, rim: "n", rimT: -9, cheerT: -9, stamp: null, flash: [], glow: null, lostT: -9, lostI: -1, relitT: -9, refuse: null, puffs: [], zones: [], pauseT: 0 }; }
+function newFx() { return { vt: 0, pose: "idle", poseT: -9, call: null, scoreT: -9, chainT: -9, disp: 0, rim: "far", rimT: -9, cheerT: -9, stamp: null, flash: [], glow: null, lostT: -9, lostI: -1, relitT: -9, refuse: null, puffs: [], zones: [], pauseT: 0 }; }
 function newRun(mode, seed) {
   run = {
     mode, ai: mode !== "play", seed, rAI: seeded((seed ^ 0x5bd1e995) >>> 0), t: 0, gt: 0, acc: 0,
@@ -651,7 +731,6 @@ function newRun(mode, seed) {
   if (mode === "play") { hint.begin(); run.hintRun = hint.active; }
   musicLevel(mode === "attract" ? "title" : "play");
 }
-
 // ---------- simulation core: shells fly on analytic arcs, so a whole chain can be simulated ahead ----------
 const shellX = (s, t) => { const a = t - s.tl; return s.x0 + s.vx * a + 0.5 * s.w * a * a; };
 const shellY = (s, t) => { const a = t - s.tl; return s.y0 + s.vy * a + 0.5 * s.g * a * a; };
@@ -730,46 +809,46 @@ function sparkCatch(s, x, y, t0) {
 }
 
 // ---------- volleys: formations by apex point and time, then launch arcs from the river ----------
-let SPR = 1; // formation spread of the volley being built (phase table "sp"): later gaps need willow, ring or timing to bridge
+let SPREAD = 1; // formation spread of the volley being built (phase table "sp"): later gaps need willow, ring or timing to bridge
 const pick = (r, arr) => arr[Math.min(arr.length - 1, fl(r() * arr.length))];
 const FORMS = {
-  cluster(r, k) { const cx = 55 + r() * 70, cy = 140 + r() * 55, o = []; for (let i = 0; i < k; i++) o.push({ x: cx + gauss(r, 0, 12 * SPR), y: cy + gauss(r, 0, 9 * SPR), at: gauss(r, 0, 0.07 * SPR) }); return o; },
+  cluster(r, k) { const cx = 55 + r() * 70, cy = 140 + r() * 55, o = []; for (let i = 0; i < k; i++) o.push({ x: cx + gauss(r, 0, 12 * SPREAD), y: cy + gauss(r, 0, 9 * SPREAD), at: gauss(r, 0, 0.07 * SPREAD) }); return o; },
   line(r, k) {
-    const sp = (15 + r() * 3) * SPR, w = Math.min(160, sp * (k - 1)), x0 = 90 - w / 2 + (r() - 0.5) * Math.max(0, 150 - w), y = 128 + r() * 70, tilt = (r() - 0.5) * 36, d = r() < 0.5, o = [];
+    const sp = (15 + r() * 3) * SPREAD, w = Math.min(160, sp * (k - 1)), x0 = 90 - w / 2 + (r() - 0.5) * Math.max(0, 150 - w), y = 128 + r() * 70, tilt = (r() - 0.5) * 36, d = r() < 0.5, o = [];
     for (let i = 0; i < k; i++) { const f = k > 1 ? i / (k - 1) : 0; o.push({ x: x0 + w * f + gauss(r, 0, 1.5), y: y + tilt * (f - 0.5) + gauss(r, 0, 2.5), at: (d ? f : 1 - f) * 0.45 }); }
     return o;
   },
   arc(r, k) {
-    const rr = Math.min(70, Math.max(26, (k - 1) * 15.5 * SPR / Math.PI)), cx = 90 + (r() - 0.5) * 30, cy = 128 + r() * 35, frown = r() < 0.4, o = [];
+    const rr = Math.min(70, Math.max(26, (k - 1) * 15.5 * SPREAD / Math.PI)), cx = 90 + (r() - 0.5) * 30, cy = 128 + r() * 35, frown = r() < 0.4, o = [];
     for (let i = 0; i < k; i++) { const f = k > 1 ? i / (k - 1) : 0, a = Math.PI * f; o.push({ x: cx - Math.cos(a) * rr, y: cy + (frown ? -1 : 1) * Math.sin(a) * rr * 0.7 + (frown ? 40 : 0), at: f * 0.35 }); }
     return o;
   },
   vee(r, k) {
     const cx = 65 + r() * 50, ty = 196 + r() * 12, o = [];
-    for (let i = 0; i < k; i++) { const side = i % 2 ? 1 : -1, j = (i + 1) >> 1; o.push({ x: cx + side * j * 11 * SPR + gauss(r, 0, 1.5), y: ty - j * 12 * SPR + gauss(r, 0, 1.5), at: j * 0.12 }); }
+    for (let i = 0; i < k; i++) { const side = i % 2 ? 1 : -1, j = (i + 1) >> 1; o.push({ x: cx + side * j * 11 * SPREAD + gauss(r, 0, 1.5), y: ty - j * 12 * SPREAD + gauss(r, 0, 1.5), at: j * 0.12 }); }
     return o;
   },
   groups(r, k) {
     const ya = 140 + r() * 50, yb = 140 + r() * 50, o = [];
-    for (let i = 0; i < k; i++) { const L = i % 2 === 0; o.push({ x: (L ? 44 : 136) + gauss(r, 0, 8 * SPR), y: (L ? ya : yb) + gauss(r, 0, 7 * SPR), at: gauss(r, 0, 0.06) + (L ? 0 : 0.25) }); }
+    for (let i = 0; i < k; i++) { const L = i % 2 === 0; o.push({ x: (L ? 44 : 136) + gauss(r, 0, 8 * SPREAD), y: (L ? ya : yb) + gauss(r, 0, 7 * SPREAD), at: gauss(r, 0, 0.06) + (L ? 0 : 0.25) }); }
     return o;
   },
   waves(r, k) {
     const cx = 60 + r() * 60, cy = 135 + r() * 30, side = r() < 0.5 ? -1 : 1, n1 = Math.ceil(k * 0.5), o = [];
     for (let i = 0; i < k; i++) {
       const first = i < n1;
-      o.push({ x: cx + (first ? 0 : side * 14 * SPR) + gauss(r, 0, (first ? 9 : 10) * SPR), y: cy + (first ? 0 : 26 * SPR) + gauss(r, 0, 6 * SPR), at: first ? gauss(r, 0, 0.05) : 0.85 + gauss(r, 0, 0.08), wave: first ? 1 : 2 });
+      o.push({ x: cx + (first ? 0 : side * 14 * SPREAD) + gauss(r, 0, (first ? 9 : 10) * SPREAD), y: cy + (first ? 0 : 26 * SPREAD) + gauss(r, 0, 6 * SPREAD), at: first ? gauss(r, 0, 0.05) : 0.85 + gauss(r, 0, 0.08), wave: first ? 1 : 2 });
     }
     return o;
   },
   circle(r, k) {
     const cx = 72 + r() * 36, cy = 150 + r() * 32, o = [{ x: cx, y: cy, at: 0, type: "ring" }], m = k - 1, a0 = r() * TAU;
-    for (let i = 0; i < m; i++) { const a = a0 + i * TAU / m, rr = R_RING + (r() - 0.5) * 4 * SPR; o.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr * 0.92, at: 0.05 + gauss(r, 0, 0.03) }); }
+    for (let i = 0; i < m; i++) { const a = a0 + i * TAU / m, rr = R_RING + (r() - 0.5) * 4 * SPREAD; o.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr * 0.92, at: 0.05 + gauss(r, 0, 0.03) }); }
     return o;
   },
   column(r, k) {
     const x = 50 + r() * 80, o = [];
-    for (let i = 0; i < k; i++) o.push({ x: x + gauss(r, 0, 3 * SPR) + (i % 2 ? 5 : -5) * SPR, y: 118 + i * Math.min(15 * SPR, 95 / Math.max(1, k - 1)), at: i * 0.03 });
+    for (let i = 0; i < k; i++) o.push({ x: x + gauss(r, 0, 3 * SPREAD) + (i % 2 ? 5 : -5) * SPREAD, y: 118 + i * Math.min(15 * SPREAD, 95 / Math.max(1, k - 1)), at: i * 0.03 });
     return o;
   },
   // showcase volleys that bring in a shell type (one per run, forgiving) and the demo's authored volleys
@@ -797,7 +876,7 @@ function weighted(r, w) { let tot = 0; for (const k in w) tot += w[k]; let v = r
 function buildVolley(n, r, ph, intro, form, soft) {
   const k = ph.n[0] + fl(r() * (ph.n[1] - ph.n[0] + 1));
   const fname = form || (intro ? "i" + intro[0].toUpperCase() + intro.slice(1) : pick(r, ph.forms.filter(f => f !== "circle" || ph.types.ring)));
-  SPR = form ? 1.05 : intro ? 1 : ph.sp;
+  SPREAD = form ? 1.05 : intro ? 1 : ph.sp;
   let pts = FORMS[fname](r, k);
   if (!form && !intro && !ph.grace && !soft && fname !== "groups" && r() < 0.8) { // the bunch seldom sits mid-sky: reading the sky beats tapping the middle
     let mx = 0, lo = 1e9, hi = -1e9; for (const p of pts) { mx += p.x; lo = Math.min(lo, p.x); hi = Math.max(hi, p.x); } mx /= pts.length;
@@ -1091,19 +1170,18 @@ function afterFreeze() { if (run.lanterns > 0) startVolley(-0.05); }
 function kill() {
   const r = run, now = T();
   r.dead = { reason: r.cause ? r.cause.kind : "short", at: now };
-  const f = r.lastFail; if (f && f.line) zoomPunch(f.line.x1 + PX.cx0, f.line.y1 + PX.cy0 - WY, 1.05, 450, now); // the camera leans toward the shell that was not reached
+  const f = r.lastFail; if (f && f.line) zoomPunch(f.line.x1 * GU, f.line.y1 * GU - WYL, 1.05, 450, now); // the camera leans toward the shell that was not reached
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (r.mode === "play") { pfStop(); hint.runEnded((now - r.startAt) / 1000); }
   if (loud()) sfx.over();
   musicLevel("duck"); pose("sad");
 }
-
 // ---------- particles: a ring buffer that recycles the oldest (bar 1.10.5); colours step through palette sets ----------
 const PN = 1100;
 const pX = new Float32Array(PN), pY = new Float32Array(PN), pVX = new Float32Array(PN), pVY = new Float32Array(PN), pL = new Float32Array(PN), pM = new Float32Array(PN), pD = new Float32Array(PN), pG = new Float32Array(PN);
 const pC = new Uint8Array(PN), pS = new Uint8Array(PN), pF = new Uint8Array(PN);
 let pHead = 0, pLive = 0;
-const CSET = [["q", "y", "a", "R"], ["w", "h", "r", "R"], ["w", "l", "g", "G"], ["w", "s", "b", "n"], ["w", "q", "m", "e"], ["q", "a", "Y", "D"], ["m", "e", "e", "D"], ["q", "r", "R", "D"], ["w", "s", "p", "c"]];
+const CSET = [["goldL", "gold", "orange", "mist"], ["paper", "redL", "red", "mist"], ["paper", "mint", "mint", "sky3"], ["paper", "paper", "paperD", "sky3"], ["paper", "goldL", "paperD", "sky3"], ["goldL", "orange", "gold", "mist"], ["paperD", "grey", "greyD", "greyD"], ["goldL", "red", "red", "mist"], ["paper", "paperD", "sky3", "sky3"]]; // the last step sinks into the sky
 const C_GOLD = 0, C_PINK = 1, C_MINT = 2, C_BLUE = 3, C_WHITE = 4, C_AMBER = 5, C_GREY = 6, C_RED = 7, C_SILVER = 8;
 function pReset() { pL.fill(0); pLive = 0; }
 function emit(x, y, vx, vy, life, cs, size, drag, grav, flags) {
@@ -1129,61 +1207,29 @@ function pStep(dt) {
   pLive = n;
   for (let i = fx.puffs.length - 1; i >= 0; i--) { const s = fx.puffs[i]; s.life -= dt; if (s.life <= 0) { fx.puffs.splice(i, 1); continue; } s.x += (s.vx + wind * 0.3) * dt; s.y += s.vy * dt; }
 }
-const BK = {}, BT = {}; for (const k in PAL) { BK[k] = new Int16Array(PN); BT[k] = new Int16Array(PN); }
-const BN = {}, BM = {};
-function pDraw(vt) {
-  for (const k in PAL) BN[k] = BM[k] = 0;
-  const tw = fl(vt / 60);
-  for (let i = 0; i < PN; i++) {
-    if (pL[i] <= 0) continue;
-    const a = 1 - pL[i] / pM[i], st = a < 0.15 ? 0 : a < 0.5 ? 1 : a < 0.8 ? 2 : 3;
-    if ((pF[i] & 1) && st >= 2 && ((i + tw) & 3) === 0) continue; // crackle: late sparks twinkle
-    const c = CSET[pC[i]][st];
-    BK[c][BN[c]++] = i;
-    if ((pF[i] & 4) && st < 3) { const t = CSET[pC[i]][st + 1]; BT[t][BM[t]++] = i; } // stars streak: a dot behind each one
-  }
-  for (const c in BM) {
-    const m = BM[c]; if (!m) continue;
-    g.fillStyle = PAL[c]; const b = BT[c];
-    for (let j = 0; j < m; j++) { const i = b[j]; g.fillRect(fl(pX[i] - pVX[i] * 0.04), fl(pY[i] - pVY[i] * 0.04), 1, 1); }
-  }
-  for (const c in BN) {
-    const m = BN[c]; if (!m) continue;
-    g.fillStyle = PAL[c]; const b = BK[c];
-    for (let j = 0; j < m; j++) { const i = b[j], s = pS[i] > 1 && pL[i] / pM[i] < 0.35 ? 1 : pS[i]; g.fillRect(fl(pX[i]), fl(pY[i]), s, s); }
-  }
-}
-// river reflections: every third bright particle, squashed into the water band
-function pReflect() {
-  for (const c of ["q", "y", "w", "h", "l", "s", "a"]) {
-    const m = BN[c]; if (!m) continue;
-    g.fillStyle = PAL[c]; const b = BK[c];
-    for (let j = 0; j < m; j += 3) { const i = b[j], y = pY[i]; if (y > HORIZON - 4) continue; const ry = RIVER_Y + 3 + fl((HORIZON - y) * 0.09); if (ry < BANK_Y - 2 && (ry & 1)) g.fillRect(fl(pX[i]), ry, 1, 1); }
-  }
-}
-function puff(x, y, n, size, col) { for (let i = 0; i < n && fx.puffs.length < 50; i++) fx.puffs.push({ x: x + (Math.random() - 0.5) * size, y: y + (Math.random() - 0.5) * size, vx: (Math.random() - 0.5) * 6, vy: -3 - Math.random() * 5, life: 1.6 + Math.random(), max: 2.6, s: 2 + fl(Math.random() * 3), col: col || "e" }); }
+function puff(x, y, n, size, col) { for (let i = 0; i < n && fx.puffs.length < 50; i++) fx.puffs.push({ x: x + (Math.random() - 0.5) * size, y: y + (Math.random() - 0.5) * size, vx: (Math.random() - 0.5) * 6, vy: -3 - Math.random() * 5, life: 1.6 + Math.random(), max: 2.6, s: 2 + fl(Math.random() * 3), col: col || "sky3", k: fl(Math.random() * 3) }); }
 
 // ---------- effects for each event (particles, reach rings, sounds start in the same step: bar 1.2.6) ----------
-function zone(kind, x, y, r, col, life, delay, band) { fx.zones.push({ kind, x, y, r, col, life: col === "w" ? life : Math.min(life, 0.15), t0: run.gt + (delay || 0), band: band || 0 }); if (fx.zones.length > 40) fx.zones.shift(); }
+function zone(kind, x, y, r, col, life, delay, band, spark) { fx.zones.push({ kind, x, y, r, col, spark: !!spark, life: spark ? life : Math.min(life, 0.15), t0: run.gt + (delay || 0), band: band || 0 }); if (fx.zones.length > 40) fx.zones.shift(); }
 function onLaunch(s) {
   for (let i = 0; i < 4; i++) emit(s.x0 + (Math.random() - 0.5) * 3, s.y0 - 2, (Math.random() - 0.5) * 14, -10 - Math.random() * 14, 0.35, C_AMBER, 1, 3, -10, 0);
   if (loud() && run.vol.shells.indexOf(s) % 2 === 0) sfx.launch();
 }
 function sparkFx(x, y) {
   radial(x, y, 22, 90, 0.4, C_WHITE, 1, 3.5, 10, 1, 0.5);
-  zone(0, x, y, SPARK_R, "w", SPARK_LIFE);
+  zone(0, x, y, SPARK_R, "paper", SPARK_LIFE, 0, 0, true);
   fx.spark = { x, y, gt: run.gt };
 }
 function burstFx(sh, ev) {
   const x = ev.x, y = ev.y, sc = ev.sc, big = ev.n >= 10, gm = 1 + 0.03 * Math.min(ev.n, 20); // bursts grow with the chain
   const cs = sh.golden ? C_GOLD : sh.type === "peony" ? [C_GOLD, C_PINK, C_BLUE, C_RED][ev.i % 4] : sh.type === "willow" ? C_AMBER : sh.type === "cross" ? C_MINT : C_PINK;
-  fx.rim = ["y", "h", "s", "a"][[C_GOLD, C_PINK, C_BLUE, C_RED].indexOf(cs)] || (cs === C_MINT ? "l" : cs === C_AMBER ? "a" : "q"); fx.rimT = run.gt;
+  fx.rim = ["gold", "redL", "paper", "orange"][[C_GOLD, C_PINK, C_BLUE, C_RED].indexOf(cs)] || (cs === C_MINT ? "mint" : cs === C_AMBER ? "orange" : "goldL"); fx.rimT = run.gt;
   fx.flash.push({ x: Math.round(x), y: Math.round(y), gt: run.gt, r: big ? 6 : sh.golden ? 5 : 4 }); if (fx.flash.length > 12) fx.flash.shift();
   if (sh.golden) {
     skyGlow(x, y);
     radial(x, y, 70, R_PEONY * sc * 3.1, 1.4, C_GOLD, 2, 2.6, 26, 5, 0.3);
     radial(x, y, 26, 50, 1.8, C_WHITE, 1, 1.4, 20, 1, 0.5);
-    zone(0, x, y, R_PEONY * sc, "y", L_PEONY);
+    zone(0, x, y, R_PEONY * sc, "gold", L_PEONY);
   } else if (sh.type === "peony") {
     radial(x, y, 32 * gm, R_PEONY * sc * 2.9 * gm, 1.15, cs, 2, 3, 24, cs === C_BLUE ? 5 : 4);
     radial(x, y, 12, R_PEONY * sc * 1.2, 0.8, C_WHITE, 1, 3, 16, 0);
@@ -1191,26 +1237,26 @@ function burstFx(sh, ev) {
   } else if (sh.type === "willow") {
     radial(x, y, 22 * gm, L_STRAND * sc * 2.6 * gm, 1.6, C_AMBER, 1, 2.2, 22, 3);
     radial(x, y, 8, R_WCORE * sc * 2.2, 0.5, C_WHITE, 1, 3, 10, 0);
-    zone(0, x, y, R_WCORE * sc, "a", L_WCORE);
+    zone(0, x, y, R_WCORE * sc, "orange", L_WCORE);
   } else if (sh.type === "cross") {
     for (let i = 0; i < 4; i++) { const a = sh.spin + Math.PI / 4 + i * Math.PI / 2; emit(x, y, Math.cos(a) * D_CSUB * sc * 5.4, Math.sin(a) * D_CSUB * sc * 5.4, 0.2, C_WHITE, 2, 3, 0, 0); }
     radial(x, y, 10, R_CROSS * sc * 3, 0.35, C_MINT, 1, 3, 10, 0);
-    zone(0, x, y, R_CROSS * sc, "l", L_CROSS);
+    zone(0, x, y, R_CROSS * sc, "mint", L_CROSS);
     for (let i = 0; i < 4; i++) {
       const a = sh.spin + Math.PI / 4 + i * Math.PI / 2, mx = x + Math.cos(a) * D_CSUB * sc, my = y + Math.sin(a) * D_CSUB * sc;
-      zone(0, mx, my, R_CSUB * sc, "l", L_CSUB, 0.18);
+      zone(0, mx, my, R_CSUB * sc, "mint", L_CSUB, 0.18);
       fx.later = fx.later || []; fx.later.push({ gt: run.gt + 0.18, x: mx, y: my, sc, i });
     }
   } else {
     const n = Math.round(36 * gm); for (let i = 0; i < n; i++) { const a = i / n * TAU, v = R_RING * sc * 3.2 * gm; emit(x, y, Math.cos(a) * v, Math.sin(a) * v, 0.9, i % 2 ? C_PINK : C_SILVER, 2, 3.2, 12, 0); }
     radial(x, y, 6, 30, 0.5, C_WHITE, 1, 3, 8, 1);
-    zone(1, x, y, R_RING * sc, "h", L_RING, 0, B_RING * sc);
+    zone(1, x, y, R_RING * sc, "redL", L_RING, 0, B_RING * sc);
   }
   if (ev.n >= 15) radial(x, y, 28, R_PEONY * sc * 4.2, 0.45, C_WHITE, 1, 3.4, 6, 4, 0.05); // a second, white ring from link 15
   if (Math.random() < 0.6) puff(x, y, 2, 14 * sc);
 }
-function dudFx(x, y) { radial(x, y, 10, 30, 0.5, C_GREY, 1, 3, 50, 0); puff(x, y, 4, 10, "e"); fx.dudAt = { x, y, gt: run.gt }; }
-function fizzleFx(x, y) { radial(x, y, 5, 18, 0.35, C_GREY, 1, 3, 40, 1); puff(x, y, 1, 6, "e"); if (loud() && Math.random() < 0.5) sfx.fizzle(); }
+function dudFx(x, y) { radial(x, y, 10, 30, 0.5, C_GREY, 1, 3, 50, 0); puff(x, y, 4, 10, "grey"); fx.dudAt = { x, y, gt: run.gt }; }
+function fizzleFx(x, y) { radial(x, y, 5, 18, 0.35, C_GREY, 1, 3, 40, 1); puff(x, y, 1, 6, "grey"); if (loud() && Math.random() < 0.5) sfx.fizzle(); }
 function laterStep() {
   if (!fx.later) return;
   for (let i = fx.later.length - 1; i >= 0; i--) { const l = fx.later[i]; if (run.gt < l.gt) continue; radial(l.x, l.y, 12, R_CSUB * l.sc * 2.6, 0.75, l.i % 2 ? C_MINT : C_SILVER, 1, 3, 20, l.i % 2 ? 0 : 1); fx.later.splice(i, 1); if (loud()) sfx.pop(); }
@@ -1218,7 +1264,7 @@ function laterStep() {
 function stampWord(key, x, y) { fx.stamp = { key, gt: run.gt, x: clamp(Math.round(x), 50, CW - 50), y: clamp(Math.round(y), 120, 200) }; }
 function pose(p) { fx.pose = p; fx.poseT = run ? run.gt : 0; }
 // the top moments only (full chain, gold, tamaya, the final miss): a 1.05x camera punch and a local sky glow (bar 1.2.7)
-function peakCam(x, y) { zoomPunch(x + PX.cx0, y + PX.cy0 - WY, 1.05, 350, T()); skyGlow(x, y); }
+function peakCam(x, y) { zoomPunch(x * GU, y * GU - WYL, 1.05, 350, T()); skyGlow(x, y); }
 function skyGlow(x, y) { if (!fx.glow || run.gt - fx.glow.gt > 0.34) fx.glow = { x: Math.round(x), y: Math.round(y), gt: run.gt }; } // at most 3 a second
 function duckMusic(d) { if (!AU.music || !loud()) return; const t = AU.ctx.currentTime, gn = AU.music.gain; gn.cancelScheduledValues(t); gn.setTargetAtTime(0.75 * d, t, 0.02); gn.setTargetAtTime(0.75, t + 0.2, 0.3); }
 
@@ -1234,6 +1280,557 @@ function refuse(kind, x, y) {
   radial(clamp(x, 4, CW - 4), clamp(y, 8, SKY_MAX), 6, 22, 0.3, C_GREY, 1, 3, 30, 0);
   call(kind, "e", {});
   if (loud()) sfx.refuse();
+}
+// ---------- GAME-SPECIFIC: where things sit (scene coords; the screen may show more world around the scene) ----------
+// The rules work in 180 x 320 game units; the world is drawn in the 360 x 640 scene, one unit = GU logical px.
+// WYL lifts the world in a portrait ?demo=1 clip, so the bank and the crowd stay above the Shorts caption zone.
+let WYL = 0, BGM = 14, HP = null;
+const vTop = () => -L.y0, vBot = () => L.H - L.y0, vLeft = () => -L.x0, vRight = () => SW + L.x0;
+const sideX = s => s < 0 ? -L.x0 / 2 : SW + L.x0 / 2;                   // the middle of the left (-1) or right (1) side area
+const hudS = () => L.wide ? clamp(L.x0 / 270, L.u, 1.45) : L.u;         // HUD scale: bigger in the side areas
+const hudTop = () => vTop() + (DEMO && !L.wide ? 40 : 0);                // a portrait clip keeps the HUD below the Shorts top bar
+const md = (a, n) => ((a % n) + n) % n;
+const h01 = n => (hash1(n) + 1) / 2;                                     // a stable 0..1 per slot number
+const ropeY = X => hudTop() + 8 + 5 * Math.sin(Math.PI * md(X, 180) / 180); // the straw rope across the top sags between its posts
+const pauseY = () => vTop() + 132, overY = () => DEMO && !L.wide ? hudTop() + 80 : vTop() + (L.wide ? 30 : 58); // a portrait clip hangs the board under the title plank
+const bestOf = () => Number(store.get("best", 0)) || 0, runsOf = () => Number(store.get("runs", 0)) || 0;
+// where the HUD hangs: from the rope at the top in portrait, in the side areas of the world on a wide screen
+function hudPos() {
+  const s = hudS(), T0 = hudTop();
+  if (!L.wide) return { s, lx: 50, lg: 28, ly: T0 + 24, ax: DEMO ? 154 : 176, ay: T0 + 16, rs: s, rx: 54, ry: T0 + 88, cx: 180, cy: T0 + 128, call: [180, T0 + 178] };
+  const lx = sideX(-1), rx = sideX(1), ry = UI.pause ? Math.max(T0 + 34, UI.pause.y + UI.pause.h * L.u + 18) : T0 + 34; // the rack hangs below the system plaques
+  return { s, rs: s * 1.3, lx, lg: 56 * s, ly: T0 + 24, ax: lx, ay: T0 + 30 + 74 * s, rx, ry, cx: rx, cy: 0, call: [180, T0 + 66] };
+}
+
+// ---------- GAME-SPECIFIC: the riverbank at dusk, drawn once per screen size into a cached layer ----------
+// A fireworks evening printed in flat colour: a bright stepped dusk sky with an apricot afterglow over the far hills,
+// the far shore (town, kura, willows, a drum bridge, a fire lookout), the river with the launch barges, the stone
+// embankment. Wide screens go on into the world: a weeping willow and a bench on the left; a stone lantern with its
+// light pool, a moored pleasure boat and a pine on the right. Every repeat is varied by a seeded random.
+let BG = null, CROWD = null;
+function band(x, X0, X1, y, amp, k, col, ink) { // fill under a hand-cut wavy edge; ink = its brush line width
+  const pts = []; for (let X = X0 - 8; X <= X1 + 8; X += 8) pts.push([X, y + Math.sin(X / 41 + k) * amp + Math.sin(X / 14.3 + k * 2.1) * amp * 0.4]);
+  const q = pSmooth(pts, true); q.lineTo(X1 + 9, 4e3); q.lineTo(X0 - 9, 4e3); q.closePath();
+  x.fillStyle = C(col); x.fill(q); if (ink) ST.line(x, pSmooth(pts, true), ink);
+}
+function ridge(x, X0, X1, y, amp, k, col, ink) { // far hills: long soft rises with a few small peaks
+  const pts = [];
+  for (let X = X0 - 12; X <= X1 + 12; X += 10) { const n = Math.sin(X / 97 + k) * 0.55 + Math.sin(X / 37 + k * 1.7) * 0.3 + Math.sin(X / 13 + k * 3) * 0.08; pts.push([X, y - amp * (0.5 + 0.5 * n)]); }
+  const q = pSmooth(pts, true); q.lineTo(X1 + 13, 4e3); q.lineTo(X0 - 13, 4e3); q.closePath();
+  x.fillStyle = C(col); x.fill(q); ST.line(x, pSmooth(pts, true), ink);
+}
+function cloudStreak(x, X, Y, w, n) { // a long evening cloud, darker than the sky, its underside lit by the afterglow
+  const r = seeded(n * 13 + 50), k = 4 + md(n, 3), top = [];
+  for (let i = 0; i <= k; i++) top.push([X + w * i / k, Y - 2 - (3 + 5 * r()) * Math.sin(Math.PI * (0.15 + 0.7 * i / k))]);
+  const p = pSmooth([...top, [X + w + 6, Y + 1], [X + w * 0.6, Y + 3.4], [X + w * 0.2, Y + 2.6], [X - 6, Y + 0.6]]);
+  x.save(); x.translate(0.6, 1.8); x.fillStyle = C("mist"); x.fill(p); x.restore();
+  x.fillStyle = C("sky2"); x.fill(p); ST.line(x, p, 0.6);
+}
+function wisp(x, X, Y, w, n) { // a thin high cloud
+  const r = seeded(n * 7 + 3), p = pSmooth([[X, Y], [X + w * 0.3, Y - 2 - r() * 3], [X + w * 0.7, Y - 1 - r() * 2], [X + w, Y], [X + w * 0.6, Y + 1.6], [X + w * 0.2, Y + 1.4]]);
+  x.fillStyle = C("sky1"); x.fill(p); ST.line(x, p, 0.5, "sky2");
+}
+function farTown(x, X0, X1) { // the far shore: roofs of uneven width, a few pale kura, small lit windows
+  for (let n = Math.floor((X0 - 40) / 23); n * 23 < X1 + 40; n++) {
+    const cx = n * 23 + 8 * hash1(n * 5 + 2), w = 14 + 16 * h01(n * 5 + 3), y = 466 - 9 * h01(n * 5 + 1), kura = h01(n * 5 + 4) < 0.2;
+    if (cx > 6 && cx < 124) continue; // the drum bridge stands here
+    x.fillStyle = C(kura ? "sky3" : "far"); x.fillRect(cx - w / 2, y, w, 480 - y);
+    const t = kura ? 3.4 : 0, roof = pPoly([[cx - w / 2 - 3, y + 2], [cx - w / 2 + 2, y - 3 - t], [cx + w / 2 - 2, y - 3.4 - t], [cx + w / 2 + 3, y + 1.6]]);
+    x.fillStyle = C("mid"); x.fill(roof); ST.line(x, roof, 0.5);
+    if (kura) { x.fillStyle = C("mid"); x.fillRect(cx - 1.5, y + 3, 3, 3); }
+    else if (h01(n * 7) < 0.6) { x.fillStyle = C(h01(n * 11) < 0.5 ? "lit" : "goldL"); x.fillRect(cx - 3 + 5 * h01(n * 13), y + 4, 2.6, 2.2); }
+  }
+}
+function farTree(x, X, Y, h, n) { // a far willow: a trunk and a soft drooping crown in one dark colour
+  const r = seeded(n + 70), p = pSmooth([[X - 2, Y], [X - 1.4, Y - h * 0.5], [X - h * 0.42, Y - h * 0.56], [X - h * 0.36, Y - h * 0.86], [X, Y - h], [X + h * 0.38, Y - h * 0.84], [X + h * 0.46, Y - h * 0.52], [X + 1.6, Y - h * 0.5], [X + 2.2, Y]]);
+  x.fillStyle = C("mid"); x.fill(p); ST.line(x, p, 0.5);
+  for (let i = 0; i < 6; i++) { const sx = X - h * 0.36 + i * h * 0.15 + r() * 2; ST.line(x, pSmooth([[sx, Y - h * 0.6], [sx + 0.6, Y - h * 0.4], [sx - 0.4, Y - h * 0.22 - r() * 4]], true), 0.8, "mid"); }
+}
+function bridge(x, X0, X1, Y) { // a drum bridge on the far shore: a steep arch, rail and posts, tiny lamps and people
+  const top = [], bot = [];
+  for (let i = 0; i <= 24; i++) { const t = i / 24, X = lerp(X0, X1, t), h = Math.pow(Math.sin(t * Math.PI), 0.75) * 24; top.push([X, Y - h]); bot.push([X, Y - h + 4]); }
+  for (const t of [0.2, 0.5, 0.8]) { const X = lerp(X0, X1, t), h = Math.pow(Math.sin(t * Math.PI), 0.75) * 24; ST.line(x, pLine(X, Y - h + 3, X, Y + 5), 1.6, "mid"); }
+  const deck = pPoly(top.concat(bot.slice().reverse())); x.fillStyle = C("mid"); x.fill(deck); ST.line(x, deck, 0.6);
+  ST.line(x, pSmooth(top.map(([X, y]) => [X, y - 6]), true), 0.9, "ink");
+  for (let i = 0; i <= 24; i += 3) { const [X, y] = top[i]; ST.line(x, pLine(X, y, X, y - 6), 0.7); if (i % 6 === 3) { x.fillStyle = C("lit"); x.fill(pEll(X, y - 8.6, 1.5, 1.9)); } }
+  for (const [i, k] of [[7, 0], [10, 1], [16, 2]]) { const [X, y] = top[i], p = pSmooth([[X - 1.8, y], [X - 1.6, y - 5], [X + 1.6, y - 5], [X + 1.8, y]]); p.addPath(pEll(X, y - 6.4, 1.4, 1.5)); if (k === 2) p.addPath(pEll(X + 2.6, y - 8, 1.6, 1.4)); x.fillStyle = C("mid"); x.fill(p); }
+}
+function yagura(x, X, Y) { // a fire lookout on the far shore: splayed legs, cross braces, a ladder, a bell under a roof
+  const top = Y - 76, p = P2();
+  for (const s of [-1, 1]) { p.moveTo(X + s * 10, Y); p.lineTo(X + s * 3.4, top); }
+  for (let i = 0; i < 4; i++) { const y0 = Y - i * 19, y1 = y0 - 19, w0 = 10 - i * 1.65, w1 = 10 - (i + 1) * 1.65; p.moveTo(X - w0, y0); p.lineTo(X + w1, y1); p.moveTo(X + w0, y0); p.lineTo(X - w1, y1); }
+  for (let y = Y - 4; y > top; y -= 4) { p.moveTo(X + 11 + (Y - y) * -0.02, y); p.lineTo(X + 14 + (Y - y) * -0.02, y); }
+  p.moveTo(X + 11, Y); p.lineTo(X + 9.4, top); p.moveTo(X + 14, Y); p.lineTo(X + 12.4, top);
+  ST.line(x, p, 0.9, "ink");
+  shape(x, pPoly([[X - 7, top], [X + 7, top], [X + 7, top + 3], [X - 7, top + 3]]), "mid", 0.6);
+  ST.line(x, pLine(X - 5, top, X - 5, top - 9), 0.8); ST.line(x, pLine(X + 5, top, X + 5, top - 9), 0.8);
+  shape(x, pPoly([[X - 9, top - 8], [X, top - 15], [X + 9, top - 8]]), "mid", 0.6);
+  shape(x, pBlob(X, top - 4.4, 2.2, 2.6, 0.06, 3), "goldD", 0.6);
+}
+function barge(x, X, w, n, seed) { // a launch barge: a row of mortar tubes, a lamp on a pole
+  const r = seeded(seed), y = 492;
+  for (let i = 0; i < n; i++) {
+    const tx = X - w * 0.34 + i * w * 0.68 / Math.max(1, n - 1), a = (r() - 0.5) * 0.22;
+    at(x, tx, y + 1, 1, a, () => { shape(x, pCut(-2.8, -10, 5.6, 11, 1), "greyD", 0.8); x.fillStyle = C("ink"); x.fill(pEll(0, -9.6, 2.2, 0.9)); });
+  }
+  const hull = pPoly([[X - w / 2 - 4, y - 1], [X + w / 2 + 5, y - 1.6], [X + w / 2 - 2, y + 7], [X - w / 2 + 3, y + 7.4]]);
+  shape(x, hull, "plank", 1, "plankD", 0, 2.4);
+  x.fillStyle = C("plankL"); x.fillRect(X - w / 2 - 2, y - 1.2, w + 5, 1.3);
+  const lx = r() < 0.5 ? X + w / 2 - 4 : X - w / 2 + 4;
+  ST.line(x, pLine(lx, y - 1, lx, y - 17), 1.3, "plankD"); shape(x, pEll(lx, y - 19.6, 2.6, 3.4), "lit", 0.7);
+}
+function willow(x, X, Y) { // a weeping willow on the near bank: a leaning trunk, arching limbs, curtains of hanging strands
+  const r = seeded(91), tx = X + 10, ty = Y - 176;
+  const trunk = pSmooth([[X - 11, Y + 30], [X - 12, Y - 50], [X - 4, Y - 120], [tx - 4, ty + 4], [tx + 5, ty - 2], [X + 8, Y - 118], [X + 9, Y - 50], [X + 12, Y + 30]]);
+  shape(x, trunk, "mid", 1.4, "ink", -2.6, 0);
+  // limbs: arcs from the top of the trunk out and down; strands hang from points along them, longer further out
+  const limbs = [[-112, -28, -70], [-64, -6, -58], [52, -14, -64], [104, 18, -52], [8, 6, -84]], strands = [];
+  for (const [ex, ey, cy] of limbs) {
+    const p0 = [tx, ty], c = [tx + ex * 0.45, ty + cy], p1 = [tx + ex, ty + ey], q = t => [lerp(lerp(p0[0], c[0], t), lerp(c[0], p1[0], t), t), lerp(lerp(p0[1], c[1], t), lerp(c[1], p1[1], t), t)];
+    ST.line(x, pSmooth([p0, q(0.25), q(0.5), q(0.75), p1], true), 2.6, "mid");
+    for (let t = 0.18; t <= 1.001; t += 0.055) { const [sx, sy] = q(t); strands.push([sx + (r() - 0.5) * 3, sy, 46 + 120 * t * (0.55 + r() * 0.45)]); }
+  }
+  for (const [sx, sy, l] of strands) { // a breeze from the river sways them all one way
+    const sw = 4 + r() * 6, col = r() < 0.3 ? "mid" : "far";
+    brush(x, [[sx, sy], [sx + sw * 0.25, sy + l * 0.45], [sx + sw, sy + l]], 2.4, "ink"); brush(x, [[sx, sy + 1], [sx + sw * 0.25, sy + l * 0.45], [sx + sw, sy + l - 1]], 1.5, col);
+  }
+}
+function bench(x, X, Y) { // a low bench with three people watching, one with a fan
+  for (const [dx, h, k] of [[-26, 40, 0], [0, 34, 1], [27, 42, 2]]) {
+    const p = pSmooth([[X + dx - 12, Y - 4], [X + dx - 11, Y - h * 0.62], [X + dx - 5, Y - h * 0.78], [X + dx + 5, Y - h * 0.78], [X + dx + 11, Y - h * 0.62], [X + dx + 13, Y - 4]]);
+    p.addPath(pBlob(X + dx, Y - h * 0.9, 6, 6.6, 0.06, k + 4));
+    if (k === 2) { p.addPath(pBlob(X + dx + 15, Y - h * 0.98, 6, 5.6, 0.08, 9)); p.addPath(pPoly([[X + dx + 14.4, Y - h * 0.9], [X + dx + 15.4, Y - h * 0.9], [X + dx + 9, Y - h * 0.62], [X + dx + 8, Y - h * 0.62]])); }
+    x.save(); x.translate(-1.2, -1.4); x.fillStyle = C("sky3"); x.fill(p); x.restore(); x.fillStyle = C("far"); x.fill(p);
+  }
+  shape(x, pPoly([[X - 46, Y - 6], [X + 46, Y - 7], [X + 47, Y], [X - 45, Y + 0.8]]), "plank", 1, "plankD", 0, 2);
+  for (const lx of [-40, 38]) shape(x, pPoly([[X + lx - 2, Y], [X + lx + 2, Y], [X + lx + 2.4, Y + 16], [X + lx - 2.2, Y + 16]]), "plankD", 0.9);
+}
+function toro(x, X, Y) { // a stone lantern tower on the near bank and its light pool on the ground
+  pool(x, X, Y + 6, 74, 12);
+  shape(x, pPoly([[X - 24, Y], [X + 24, Y + 0.6], [X + 19, Y - 14], [X - 19, Y - 14.4]]), "grey", 1.1, "greyD", 2.4, 0);
+  shape(x, pPoly([[X - 11, Y - 14], [X + 11, Y - 14], [X + 9, Y - 64], [X - 9, Y - 64]]), "grey", 1.1, "greyD", 2.6, 0);
+  for (const y of [Y - 30, Y - 46]) ST.line(x, pLine(X - 10, y, X + 10, y + 0.4), 0.6, "greyD");
+  shape(x, pPoly([[X - 15, Y - 64], [X + 15, Y - 64], [X + 14, Y - 90], [X - 14, Y - 90]]), "greyD", 1);
+  shape(x, pPoly([[X - 9, Y - 67], [X + 9, Y - 67], [X + 9, Y - 87], [X - 9, Y - 87]]), "lit", 0.8);
+  x.fillStyle = C("warm"); x.fillRect(X - 5.6, Y - 84, 11.2, 13); ST.line(x, pLine(X, Y - 87, X, Y - 67), 0.7, "goldD");
+  shape(x, pPoly([[X - 30, Y - 89], [X - 23, Y - 97], [X - 8, Y - 104], [X + 8, Y - 104], [X + 23, Y - 97], [X + 30, Y - 89], [X + 21, Y - 91.4], [X - 21, Y - 91.4]]), "grey", 1.1, "greyD", 0, 2.2);
+  shape(x, pBlob(X, Y - 109, 5.2, 5.6, 0.06, 4), "grey", 1, "greyD", 1.4, 1.4);
+}
+function pine(x, X, Y) { // a pine leaning out over the water, its needles in flat clumps with a dark underside
+  const trunk = pSmooth([[X + 8, Y + 20], [X + 3, Y - 50], [X - 22, Y - 112], [X - 60, Y - 150], [X - 56, Y - 157], [X - 14, Y - 120], [X + 12, Y - 60], [X + 16, Y + 20]]);
+  shape(x, trunk, "plankD", 1.3, "ink", 2, 0);
+  for (const [cx, cy, w, n] of [[-62, -160, 60, 1], [-26, -128, 46, 2], [-4, -86, 52, 3], [-46, -118, 36, 4], [10, -150, 40, 5]]) {
+    const r = seeded(n + 30), k = 5, pts = [[X + cx + w / 2, Y + cy + 6]];
+    for (let i = k; i >= 0; i--) pts.push([X + cx - w / 2 + w * i / k, Y + cy - 3 - 7 * r() * Math.sin(Math.PI * (0.2 + 0.6 * i / k))]);
+    pts.push([X + cx - w / 2, Y + cy + 6]);
+    shape(x, pSmooth(pts), "far", 1, "mid", 0, 3.2);
+  }
+}
+function buildBg() {
+  BG = layer(BGM, (x, X0, Y0, W, H) => {
+    const X1 = X0 + W, Y1 = Y0 + H, r = seeded(23);
+    // the dusk sky in flat steps with hand-cut edges (never a gradient), an apricot afterglow band low down
+    x.fillStyle = C("sky0"); x.fillRect(X0, Y0, W, H);
+    band(x, X0, X1, 132, 5, 1, "sky1"); band(x, X0, X1, 252, 4, 2, "sky2"); band(x, X0, X1, 352, 3, 3, "sky3");
+    band(x, X0, X1, 420, 2.4, 4, "mist"); band(x, X0, X1, 446, 1.6, 5, "lit");
+    for (let i = 0; i < W * 0.06; i++) { const v = r(), s = 0.8 + r(); x.fillStyle = C(v < 0.45 ? "paper" : v < 0.75 ? "goldL" : "sky3"); x.fillRect(X0 + r() * W, Y0 + r() * (136 - Y0), s, s); }
+    for (let n = Math.floor((X0 - 260) / 230); n * 230 < X1; n++) wisp(x, n * 230 + 60 * hash1(n * 3 + 1), 84 + 40 * h01(n * 3 + 2), 50 + 40 * h01(n * 3 + 3), n);
+    for (let n = Math.floor((X0 - 220) / 200); n * 200 < X1; n++) cloudStreak(x, n * 200 + 60 * hash1(n * 7 + 2), 392 + 22 * h01(n * 7 + 1), 56 + 60 * h01(n * 7 + 3), n);
+    // the far shore: hills, the town and its trees, a drum bridge on the left, a fire lookout on the right
+    ridge(x, X0, X1, 458, 26, 1.3, "far", 0.6);
+    for (let n = Math.floor((X0 - 90) / 140); n * 140 < X1 + 90; n++) { const X = n * 140 + 46 * hash1(n * 9 + 4); if (X < 0 || X > 130) farTree(x, X, 476, 18 + 9 * h01(n * 9 + 5), n); }
+    farTown(x, X0, X1);
+    x.fillStyle = C("mid"); x.fillRect(X0, 474, W, 6); ST.line(x, pLine(X0, 474, X1, 474), 0.6);
+    bridge(x, 12, 120, 477); yagura(x, 324, 476);
+    // the river: the evening sky in the water, the afterglow in broken dashes, ripples
+    x.fillStyle = C("indigo"); x.fillRect(X0, 479, W, 80);
+    band(x, X0, X1, 479, 0.6, 6, "sky1"); band(x, X0, X1, 486, 1, 7, "indigo");
+    for (let X = X0 - md(X0, 9); X < X1; X += 9) { const k = h01(X * 3 + 1); if (k < 0.4) continue; x.fillStyle = C(k > 0.8 ? "lit" : "mist"); x.fillRect(X + 3 * k, 481 + 3 * h01(X + 7), 3 + 7 * k, 1.3); }
+    for (let i = 0; i < W * 0.12; i++) { const X = X0 + r() * W, Y = 490 + r() * 40; x.fillStyle = C(r() < 0.55 ? "sky1" : "sky2"); x.fillRect(X, Y, 4 + r() * 12, 1.2); }
+    // the launch barges the shells rise from (and smaller ones out in the side areas)
+    barge(x, 62, 58, 4, 3); barge(x, 182, 82, 6, 5); barge(x, 300, 66, 5, 8);
+    for (let n = 1; n * 300 - 100 < Math.max(-X0, X1 - SW) + 60; n++) { barge(x, -n * 300 + 120 + 40 * hash1(n), 40 + 20 * h01(n), 3, n + 20); barge(x, SW + n * 300 - 120 + 40 * hash1(n + 9), 40 + 20 * h01(n + 3), 3, n + 40); }
+    if (X1 > 520) put(x, yakataSpr(), 606, 514, 0, 1.25);                  // a moored pleasure boat (wide screens)
+    // the stone embankment: cap stones, then rows of uneven stones; the near bank behind the crowd
+    x.fillStyle = C("ground"); x.fillRect(X0, 532, W, Y1 - 532 + 10);
+    for (let row = 0; row < 3; row++) {
+      const yy = 537 + row * 8.4;
+      for (let X = X0 - 14 - 6 * row, n = 0; X < X1; n++) { const w = 11 + 10 * h01(n * 7 + row * 131 + 3); const p = pPoly([[X + 0.8, yy + 0.8], [X + w - 0.6, yy + 0.4 + 0.8 * hash1(n + row)], [X + w - 1, yy + 7.6], [X + 0.4, yy + 7.8]]); x.fillStyle = C(h01(n * 5 + row) < 0.18 ? "grey" : "groundL"); x.fill(p); ST.line(x, p, 0.55); X += w; }
+    }
+    for (let X = X0 - 20, n = 0; X < X1; n++) { const w = 20 + 9 * h01(n * 3 + 77), p = pPoly([[X + 0.5, 534], [X + 1.5, 529.6], [X + w - 1.4, 529.2 + hash1(n)], [X + w - 0.4, 534.4]]); x.fillStyle = C("groundL"); x.fill(p); ST.line(x, p, 0.6); X += w; }
+    // wide screens: a weeping willow and a bench on the left, a stone lantern and a pine on the right
+    if (X0 < -60) { willow(x, -118, 588); bench(x, -262, 604); }
+    if (X1 > 420) { toro(x, 452, 612); pine(x, 724, 598); }
+  });
+}
+// the crowd: two rows of spectators seen from behind, cached as paths per screen size; the back row is a step
+// lighter (farther away). A rim in the colour of the latest burst catches their shoulders.
+function person(p, arms, X, Y, h, kind) {
+  const hr = h * 0.135, sw = h * 0.27, top = Y - h, hy = top + hr, ny = top + hr * 2.05;
+  p.addPath(pSmooth([[X - sw * 1.2, Y + 600], [X - sw * 1.12, ny + h * 0.24], [X - sw * 0.78, ny + h * 0.05], [X - hr * 0.55, ny - 0.4], [X + hr * 0.55, ny - 0.4], [X + sw * 0.78, ny + h * 0.05], [X + sw * 1.12, ny + h * 0.24], [X + sw * 1.2, Y + 600]]));
+  p.addPath(pBlob(X, hy, hr, hr * 1.08, 0.07, kind * 5 + 1));
+  if (kind === 0) { p.addPath(pBlob(X + hr * 0.15, top - hr * 0.05, hr * 0.56, hr * 0.46, 0.1, 3)); p.addPath(pPoly([[X + hr * 0.5, top - hr * 0.1], [X + hr * 1.6, top - hr * 0.7], [X + hr * 1.7, top - hr * 0.5], [X + hr * 0.6, top + hr * 0.15]])); } // a bun with a hairpin
+  else if (kind === 1) p.addPath(pPoly([[X - hr * 0.6, hy - hr * 0.35], [X - hr * 1.8, hy - hr * 0.2], [X - hr * 1.5, hy + hr * 0.5], [X - hr * 0.7, hy + hr * 0.15]])); // headband tails
+  else if (kind === 2) { const fx0 = X + sw * 1.15, fy = top - hr * 0.3; p.addPath(pBlob(fx0, fy, hr * 1.05, hr * 0.95, 0.09, 5)); p.addPath(pPoly([[fx0 - 0.8, fy], [fx0 + 0.8, fy], [fx0 - sw * 0.3 + 0.8, ny + h * 0.28], [fx0 - sw * 0.3 - 0.8, ny + h * 0.28]])); } // an uchiwa held up
+  else if (kind === 3) { const cy = top - hr * 1.2; p.addPath(pSmooth([[X - sw * 0.72, ny + 1], [X - sw * 0.5, cy + hr * 1.2], [X, cy + hr * 0.7], [X + sw * 0.5, cy + hr * 1.2], [X + sw * 0.72, ny + 1]])); p.addPath(pBlob(X + 1, cy, hr * 0.78, hr * 0.84, 0.06, 7)); } // a child on the shoulders
+  else if (kind === 4) p.addPath(pSmooth([[X - hr * 1.15, hy - hr * 0.1], [X - hr * 0.6, top - hr * 0.35], [X + hr * 0.7, top - hr * 0.3], [X + hr * 1.2, hy], [X, hy - hr * 0.35]])); // a towel tied on the head
+  if (kind !== 3 && h01(Math.round(X * 3) + kind) < 0.5) for (const s of [-1, 1]) arms.addPath(pPoly([[X + s * sw * 0.55, ny + 5], [X + s * sw * 0.95, top - h * 0.16], [X + s * sw * 0.95 + s * 3, top - h * 0.19], [X + s * sw * 0.98, ny + 6]])); // raised in a cheer
+}
+function buildCrowd() {
+  const X0 = vLeft() - BGM - 30, X1 = vRight() + BGM + 30, gaps = [[20, 92], [-312, -212], [416, 490]];
+  CROWD = [[606, 50, 7, 22, "far"], [650, 60, 19, 27, "ground"]].map(([base, hgt, seed, step, col]) => {
+    const r = seeded(seed), p = [P2(), P2()], arms = [P2(), P2()];
+    let k = 0;
+    for (let X = X0 + r() * 10; X < X1; X += step * (0.72 + r() * 0.56)) {
+      const h = hgt * (0.84 + r() * 0.3), kind = fl(r() * 6);
+      if (gaps.some(([a, b]) => X > a && X < b)) continue;
+      person(p[k & 1], arms[k & 1], X, base + (r() - 0.5) * 6, h, kind); k++;
+    }
+    return { p, arms, col };
+  });
+}
+
+// ---------- GAME-SPECIFIC: sprites (made once per size by the kit's sprite cache) ----------
+// shells: each type has its own shape; n = rising, f = past its top (a deeper shade), l = caught (its fuse burns white)
+const SHR = { peony: 6.5, willow: 6.5, cross: 6.8, ring: 7.2, gold: 8, dud: 6 };
+const SHC = { peony: ["gold", "goldD"], willow: ["orange", "redD"], cross: ["mint", "far"], ring: ["redL", "redD"], gold: ["goldL", "gold"], dud: ["grey", "greyD"] };
+function shellSpr(type, st) {
+  const r = SHR[type] || 6.5, lit = st === "l", [c0, c1] = lit ? ["paper", "paperD"] : SHC[type] || SHC.peony, k = st === "f" ? 3 : 1.5;
+  return bake("sh" + type + st, 2 * r + 16, 2 * r + 22, r + 8, r + 10, x => {
+    if (type !== "dud") ST.line(x, pSmooth([[0, -r + 1], [0.8, -r - 2.4], [2.8, -r - 4.4]], true), 1.2, "plankD"); // the fuse
+    if (type === "ring") { // a hollow shell: its burst is a ring with an empty middle
+      const p = pEll(0, 0, r - 2, r - 2);
+      x.lineCap = "round"; x.strokeStyle = C("ink"); x.lineWidth = 5.8; x.stroke(p);
+      x.strokeStyle = C(c0); x.lineWidth = 3.6; x.stroke(p);
+      x.strokeStyle = C(c1); x.lineWidth = 1.3; x.beginPath(); x.arc(0, 0, r - 1.1, 0.1, st === "f" ? 2.6 : 1.5); x.stroke();
+      return;
+    }
+    const body = type === "dud" ? pBlob(0, 0, r, r * 0.9, 0.22, 4) : pBlob(0, 0, r, r, 0.05, type.length * 3);
+    if (type === "willow") body.addPath(pSmooth([[-2.8, r - 2.4], [2.8, r - 2.4], [0.4, r + 5.6]])); // a drop hangs under it
+    ST.fill(x, body, c0); ST.shade(x, body, c1, k, k * 1.1);
+    x.save(); x.clip(body); x.fillStyle = C(lit ? "paperD" : "paper");
+    if (type === "peony") x.fillRect(-r, -1.3, 2 * r, 2.6);                                  // the paper tape round it
+    if (type === "cross") { x.fillRect(-r, -1, 2 * r, 2); x.fillRect(-1, -r, 2, 2 * r); }    // a cross: it splits in four
+    if (type === "gold") x.fill(pStar(-2.8, -3, 3.6, 1, 4));                                 // a glint
+    x.restore();
+    if (type === "dud") { ST.line(x, pPoly([[-3.4, -3], [-0.4, -0.6], [-1.4, 2.4], [1.8, 4]], true), 0.9); ST.line(x, pPoly([[1.4, -4.2], [3.2, -1.4]], true), 0.8); }
+    ST.edge(x, body, 1.25);
+  });
+}
+// smoke: a small flat cloud of three or four lobes (it shrinks away, never fades)
+const puffSpr = (k, col) => bake("pf" + k + col, 34, 28, 17, 14, x => {
+  const r = seeded(k * 5 + 2), p = P2(), n = 3 + k % 2;
+  for (let i = 0; i < n; i++) { const a = -Math.PI * (0.15 + 0.7 * i / (n - 1)), d = 5 + r() * 2; p.addPath(pBlob(Math.cos(a) * d * 1.3, Math.sin(a) * d * 0.7 + 2, 6 + r() * 2, 5 + r() * 1.6, 0.1, i + k * 7)); }
+  p.addPath(pEll(0, 3, 11, 4.4));
+  ST.fill(x, p, col); ST.line(x, p, 0.9, "ink"); x.fillStyle = C(col); x.fill(p);
+});
+// the goal rack: small shells on a bamboo pole, grey until the chain reaches them, gold when it does, pink past the goal
+const rackSpr = k => bake("rk" + k, 14, 14, 7, 10, x => shape(x, pBlob(0, -4.3, 4.6, 4.4, 0.06, k + 2), ["grey", "gold", "redL"][k], 1, ["greyD", "goldD", "redD"][k], 1, 1.2));
+const poleSpr = () => bake("pole", 112, 12, 56, 6, x => bamboo(x, -52, 0, 52, 0.5, 4.4, 26));
+// a life: a folding paper lantern (odawara) with lacquered caps; dim = it flickers, off = printed in greys
+function odawara(k) {
+  const c = k === "on" ? ["warm", "lit", "goldD", "red"] : k === "dim" ? ["tag", "tagD", "tagD", "redD"] : ["grey", "greyD", "greyD", "greyD"];
+  return bake("oda" + k, 32, 50, 16, 2, x => {
+    ST.line(x, pSmooth([[0, 0], [-1.8, 3], [0, 6.4]], true), 1.1);
+    const p = pSmooth([[-7.6, 10], [7.6, 10], [10, 15], [10, 33], [7.6, 38], [-7.6, 38], [-10, 33], [-10, 15]]);
+    ST.fill(x, p, c[0]); ST.shade(x, p, c[1], 2.6, 0);
+    x.save(); x.clip(p); x.strokeStyle = C(c[2]); x.lineWidth = 0.7;
+    for (let i = 1; i < 7; i++) { const y = 10 + i * 4; x.beginPath(); x.moveTo(-10, y); x.quadraticCurveTo(0, y + 1.6, 10, y); x.stroke(); }
+    x.restore();
+    const crest = pBlob(0, 24, 3.6, 3.6, 0.1, 5); ST.fill(x, crest, c[3]); x.fillStyle = C(c[0]); x.fill(pEll(0.4, 24.2, 1.3, 1.3));
+    ST.edge(x, p, 1.1);
+    for (const y of [5.6, 37]) shape(x, pCut(-8.4, y, 16.8, 5, 1.6), "ink", 0.6);
+  });
+}
+// the score: a square paper lantern (andon) in a wooden frame; unlit paper while the volleys are practice
+const AW = 116, AH = 76;
+function andonSpr(on) {
+  return bake("andon" + on, AW + 10, AH + 10, AW / 2 + 5, 3, x => {
+    const pane = pPoly([[-AW / 2 + 7, 7], [AW / 2 - 7, 7.5], [AW / 2 - 7.5, AH - 8], [-AW / 2 + 7.4, AH - 7.6]]);
+    ST.fill(x, pane, on ? "warm" : "paper"); ST.shade(x, pane, on ? "lit" : "paperD", 3.4, 2.8);
+    ST.line(x, pCut(-AW / 2 + 12, 11, AW - 24, AH - 22, 1), 0.6, on ? "goldD" : "paperD");
+    ST.edge(x, pane, 1);
+    for (const s of [-1, 1]) shape(x, pPoly([[s * (AW / 2 - 8), -1], [s * (AW / 2 - 0.5), -1], [s * (AW / 2 + 0.6), AH + 2], [s * (AW / 2 - 8.6), AH + 2]]), "plank", 1, "plankD", s * 1.6, 0);
+    for (const y of [1, AH - 8]) shape(x, pPoly([[-AW / 2 - 3, y], [AW / 2 + 3, y + 0.5], [AW / 2 + 2.4, y + 6.4], [-AW / 2 - 2.4, y + 6]]), "plank", 1, "plankD", 0, 1.8);
+  });
+}
+// the title: an Edo broadsheet (kawaraban) hung by wooden clips, with woodcut burst marks
+const KW = 300;
+function woodBurst(x, X, Y, R, c1, c2, n, seed) { // brushed rays and dots printed in two blocks, a paper star core
+  const r = seeded(seed);
+  for (let i = 0; i < n; i++) {
+    const a = i * TAU / n + r() * 0.2, r0 = R * 0.24, r1 = R * (0.72 + r() * 0.28), ca = Math.cos(a), sa = Math.sin(a);
+    const pts = [[X + ca * r0, Y + sa * r0], [X + ca * (r0 + r1) / 2 - sa * 0.8, Y + sa * (r0 + r1) / 2 + ca * 0.8], [X + ca * r1, Y + sa * r1]];
+    brush(x, pts, 4.2, "ink"); brush(x, pts, 2.4, i % 2 ? c1 : c2);
+    const d = pEll(X + ca * (r1 + 3.6), Y + sa * (r1 + 3.6), 1.7, 1.7); x.fillStyle = C(i % 2 ? c2 : c1); x.fill(d); ST.line(x, d, 0.5);
+  }
+  const core = pStar(X, Y, R * 0.34, R * 0.13, 8, 0.2); ST.fill(x, core, "paper"); ST.edge(x, core, 0.8);
+}
+function kawaraSpr(h) {
+  return bake("kw" + h, KW + 20, h + 26, KW / 2 + 10, 12, x => {
+    const r = seeded(17), pts = [], side = (x0, y0, x1, y1, n) => { for (let i = 0; i < n; i++) { const t = i / n; pts.push([lerp(x0, x1, t) + (r() - 0.5) * 1.8, lerp(y0, y1, t) + (r() - 0.5) * 1.8]); } };
+    side(-KW / 2, 0, KW / 2, 0.8, 26); side(KW / 2, 0.8, KW / 2 - 1, h, 18); side(KW / 2 - 1, h, -KW / 2 + 0.6, h - 0.6, 26); side(-KW / 2 + 0.6, h - 0.6, -KW / 2, 0, 18);
+    const sheet = pPoly(pts);
+    ST.fill(x, sheet, "paper"); ST.shade(x, sheet, "paperD", -2.4, -2.8); ST.edge(x, sheet, 1.4);
+    ST.line(x, pCut(-KW / 2 + 9, 9, KW - 18, h - 18, 1.5), 1.6);
+    ST.line(x, pCut(-KW / 2 + 14, 14, KW - 28, h - 28, 1), 0.7);
+    woodBurst(x, -113, 50, 24, "red", "gold", 13, 3); woodBurst(x, 113, 52, 22, "gold", "redL", 11, 8);
+    brush(x, [[-108, 101], [-36, 98.6], [38, 100.4], [110, 98.8]], 2.4, "redD");
+    for (const s of [-1, 1]) shape(x, pPoly([[s * 96 - 5, -10], [s * 96 + 5, -10.4], [s * 96 + 4.4, 9], [s * 96 - 4.6, 9.4]]), "plank", 1, "plankD", 1.2, 0); // wooden clips
+  });
+}
+const plankSpr = (w, h = 34) => bake("plank" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 2, x => woodTag(x, -w / 2, 0, w, h, { dark: 1, cut: 5, seed: w }));
+// the hanabishi: happi coat, headband, tight trousers, a torch; one picture per pose (feet at 0, 0; he faces the river)
+const MPOSE = {
+  idle: { hand: [16, -41], elbow: [14, -37], tip: [25, -63], back: [[-7, -47], [-12, -38], [-9, -31]], head: [1, -59] },
+  thrust: { hand: [14, -74], elbow: [14, -60], tip: [19, -97], back: [[-7, -47], [-15, -42], [-19, -37]], head: [2, -60] },
+  joy: { hand: [13, -75], elbow: [14, -61], tip: [17, -98], back: [[-7, -48], [-14, -61], [-14, -74]], head: [1, -60] },
+  sad: { hand: [13, -30], elbow: [11, -38], tip: [28, -21], back: [[-7, -46], [-10, -36], [-9, -29]], head: [4, -55] }
+};
+function masterSpr(pose) {
+  const m = MPOSE[pose], [hx, hy] = m.head;
+  return bake("mst" + pose, 84, 128, 38, 112, x => {
+    for (const [a, b] of [[-5, -7], [3, 6]]) shape(x, pPoly([[a - 3.6, -29], [a + 3.6, -29], [b + 2.6, -3], [b - 2.8, -3]]), "mid", 1);
+    for (const fx0 of [-8, 7.4]) shape(x, pBlob(fx0, -2, 4.4, 2.3, 0.08, 9), "paper", 0.9);
+    const back = m.back; cordLine(x, pSmooth(back, true), 4.8, "indigo", 0.8); shape(x, pBlob(back[2][0], back[2][1], 2.6, 2.6, 0.1, 3), "tag", 0.8);
+    const coat = pSmooth([[-9.4, -53], [-3, -54], [3, -54], [9.4, -53], [11.6, -36], [13.2, -22.6], [0, -22], [-12.8, -22.4], [-11.2, -36]]);
+    ST.fill(x, coat, "indigo"); ST.shade(x, coat, "mid", -2.6, 0);
+    x.save(); x.clip(coat); x.fillStyle = C("paper"); x.fillRect(-15, -26.6, 30, 2.2);
+    x.fillStyle = C("red"); x.fillRect(-15, -36.6, 30, 4);
+    x.fillStyle = C("paper"); x.fill(pPoly([[1.6, -55], [5.4, -55], [9.2, -22], [5.4, -22]]));
+    x.restore();
+    for (const y of [-49, -44, -27]) brush(x, [[4.3 + (y + 55) * 0.11, y], [4.6 + (y + 55) * 0.11, y + 2.6]], 1.4);
+    ST.edge(x, coat, 1.2);
+    shape(x, pPoly([[-13, -37], [-17.4, -35.6], [-16, -31.4], [-12.4, -33.6]]), "red", 0.8);  // the sash knot
+    // the torch behind the hand, its wrapped head at the tip
+    const ang = Math.atan2(m.tip[1] - m.hand[1], m.tip[0] - m.hand[0]), tl = Math.hypot(m.tip[0] - m.hand[0], m.tip[1] - m.hand[1]);
+    cordLine(x, pLine(m.hand[0] - Math.cos(ang) * 5, m.hand[1] - Math.sin(ang) * 5, m.tip[0], m.tip[1]), 2.1, "tag", 0.6);
+    at(x, m.tip[0], m.tip[1], 1, ang + Math.PI / 2, () => shape(x, pCut(-2.8, -1, 5.6, 7.4 + tl * 0, 1.4), "plankD", 0.8));
+    // head: skin, dark hair at the back, a paper headband with its knot tails
+    const head = pBlob(hx, hy, 6.4, 7, 0.06, 5);
+    ST.fill(x, head, "tag"); ST.shade(x, head, "tagD", -1.8, 0);
+    x.save(); x.clip(head); x.fillStyle = C("ink"); x.fill(pEll(hx - 4.4, hy - 2.6, 5.4, 7.6)); x.fillStyle = C("paper"); x.fillRect(hx - 8, hy - 3.6, 16, 2.6); x.restore();
+    ST.edge(x, head, 1.1); brush(x, [[hx + 2.6, hy + 0.4], [hx + 4.6, hy - 0.2]], 1.3); // his eye, looking up at the sky
+    shape(x, pPoly([[hx - 5.6, hy - 2.8], [hx - 11.4, hy - 6], [hx - 10.6, hy - 0.6]]), "paper", 0.7);
+    shape(x, pPoly([[hx - 5.6, hy - 1.6], [hx - 10, hy + 3], [hx - 7.4, hy + 3.8]]), "paper", 0.7);
+    // the front arm, the hand round the torch
+    cordLine(x, pSmooth([[6.6, -49], m.elbow, m.hand], true), 4.8, "indigo", 0.8); shape(x, pBlob(m.hand[0], m.hand[1], 2.8, 2.8, 0.1, 2), "tag", 0.8);
+  });
+}
+// a roofed pleasure boat (yakatabune): lit paper screens, red lanterns under the eaves, a boatman with his pole
+const yakataSpr = () => bake("yakata", 124, 60, 62, 42, x => {
+  ST.line(x, pLine(-49, -36, -41, 9), 1.4, "plankD");
+  const man = pSmooth([[-49.4, -3], [-50, -18], [-47, -22], [-44, -18], [-44.4, -3]]); man.addPath(pBlob(-47, -25, 2.6, 2.8, 0.05, 2));
+  shape(x, man, "mid", 0.6);
+  const cab = pPoly([[-34, -22], [30, -22], [30, -3], [-34, -3]]); ST.fill(x, cab, "lit");
+  x.save(); x.clip(cab); x.fillStyle = C("warm"); for (let i = 0; i < 8; i++) if (i % 3 !== 1) x.fillRect(-34 + i * 8 + 1, -21, 6, 17);
+  x.strokeStyle = C("goldD"); x.lineWidth = 0.8; for (let X = -26; X < 30; X += 8) x.stroke(pLine(X, -22, X, -3)); x.stroke(pLine(-34, -12, 30, -12)); x.restore();
+  ST.edge(x, cab, 1);
+  shape(x, pPoly([[-42, -21], [-37, -30], [34, -30], [40, -21], [34, -22.8], [-37, -22.8]]), "mid", 1.1, "ink", 0, 1.6);
+  for (let i = 0; i < 6; i++) { const lx = -28 + i * 11.2; ST.line(x, pLine(lx, -22.6, lx, -20), 0.6); shape(x, pEll(lx, -17.6, 2.3, 2.9), i % 2 ? "red" : "redL", 0.7); }
+  shape(x, pPoly([[-51, -3], [44, -4], [55, -13], [49, 2], [41, 6.4], [-44, 6.4], [-51, 1]]), "plank", 1.1, "plankD", 0, 2.8);
+  x.fillStyle = C("plankL"); x.fillRect(-48, -3.4, 90, 1.2);
+});
+
+// ---------- GAME-SPECIFIC: drawing the world each frame (scene coords; game units x GU) ----------
+// a dashed ring with an ink line under each dash (reach rings, the aim): never a glow
+function dashRing(x, X, Y, r, col, dash, w) {
+  if (r < 1) return;
+  const p = pEll(X, Y, r, r);
+  x.save(); x.setLineDash(dash); x.lineDashOffset = -fx.vt / 40; x.lineCap = "round";
+  x.strokeStyle = C("ink"); x.lineWidth = w + 1.8; x.stroke(p);
+  x.strokeStyle = C(col); x.lineWidth = w; x.stroke(p); x.restore();
+}
+function brackets(x, X, Y, o, a, w, col) { // four inked corner marks round a shell
+  const p = P2();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { p.moveTo(X + sx * o, Y + sy * (o - a)); p.lineTo(X + sx * o, Y + sy * o); p.lineTo(X + sx * (o - a), Y + sy * o); }
+  cordLine(x, p, w, col, 0.6);
+}
+function drawSky(x) { // a few stars twinkle; smoke drifts as small flat clouds that shrink away (never fade)
+  for (let i = 0; i < 14; i++) if (((i * 7 + fl(fx.vt / 400)) % 5) === 0) { x.fillStyle = C("paper"); x.fill(pStar(((i * 61 + 17) % CW) * GU, (12 + (i * 37) % 120) * GU, 4.4, 0.9, 4)); }
+  for (const s of fx.puffs) { const a = s.life / s.max; put(x, puffSpr(s.k, s.col), s.x * GU, s.y * GU, 0, s.s * 0.2 * (0.35 + 0.65 * a)); }
+}
+function drawZones(x) { // the reach of the spark and of the two newest bursts, as dashed inked rings
+  const gt = run.gt; let nb = 0;
+  for (let i = fx.zones.length - 1; i >= 0; i--) {
+    const z = fx.zones[i], a = gt - z.t0;
+    if (a > z.life) { fx.zones.splice(i, 1); continue; }
+    if (a < 0 || (!z.spark && ++nb > 2)) continue; // never a debug overlay
+    const r = z.r * GU * ease(Math.min(1, a / EXPAND)), X = z.x * GU, Y = z.y * GU, dash = z.spark && a < z.life * 0.6 ? [8, 5] : [4, 6];
+    if (z.kind === 1) { dashRing(x, X, Y, r - z.band * GU, z.col, dash, 1.4); dashRing(x, X, Y, r + z.band * GU, z.col, dash, 1.4); }
+    else dashRing(x, X, Y, r, z.col, dash, z.spark ? 1.9 : 1.4);
+  }
+}
+function drawCores(x) { // each burst has a two-frame star core; the peaks get brushed rays round them (never a glow)
+  const gl = fx.glow;
+  if (gl && run.gt - gl.gt < 0.12) {
+    const k = (run.gt - gl.gt) / 0.12, X = gl.x * GU, Y = gl.y * GU;
+    for (let i = 0; i < 14; i++) {
+      const a = i * TAU / 14 + 0.2, ca = Math.cos(a), sa = Math.sin(a), r0 = 20 + k * 22, r1 = 50 + k * 36 + (i % 2) * 14;
+      const pts = [[X + ca * r0, Y + sa * r0], [X + ca * (r0 + r1) / 2, Y + sa * (r0 + r1) / 2], [X + ca * r1, Y + sa * r1]];
+      brush(x, pts, 5, "ink"); brush(x, pts, 2.8, i % 2 ? "goldL" : "paper");
+    }
+  }
+  for (const f of fx.flash) {
+    const a = run.gt - f.gt, X = f.x * GU, Y = f.y * GU, r = f.r * GU;
+    if (a < 0.035) { const p = pStar(X, Y, r * 1.7, r * 0.62, 8, 0.2); x.fillStyle = C("paper"); x.fill(p); ST.edge(x, p, 1.2); }
+    else if (a < 0.07) { const p = pStar(X, Y, r * 1.2, r * 0.46, 8, 0); x.fillStyle = C("goldL"); x.fill(p); ST.edge(x, p, 1); }
+  }
+  fx.flash = fx.flash.filter(f => run.gt - f.gt < 0.07);
+}
+// sparks: flat drops stretched along their flight, a shared ink underlay, one fill per palette colour (bar 1.10.5)
+const RF = new Int16Array(PN), RFC = []; let RFn = 0;
+const REFL = { paper: 1, goldL: 1, gold: 1, orange: 1, redL: 1, red: 1, mint: 1, paperD: 1 };
+function drop(p, X, Y, ux, uy, w, tail, tip) {
+  p.moveTo(X - uy * w, Y + ux * w); p.quadraticCurveTo(X + ux * tip * 2, Y + uy * tip * 2, X + uy * w, Y - ux * w);
+  p.lineTo(X - ux * tail, Y - uy * tail); p.closePath();
+}
+function pDraw(x) {
+  const tw = fl(fx.vt / 60), ink = P2(), cols = {};
+  RFn = 0;
+  for (let i = 0; i < PN; i++) {
+    if (pL[i] <= 0) continue;
+    const f = pL[i] / pM[i], a = 1 - f, st = a < 0.15 ? 0 : a < 0.5 ? 1 : a < 0.8 ? 2 : 3;
+    if ((pF[i] & 1) && st >= 2 && ((i + tw) & 3) === 0) continue; // crackle: late sparks twinkle
+    const c = CSET[pC[i]][st], X = pX[i] * GU, Y = pY[i] * GU, vx = pVX[i] * GU, vy = pVY[i] * GU;
+    const sz = pS[i] > 1 && f < 0.35 ? 1 : pS[i], w = st === 3 ? 0.8 : sz * 0.95 + 0.4, sp = Math.hypot(vx, vy);
+    const tail = clamp(sp * ((pF[i] & 4) ? 0.09 : 0.065), w * 1.2, w * 11), ux = sp > 1 ? vx / sp : 0, uy = sp > 1 ? vy / sp : 1;
+    if (st < 3) drop(ink, X, Y, ux, uy, w + 0.75, tail + 1, w * 0.6 + 0.8); // the last step is a small sky-coloured speck: it sinks into the sky
+    drop(cols[c] || (cols[c] = P2()), X, Y, ux, uy, w, tail, w * 0.6);
+    if (REFL[c] && i % 3 === 0 && pY[i] < HORIZON - 4 && RFn < PN) { RF[RFn] = i; RFC[RFn++] = c; }
+  }
+  x.fillStyle = C("ink"); x.fill(ink);
+  for (const c in cols) { x.fillStyle = C(c); x.fill(cols[c]); }
+}
+function pReflect(x) { // the river carries every third bright spark as a short dash, nearer the bank the higher it is
+  const cols = {};
+  for (let j = 0; j < RFn; j++) { const i = RF[j], ry = 500 + 3 * fl((HORIZON - pY[i]) * 0.068); if (ry > 527) continue; (cols[RFC[j]] || (cols[RFC[j]] = P2())).rect(pX[i] * GU - 3, ry, 6.5, 1.5); }
+  for (const c in cols) { x.fillStyle = C(c); x.fill(cols[c]); }
+}
+function trailStep(dt) { // rising shells leave sparks (visual only)
+  const v = run && run.vol; if (!v) return;
+  for (const s of v.shells) {
+    if (!s.launched || s.done || v.t - s.tl > s.ta || Math.random() > dt * (s.type === "willow" ? 40 : 22)) continue;
+    const x = shellX(s, v.t), y = shellY(s, v.t);
+    emit(x + (Math.random() - 0.5) * 2, y + 3, (Math.random() - 0.5) * 6, 6 + Math.random() * 8, s.type === "willow" ? 0.7 : 0.4, s.dud ? C_GREY : s.golden ? C_GOLD : C_AMBER, 1, 2, 20, s.type === "willow" ? 1 : 0);
+  }
+}
+function drawShells(x) {
+  const v = run.vol, r = run;
+  const one = (s, t, lit) => {
+    const X = shellX(s, t) * GU, Y = shellY(s, t) * GU, a = t - s.tl, ap = a - s.ta, rr = SHR[s.type] || 6.5;
+    if (!lit && ap < -0.06) { // a few sparks drop behind a rising shell: small flat dots, no tail
+      const vx = (s.vx + s.w * a) * GU, vy = (s.vy + s.g * a) * GU, sp = Math.hypot(vx, vy), n = sp > 60 ? 3 : sp > 25 ? 2 : 0, j = (fl(fx.vt / 70) & 1) * 2;
+      if (n) { const ux = vx / sp, uy = vy / sp; for (let i = 0; i < n; i++) { const d = rr + 3 + i * 5 + j, r0 = 1.9 - i * 0.45; shape(x, pEll(X - ux * d + (i & 1 ? 1.2 : -1.2), Y - uy * d, r0, r0), s.dud ? "grey" : i ? "gold" : "goldL", 0.7); } }
+    }
+    if (!lit && !s.dud && ap > -0.05 && ap < 0.09) { const p = pStar(X, Y, ap < 0.02 ? 16 : 12, 1.8, 4, 0); ST.fill(x, p, "paper"); ST.edge(x, p, 0.9); } // a twinkle as it peaks
+    put(x, shellSpr(s.type, lit ? "l" : ap > 0.15 ? "f" : "n"), X, Y);
+    if (s.golden && (fl(fx.vt / 90) & 1)) for (const [dx, dy, c, q] of [[-13, -9, "paper", 4.2], [11, 7, "goldL", 3.6], [12, -12, "gold", 3.2]]) { const p = pStar(X + dx, Y + dy, q, q * 0.3, 4); ST.fill(x, p, c); ST.edge(x, p, 0.7); }
+  };
+  if (v) {
+    const ah = aimNow(), fuse = new Set(), blink = fl(fx.vt / 120) & 1;
+    if (v.events) for (let j = v.evIdx; j < v.events.length && v.events[j].t - v.t < FUSE + 0.001; j++) fuse.add(v.events[j].i);
+    const ax = ah ? Math.round(clamp(ah.x, 4, CW - 4)) : 0, ay = ah ? Math.round(clamp(ah.y, 8, SKY_MAX)) : 0;
+    for (let i = 0; i < v.shells.length; i++) {
+      const s = v.shells[i];
+      if (!s.launched || s.done) continue;
+      one(s, s.pend ? Math.min(v.t, s.tEnd) : v.t, fuse.has(i)); // a caught shell turns white while its fuse burns
+      // preview: exactly the shells the growing spark would catch if lit now
+      if (ah && !v.spark && blink && sparkCatch(s, ax, ay, v.t)) brackets(x, shellX(s, v.t) * GU, shellY(s, v.t) * GU, 12, 5, 1.7, "paper");
+    }
+  }
+  for (const gh of r.ghosts) { const p = ghostPos(gh); put(x, shellSpr(gh.s.type, "f"), p.x * GU, p.y * GU); }
+}
+function aimNow() { // the ring that shows a spark's reach: the held finger, the AI's aim, or the keyboard reticle
+  const v = run && run.vol;
+  if (!v || v.spark || v.resolved) return null;
+  if (state === "play" && aim.held) return { x: clamp(aim.x, 4, CW - 4), y: clamp(aim.y, 8, SKY_MAX), held: true };
+  if ((run.ai || autopilot) && v.plan && v.plan.t - v.t < 0.45) { const k = clamp((v.plan.t - v.t) / 0.45, 0, 1); return { x: lerp(v.plan.x, v.cx, k * k * 0.6), y: lerp(v.plan.y, v.cy, k * k * 0.6), held: k < 0.5 }; }
+  if (state === "play" && aim.key) return { x: aim.kx, y: aim.ky, key: true };
+  if (state === "play" && aim.hover && finePointer) return { x: clamp(aim.hx, 4, CW - 4), y: clamp(aim.hy, 8, SKY_MAX), hover: true };
+  return null;
+}
+function drawAim(x) {
+  const a = aimNow();
+  if (!a) { // a press while the spark is spent still answers: a small ring with a cross, so the touch is seen
+    if (state !== "play" || !aim.held) return;
+    const X = clamp(aim.x, 4, CW - 4) * GU, Y = clamp(aim.y, 8, SKY_MAX) * GU, p = P2();
+    dashRing(x, X, Y, 18, "paperD", [4, 4], 1.6);
+    p.moveTo(X - 7, Y - 7); p.lineTo(X + 7, Y + 7); p.moveTo(X + 7, Y - 7); p.lineTo(X - 7, Y + 7); cordLine(x, p, 2, "paperD", 0.7);
+    return;
+  }
+  const X = a.x * GU, Y = a.y * GU, R = SPARK_R * GU, p = P2();
+  if (a.held) {
+    dashRing(x, X, Y, R - ((fl(fx.vt / 100) & 1) ? 2 : 0), "paper", [7, 5], 2);
+    p.moveTo(X - 8, Y); p.lineTo(X + 8, Y); p.moveTo(X, Y - 8); p.lineTo(X, Y + 8); cordLine(x, p, 1.8, "paper", 0.6);
+    shape(x, pEll(X, Y, 3, 3), "redL", 0.8);
+  } else if (a.key) {
+    dashRing(x, X, Y, R, "goldL", [5, 5], 1.8);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { p.moveTo(X + dx * 4, Y + dy * 4); p.lineTo(X + dx * 10, Y + dy * 10); }
+    cordLine(x, p, 1.8, "goldL", 0.6);
+  } else { dashRing(x, X, Y, R, "paperD", [4, 6], 1.4); shape(x, pEll(X, Y, 2.2, 2.2), "goldL", 0.7); }
+}
+function drawFail(x) { // the cause stays visible: missed shells bracketed, a dashed line from the nearest burst
+  const f = run.lastFail; if (!f) return;
+  const end = isDying() || isOver(), age = run.t - f.at, v = run.vol;
+  if (!end && (age > 1.3 || (v && v.n !== f.vn && v.shells.some(s => s.launched && v.t - s.tl > 0.25)))) return;
+  const blink = fl(fx.vt / 110) & 1;
+  if (f.line) {
+    const p = pLine(f.line.x0 * GU, f.line.y0 * GU, f.line.x1 * GU, f.line.y1 * GU);
+    x.save(); x.setLineDash([7, 6]); x.lineDashOffset = -fx.vt / 50; x.lineCap = "round";
+    x.strokeStyle = C("ink"); x.lineWidth = 4.4; x.stroke(p); x.strokeStyle = C("redL"); x.lineWidth = 2.4; x.stroke(p); x.restore();
+  }
+  for (const m of f.missed) brackets(x, m.x * GU, m.y * GU, end ? 16 : 12, end ? 8 : 6, end ? 2.8 : 1.9, blink ? "redL" : "paper"); // the final miss reads at phone size
+}
+function drawHint(x) { // first runs: a finger presses where a good spark is, when it is time (bar 1.7.1)
+  const v = run.vol;
+  if (state !== "play" || !hint.active || !v || v.spark || v.resolved || !v.hint || aim.held) return;
+  const k = clamp(Math.abs(v.hint.t - v.t) / 0.7, 0, 1), X = v.hint.x * GU, Y = v.hint.y * GU;
+  if (k < 0.5) dashRing(x, X, Y, SPARK_R * GU, "goldL", [3, 7], 1.4);
+  drawTapHint(x, X, Y, k);
+}
+function drawStamp(x) { // the biggest calls (全部!, たまや!) are pressed into the sky as a big seal for a moment
+  const s = fx.stamp; if (!s) return;
+  const age = run.gt - s.gt; if (age > 1.1) { fx.stamp = null; return; }
+  if (age > 0.95 && (fl(age * 25) & 1)) return;
+  const word = S(s.key), gold = s.key === "all", size = 40, w = textW(x, word, size, { f: ST.title, w: 900 }) + size * 1.2, h = size * 1.7;
+  const X = clamp(s.x * GU, w / 2 + 10, SW - w / 2 - 10), Y = Math.max(s.y * GU - h / 2 - 54, HP.call[1] + WYL + h / 2 - 16);
+  at(x, X, Y, 1 + 0.5 * (1 - easeOut(age / 0.14)), -0.06, () => {
+    shape(x, pCut(-w / 2, -h / 2, w, h, 6), gold ? "gold" : "red", 1.7, gold ? "goldD" : "redD", 2.2, 2.8);
+    x.lineWidth = 1.6; x.strokeStyle = C(gold ? "ink" : "paper"); x.stroke(pCut(-w / 2 + 5, -h / 2 + 5, w - 10, h - 10, 4));
+    text(x, word, 0, 2, size, gold ? "ink" : "paper", { f: ST.title, w: 900 });
+  });
+  s.box = { cx: X, y: Y + h / 2 + 26 - WYL }; // the call's stars and sub line go under the stamp, never on it (HUD coords)
+}
+function drawBoat(x, now) { // a pleasure boat drifts slowly across the river in front of the barges
+  const span = L.W + 280, X = vRight() + 140 - md(now / 1000 * 6, span);
+  x.fillStyle = C("lit"); for (const d of [-22, -8, 7, 21]) x.fillRect(X + d - 2.4, 525 + md(d, 3), 5, 1.3);
+  put(x, yakataSpr(), X, 521);
+}
+function flame(x, X, Y, k) { // a torch flame: a flat orange tongue with a gold core and an ink edge
+  const h = 12 + k * 3, p = pSmooth([[X, Y - h], [X + 3.8, Y - h * 0.34], [X + 3.2, Y + 1.8], [X, Y + 3], [X - 3.4, Y + 1.6], [X - 3.8, Y - h * 0.4]]);
+  shape(x, p, "orange", 0.9); x.fillStyle = C("goldL"); x.fill(pSmooth([[X, Y - h * 0.55], [X + 1.7, Y - 1], [X, Y + 1.8], [X - 1.7, Y - 1]]));
+}
+function drawCrowd(x, row, rim, cheer, ph) {
+  for (let k = 0; k < 2; k++) {
+    const hop = cheer && k === ph ? -3 : 0;
+    for (const [dx, dy, c] of [[-1.3, hop - 1.5, rim], [0, hop, row.col]]) { x.save(); x.translate(dx, dy); x.fillStyle = C(c); x.fill(row.p[k]); if (cheer) x.fill(row.arms[k]); x.restore(); }
+  }
+}
+function drawMaster(x) { // the hanabishi: raises the torch to light, cheers a big chain, hangs his head at a miss
+  const age = run.gt - fx.poseT, p = fx.pose;
+  const thrust = p === "thrust" && age < 0.5, sad = (p === "sad" && age < 1.6) || isDying() || (isOver() && run.mode !== "attract"), joy = run.gt - fx.cheerT < 1.2;
+  const pose = thrust ? "thrust" : sad && (fx.poseT >= fx.cheerT || !joy) ? "sad" : joy ? "joy" : "idle", bob = pose === "idle" && (fl(fx.vt / 260) & 1) ? 1 : 0, lift = thrust && age < 0.06 ? -2 : 0;
+  const X = 54, Y = 602 + bob + lift, t = MPOSE[pose].tip;
+  put(x, masterSpr(pose), X, Y);
+  if (pose !== "sad") flame(x, X + t[0], Y + t[1] - 3, fl(fx.vt / 90) & 1);
+  else if (fl(fx.vt / 300) & 1) ST.line(x, pSmooth([[X + t[0], Y + t[1] - 2], [X + t[0] + 3, Y + t[1] - 7], [X + t[0], Y + t[1] - 12]], true), 1.4, "grey"); // the torch is out
+}
+function drawBank(x) { // the crowd lit by the latest burst; they hop and raise their arms on a big chain
+  const rimOn = run.gt - fx.rimT < 0.35, rim = rimOn ? fx.rim : "sky3", cheer = run.gt - fx.cheerT < 1.4, ph = fl(fx.vt / 140) & 1;
+  drawCrowd(x, CROWD[0], rim, cheer, ph);
+  drawMaster(x);
+  drawCrowd(x, CROWD[1], rim, cheer, ph ^ 1);
 }
 
 // ---------- audio: festival bayashi (taiko, kane, flute) plus river and crowd; every voice goes through the kit bus ----------
@@ -1419,7 +2016,6 @@ function musicStep() {
     mus.next += st;
   }
 }
-
 // ---------- result: steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
 const RES = { drop: 220, head: 200, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
 function missionStat(m, r) { return m.k === "chain" ? r.maxChain : m.k === "all" ? r.alls : m.k === "volley" ? r.volleyN : m.k === "score" ? r.score : m.k === "gold" ? r.golds : r.stars; }
@@ -1443,410 +2039,249 @@ function resultStep(now) {
   if (!res.rankDone && res.showRank && age > RES.rank) { res.rankDone = true; sfx.stamp(); }
   if (!res.stamped && res.newBest && age > RES.best) { // never in demo: newBest is only set in play
     res.stamped = true; sfx.best(); platform("happytime");
-    const L = lay(); radial(140, L.over + 112, 26, 80, 0.9, C_GOLD, 1, 2.5, 30, 1); radial(140, L.over + 112, 10, 50, 1, C_PINK, 2, 2, 20, 0);
+    const b = bestSealAt(); burst(b.x, b.y, 18, 220, { col: "gold", kind: "chip", s: 3 }); burst(b.x, b.y, 6, 240, { kind: "star", col: "goldL", s: 3 });
   }
 }
 const resAge = (res, now) => state === "demo-over" ? RES.count + (now - res.at) * 2.5 : now - res.at;
 function skipResult(now) { const res = run && run.result; if (res && now - res.at < RES.goal) { res.at = now - RES.goal; res.ticks = 99; res.rankDone = true; return true; } return false; }
-
-// ---------- layout: the HUD hangs from a rope at the top in portrait, and sits in the side bays on wide screens ----------
-function lay() {
-  const wide = PX.cx0 >= 64, bay = PX.cx0, T0 = -PX.cy0 + (DEMO && !wide ? 20 : 0); // a portrait clip keeps the HUD below the Shorts top bar
-  if (!wide) return { wide, T: T0, lives: { x: 8, y: T0 + 7 }, score: { x: 82, y: T0 + 5 }, tag: { x: 134, y: T0 + 8 }, beads: { x: 90, y: T0 + 33 }, chain: { x: 90, y: T0 + 41 }, call: { x: 90, y: T0 + 72 }, over: T0 + 6 };
-  const lx = -fl(bay / 2), rx = CW + fl(bay / 2);
-  return { wide, T: T0, lives: { x: lx - 21, y: T0 + 34 }, score: { x: lx, y: T0 + 8 }, tag: { x: lx, y: T0 + 56 }, beads: { x: rx, y: T0 + 14 }, chain: { x: rx, y: T0 + 30 }, call: { x: 90, y: T0 + 6 }, over: T0 + 4, lx, rx };
+// ---------- GAME-SPECIFIC: the HUD hangs from a straw rope; the boards and tags are wood and paper ----------
+function drawRope(x) {
+  const T0 = hudTop();
+  put(x, bake("rope" + Math.round(L.W) + "_" + Math.round(T0), L.W + 44, 26, L.x0 + 22, 2, q => {
+    const pts = []; for (let X = vLeft() - 18; X <= vRight() + 18; X += 6) pts.push([X, ropeY(X) - T0]);
+    rope(q, pts, 3.4, "tag", "tagD", 0.6);
+  }), 0, T0);
 }
-
-// ---------- drawing: everything goes into the pixel buffer ----------
-let bgC = null, WY = 0; // WY: in a portrait ?demo=1 clip the world sits higher, so the crowd and the bank stay above the Shorts caption zone
-const BGM = 6; // background margin for the shake
-function buildBg() {
-  const { LW, LH, cx0, cy0 } = PX;
-  bgC = newCanvas(LW + 2 * BGM, LH + 2 * BGM + WY);
-  const keep = g; g = bgC.getContext("2d"); g.imageSmoothingEnabled = false;
-  g.translate(cx0 + BGM, cy0 + BGM);
-  const X0 = -cx0 - BGM, X1 = LW - cx0 + BGM, Y0 = -cy0 - BGM, Y1 = LH - cy0 + BGM + WY, WW = X1 - X0;
-  // night sky: deep indigo to violet city glow, flat bands joined by ordered dither
-  if (Y0 < 40) R(X0, Y0, WW, 40 - Y0, "G");
-  band(X0, 40, WW, 40, "G", "n"); R(X0, 80, WW, 60, "n"); band(X0, 140, WW, 36, "n", "c"); R(X0, 176, WW, 30, "c"); band(X0, 206, WW, 22, "c", "p"); R(X0, 228, WW, 14, "p");
-  for (let i = 0; i < 90; i++) { const sx = X0 + ((i * 97 + 13) % WW), sy = Y0 + ((i * 53 + 7) % Math.max(1, 150 - Y0)); if (sy < 150) P(sx, sy, i % 4 ? "b" : i % 3 ? "s" : "q"); }
-  spr(SP.moon, 146, 46);
-  // far shore: hills, rooftops with lit windows, a pagoda and a lantern-lit arched bridge
-  for (let x = X0 - (((X0 % 29) + 29) % 29) - 29; x < X1; x += 29) { const hh = 6 + ((((x * 7) % 9) + 9) % 9); ell(x, 232 - (hh >> 1), 18, hh, "G"); }
-  for (let x = X0 - (((X0 % 13) + 13) % 13) - 13; x < X1; x += 13) {
-    const h = 5 + ((((x * 13) >> 2) % 6 + 6) % 6), w = 9 + (((x >> 3) & 1) * 3);
-    poly([{ x: x - 1, y: 238 - h }, { x: x + (w >> 1), y: 238 - h - 4 }, { x: x + w + 1, y: 238 - h }, { x: x + w + 1, y: 239 }, { x: x - 1, y: 239 }], "k");
-    if (((x >> 2) & 3) !== 1) P(x + 3, 238 - h + 2, "Y"); if (((x >> 3) & 1) === 0) P(x + w - 3, 236 - (h >> 1), "a");
-  }
-  const pg = 150; // pagoda silhouette
-  for (let i = 0; i < 5; i++) { const y = 236 - i * 7, w = 22 - i * 3; poly([{ x: pg - w / 2 - 2, y }, { x: pg, y: y - 4 }, { x: pg + w / 2 + 2, y }], "k"); R(pg - w / 2 + 3, y, w - 6, 3, "k"); }
-  R(pg, 196, 1, 8, "k");
-  for (let x = 6; x <= 58; x++) { const a = (x - 6) / 52, y = Math.round(238 - Math.sin(a * Math.PI) * 8); R(x, y, 1, 2, "k"); if (x % 9 === 3) { R(x, y - 4, 1, 4, "k"); P(x, y - 5, "a"); } }
-  // river with ripple lines, then the stone bank and the grass where the crowd stands
-  R(X0, RIVER_Y - 1, WW, BANK_Y - RIVER_Y + 1, "n"); R(X0, RIVER_Y - 1, WW, 1, "c"); D(X0, RIVER_Y, WW, 8, "n", "G", 6);
-  for (let x = X0 - (((X0 % 11) + 11) % 11); x < X1; x += 11) { R(x + ((x >> 2) & 3), RIVER_Y + 4 + ((x >> 3) & 7) * 2, 3 + ((x >> 1) & 3), 1, "b"); }
-  for (const bx of [30, 90, 150]) { R(bx - 9, LAUNCH_Y - 1, 18, 3, "k"); R(bx - 8, LAUNCH_Y - 1, 16, 1, "D"); R(bx - 2, LAUNCH_Y - 4, 4, 3, "k"); P(bx - 1, LAUNCH_Y - 4, "O"); }
-  R(X0, BANK_Y, WW, Y1 - BANK_Y, "G"); R(X0, BANK_Y, WW, 1, "k");
-  for (let x = X0 - (((X0 % 8) + 8) % 8); x < X1; x += 8) { R(x, BANK_Y + 1, 7, 3, "e"); R(x, BANK_Y + 1, 7, 1, "m"); R(x + 7, BANK_Y + 1, 1, 3, "k"); }
-  R(X0, BANK_Y + 4, WW, 1, "k"); D(X0, BANK_Y + 5, WW, Y1 - BANK_Y - 5, "G", "n", 3);
-  g = keep;
-}
-function dashRing(cx, cy, r, col, ph, gap) { // a dashed circle outline on the pixel grid
-  if (r < 1) return;
-  const n = Math.max(8, Math.round(r * 6.3)); g.fillStyle = PAL[col];
-  for (let i = 0; i < n; i++) { if (((i + ph) % (gap || 3)) === 0) continue; const a = i / n * TAU; g.fillRect(fl(cx + Math.cos(a) * r), fl(cy + Math.sin(a) * r), 1, 1); }
-}
-function dashLine(x0, y0, x1, y1, col, ph) {
-  const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0))); g.fillStyle = PAL[col];
-  for (let i = 0; i <= n; i++) if (((i + ph) >> 1) & 1) g.fillRect(fl(x0 + (x1 - x0) * i / n), fl(y0 + (y1 - y0) * i / n), 1, 1);
-}
-function drawZones() {
-  const gt = run.gt; let nb = 0;
-  for (let i = fx.zones.length - 1; i >= 0; i--) {
-    const z = fx.zones[i], a = gt - z.t0;
-    if (a > z.life) { fx.zones.splice(i, 1); continue; }
-    if (a < 0 || (z.col !== "w" && ++nb > 2)) continue; // the spark's ring and the two newest burst rings only: never a debug overlay
-    const r = z.r * ease(Math.min(1, a / EXPAND)), ph = fl(fx.vt / 70);
-    if (z.kind === 1) { dashRing(z.x, z.y, r - z.band, z.col, ph, 2); dashRing(z.x, z.y, r + z.band, z.col, ph, 2); }
-    else dashRing(z.x, z.y, r, z.col, ph, z.col === "w" && a < z.life * 0.6 ? 3 : 2); // burst rings: sparse dots, gone in 0.2 s
-  }
-}
-function drawGlow() { // a big burst lifts the sky around it by one dithered step for 0.1 s; each burst has a 2-frame core
-  const gl = fx.glow;
-  if (gl && run.gt - gl.gt < 0.1) for (let dy = -34; dy <= 34; dy++) { const w = hw(34, 34, dy); D(gl.x - w, gl.y + dy, 2 * w, 1, null, gl.y + dy < 140 ? "c" : "p", 5); }
-  for (const f of fx.flash) { const a = run.gt - f.gt; if (a < 0.035) ell(f.x, f.y, f.r, f.r, "w"); else if (a < 0.07) ell(f.x, f.y, f.r - 1, f.r - 1, "q"); }
-  fx.flash = fx.flash.filter(f => run.gt - f.gt < 0.07);
-}
-function drawShells(c) {
-  const v = run.vol, r = run;
-  const draw = (s, t, lit) => {
-    const x = Math.round(shellX(s, t)), y = Math.round(shellY(s, t)), ap = t - s.tl - s.ta, sp = (lit ? SP.lit : ap > 0.15 ? SP.fall : SP.shell)[s.type];
-    spr(sp, x - (sp.width >> 1), y - (sp.height >> 1));
-    if (!lit && !s.dud && ap > -0.05 && ap < 0.09) { const k = ap < 0.02 ? 3 : 2; R(x, y - 3 - k, 1, k, "w"); R(x, y + 3, 1, k, "w"); R(x - 3 - k, y, k, 1, "w"); R(x + 3, y, k, 1, "w"); } // apex: a twinkle as it peaks
-    if (s.golden && (fl(fx.vt / 90) & 1)) { P(x - 5, y - 4, "w"); P(x + 4, y + 3, "q"); P(x + 5, y - 5, "y"); }
-  };
-  if (v) {
-    const ah = aimNow(), fuse = new Set();
-    if (v.events) for (let j = v.evIdx; j < v.events.length && v.events[j].t - v.t < FUSE + 0.001; j++) fuse.add(v.events[j].i);
-    for (let i = 0; i < v.shells.length; i++) {
-      const s = v.shells[i];
-      if (!s.launched || s.done) continue;
-      draw(s, s.pend ? Math.min(v.t, s.tEnd) : v.t, fuse.has(i)); // a caught shell flashes white while its fuse burns
-      if (ah && !v.spark && (fl(fx.vt / 120) & 1)) { // preview: exactly the shells the growing spark would catch if lit now
-        if (sparkCatch(s, Math.round(clamp(ah.x, 4, CW - 4)), Math.round(clamp(ah.y, 8, SKY_MAX)), v.t)) { const x = Math.round(shellX(s, v.t)), y = Math.round(shellY(s, v.t)); R(x - 5, y - 5, 2, 1, "w"); R(x + 4, y - 5, 2, 1, "w"); R(x - 5, y + 5, 2, 1, "w"); R(x + 4, y + 5, 2, 1, "w"); }
-      }
-    }
-  }
-  for (const gh of r.ghosts) { const p = ghostPos(gh), sp = SP.shell[gh.s.type]; spr(sp, Math.round(p.x) - (sp.width >> 1), Math.round(p.y) - (sp.height >> 1)); }
-}
-function trailStep(dt) { // rising shells leave sparks (visual only)
-  const v = run && run.vol; if (!v) return;
-  for (const s of v.shells) {
-    if (!s.launched || s.done || v.t - s.tl > s.ta || Math.random() > dt * (s.type === "willow" ? 40 : 22)) continue;
-    const x = shellX(s, v.t), y = shellY(s, v.t);
-    emit(x + (Math.random() - 0.5) * 2, y + 3, (Math.random() - 0.5) * 6, 6 + Math.random() * 8, s.type === "willow" ? 0.7 : 0.4, s.dud ? C_GREY : s.golden ? C_GOLD : C_AMBER, 1, 2, 20, s.type === "willow" ? 1 : 0);
-  }
-}
-function aimNow() { // the ring that shows a spark's reach: the held finger, the AI's aim, or the keyboard reticle
-  const v = run && run.vol;
-  if (!v || v.spark || v.resolved) return null;
-  if (state === "play" && aim.held) return { x: clamp(aim.x, 4, CW - 4), y: clamp(aim.y, 8, SKY_MAX), held: true };
-  if ((run.ai || autopilot) && v.plan && v.plan.t - v.t < 0.45) { const k = clamp((v.plan.t - v.t) / 0.45, 0, 1); return { x: lerp(v.plan.x, v.cx, k * k * 0.6), y: lerp(v.plan.y, v.cy, k * k * 0.6), held: k < 0.5 }; }
-  if (state === "play" && aim.key) return { x: aim.kx, y: aim.ky, key: true };
-  if (state === "play" && aim.hover && finePointer) return { x: clamp(aim.hx, 4, CW - 4), y: clamp(aim.hy, 8, SKY_MAX), hover: true };
-  return null;
-}
-function drawAim() {
-  const a = aimNow();
-  if (!a) { // a press while the spark is spent still answers: a small grey ring with a cross, so the touch is seen
-    if (state !== "play" || !aim.held) return;
-    const x = Math.round(clamp(aim.x, 4, CW - 4)), y = Math.round(clamp(aim.y, 8, SKY_MAX));
-    dashRing(x, y, 9, "q", fl(fx.vt / 60), 2); R(x - 3, y - 3, 1, 1, "q"); R(x - 2, y - 2, 1, 1, "q"); P(x, y, "w"); R(x + 2, y + 2, 1, 1, "q"); R(x + 3, y + 3, 1, 1, "q"); R(x + 3, y - 3, 1, 1, "q"); R(x + 2, y - 2, 1, 1, "q"); R(x - 2, y + 2, 1, 1, "q"); R(x - 3, y + 3, 1, 1, "q");
-    return;
-  }
-  const x = Math.round(a.x), y = Math.round(a.y), ph = fl(fx.vt / 60);
-  if (a.held) { dashRing(x, y, SPARK_R - (fl(fx.vt / 100) & 1), "w", ph, 3); R(x - 3, y, 7, 1, "w"); R(x, y - 3, 1, 7, "w"); P(x, y, "h"); }
-  else if (a.key) { dashRing(x, y, SPARK_R, "q", ph, 2); R(x - 4, y, 3, 1, "q"); R(x + 2, y, 3, 1, "q"); R(x, y - 4, 1, 3, "q"); R(x, y + 2, 1, 3, "q"); }
-  else { dashRing(x, y, SPARK_R, "p", ph, 2); P(x, y, "q"); }
-}
-function drawFail() { // the cause stays visible: missed shells bracketed, a dashed line from the nearest burst
-  const f = run.lastFail; if (!f) return;
-  const end = isDying() || isOver(), age = run.t - f.at, v = run.vol;
-  if (!end && (age > 1.3 || (v && v.n !== f.vn && v.shells.some(s => s.launched && v.t - s.tl > 0.25)))) return;
-  const blink = fl(fx.vt / 110) & 1, o = end ? 8 : 6, a = end ? 4 : 3, t = end ? 2 : 1; // the final miss reads at phone size
-  if (f.line) { dashLine(f.line.x0, f.line.y0, f.line.x1, f.line.y1, "h", fl(fx.vt / 50)); }
-  for (const m of f.missed) { const x = Math.round(m.x), y = Math.round(m.y), c = blink ? "h" : "w"; R(x - o, y - o, a, t, c); R(x - o, y - o, t, a, c); R(x + o + 1 - a, y - o, a, t, c); R(x + o + 1 - t, y - o, t, a, c); R(x - o, y + o + 1 - t, a, t, c); R(x - o, y + o + 1 - a, t, a, c); R(x + o + 1 - a, y + o + 1 - t, a, t, c); R(x + o + 1 - t, y + o + 1 - a, t, a, c); }
-}
-function drawStamp() { // the biggest calls (全部!, たまや!) are stamped into the sky at 2x for a moment (STYLE.md 8)
-  const s = fx.stamp; if (!s) return;
-  const age = run.gt - s.gt; if (age > 1.1) { fx.stamp = null; return; }
-  if (age > 0.95 && (fl(age * 25) & 1)) return;
-  const word = S(s.key), ja = [...word].every(ch => STAMP_ART[ch]), k = 2;
-  const c = ja ? inkArt(STAMP_ART, word, [1, 0, 1, 0], s.key === "all" ? "y" : "w", s.key === "all" ? "Y" : "e") : textCanvas(word, { c: s.key === "all" ? "y" : "w", o: "k", sc: 3 });
-  noteText(word, 16);
-  // 6 px inside the core scene, above the burst it celebrates (not on it), below the HUD
-  const w = c.width * k, h = c.height * k, x = clamp(s.x - fl(w / 2), 6, CW - 6 - w), y = Math.max(s.y - h - 24, lay().call.y - 6 + WY) - (age < 0.08 ? 2 : 0);
-  nr(x - 3, y - 3, w + 6, h + 6, "k", 2); R(x - 2, y - 2, w + 4, h + 4, s.key === "all" ? "r" : "h"); R(x - 1, y - 1, w + 2, h + 2, "k");
-  spr(c, x, y, false, k, k);
-  s.box = { cx: x + fl(w / 2), y: y + h + 6 - WY }; // the call's stars and sub line go under the stamp, never on it
-}
-function drawBank(now) { // the crowd: silhouettes lit by the latest burst; they cheer on a big chain
-  const rimOn = run.gt - fx.rimT < 0.35, rim = rimOn ? fx.rim : "n", cheer = run.gt - fx.cheerT < 1.4;
-  const X0 = -PX.cx0, X1 = PX.LW - PX.cx0, set = SP.crowd[rim];
-  let i = 0;
-  for (let x = X0 - (((X0 % 15) + 15) % 15) - 4; x < X1; x += 15, i++) {
-    const k = ((x * 7 + 300) >> 2) % 4, sp = set[(k + 4) % 4], hop = cheer && ((i + fl(fx.vt / 140)) & 1) ? 2 : 0, y = 276 + ((i * 5) % 4) - hop;
-    if (x > 14 && x < 44) continue; // room for the hanabishi
-    spr(sp, x, y);
-    if (cheer && (i % 3 === 0)) { R(x + 1, y - 4, 2, 5, "k"); R(x + sp.width - 3, y - 4, 2, 5, "k"); }
-  }
-  drawMaster();
-}
-function drawMaster() {
-  const x = 22, y = 268, age = run.gt - fx.poseT, p = fx.pose;
-  const thrust = p === "thrust" && age < 0.5, sad = p === "sad" && age < 1.6 || isDying() || (isOver() && run.mode !== "attract"), joy = run.gt - fx.cheerT < 1.2;
-  const bob = !thrust && (fl(fx.vt / 260) & 1) ? 1 : 0, base = sad ? SP.masterSad : joy ? SP.masterJoy : SP.master;
-  spr(base, x, y + bob + (sad ? 1 : 0));
-  // arms and the torch, posed (not tweened): rest, thrust up, both up for joy, hanging when sad
-  const hx = x + 12, hy = y + 11 + bob;
-  if (thrust) { const lift = age < 0.06 ? 2 : 0; R(hx, hy - 6 - lift, 2, 7, "k"); R(hx + 1, hy - 5 - lift, 1, 5, "b"); torch(hx + 1, hy - 13 - lift, true); }
-  else if (joy) { R(x, hy - 6, 2, 6, "k"); R(hx, hy - 6, 2, 6, "k"); torch(hx + 1, hy - 13, true); }
-  else if (sad) { R(hx, hy, 2, 4, "k"); torch(hx + 2, hy + 3, false); }
-  else { R(hx, hy - 1, 2, 4, "k"); torch(hx + 2, hy - 6, true); }
-}
-function torch(x, y, lit) {
-  R(x, y + 2, 1, 7, "O"); P(x, y + 9, "D");
-  if (!lit) { if (fl(fx.vt / 300) & 1) P(x, y, "e"); return; }
-  const f = fl(fx.vt / 90) & 1;
-  R(x - 1, y - 1 + f, 3, 3, "a"); P(x, y - 2 + f, "y"); P(x, y + f, "q");
-}
-function drawLantern(x, y, i, now) { // a life: lit, flickering out when lost, swinging, relit with a glow
+const hang = (x, X, Y) => cordLine(x, pLine(X, ropeY(X), X, Y), 1.4, "red", 0.45); // a red cord from the rope
+function drawLantern(x, X, Y, i, s) { // a life: lit, flickering when dim, swinging, flickering out when lost, relit
   const r = run, lit = r.lanterns > i, lostAge = r.gt - fx.lostT, justLost = fx.lostI === i && lostAge < 1.2, relit = i === r.lanterns - 1 && r.gt - fx.relitT < 0.9;
   const swAge = r.gt - (fx.swingT || -9), swing = (justLost && lostAge > 0.25) || (swAge < 1.2 && swAge > i * 0.08) || (fx.lostI !== i && r.gt - (fx.dimT || -9) < 0.6 && i === r.lanterns - 1);
-  const sw = swing ? ((fl((r.gt + i * 0.05) * 10) & 1) ? 1 : -1) : 0;
-  line(x + 4, y - 4, x + 4 + sw, y, "k");
-  let s = lit ? (r.dim && i === r.lanterns - 1 && fl(r.gt * 9) % 6 ? SP.lanternDim : SP.lantern) : SP.lanternOff; // a flickering lantern burns low
-  if (justLost && lostAge < 0.4) s = (fl(lostAge * 22) & 1) ? SP.lantern : SP.lanternDim; // flicker before it dies
-  if (relit && (fl((r.gt - fx.relitT) * 12) & 1)) s = SP.lanternDim;
-  spr(s, x + sw, y);
-  if (justLost && lostAge > 0.3 && lostAge < 1.2) { const k = lostAge - 0.3; D(x + 3 + Math.round(Math.sin(k * 8) * 2), y - 3 - fl(k * 10), 3, 3, null, "e", lostAge > 0.8 ? 4 : 8); }
+  const sw = swing && !Juice.reduce ? ((fl((r.gt + i * 0.05) * 10) & 1) ? 0.12 : -0.12) : 0;
+  let k = lit ? (r.dim && i === r.lanterns - 1 && fl(r.gt * 9) % 6 ? "dim" : "on") : "off"; // a flickering lantern burns low
+  if (justLost && lostAge < 0.4) k = (fl(lostAge * 22) & 1) ? "on" : "dim";                // it flickers before it dies
+  if (relit && (fl((r.gt - fx.relitT) * 12) & 1)) k = "dim";
+  hang(x, X, Y + 1);
+  at(x, X, Y, s, sw, () => {
+    put(x, odawara(k), 0, 0);
+    if (justLost && lostAge > 0.3 && lostAge < 1.2) { const a = lostAge - 0.3; put(x, puffSpr(fl(a * 4) % 3, "grey"), Math.sin(a * 8) * 3, -2 - a * 26, 0, 0.55 - a * 0.3); }
+  });
 }
-function drawHUD(now) {
-  const r = run, v = r.vol, L = lay();
-  // the rope and its lanterns (lives)
-  if (!L.wide) { for (let x = -PX.cx0; x < PX.LW - PX.cx0; x++) { const k = x / CW; P(x, L.T + 2 + Math.round(Math.sin(k * Math.PI) * 4), "k"); } }
-  else { const x0 = -PX.cx0 + 2, x1 = -2; for (let x = x0; x < x1; x++) P(x, L.T + 2 + Math.round(Math.sin((x - x0) / (x1 - x0) * Math.PI) * 3), "k"); }
-  for (let i = 0; i < 3; i++) drawLantern(L.lives.x + i * 14, L.lives.y, i, now);
-  // the score is painted on a wide paper lantern; it hops when it changes
-  const sx = L.score.x, sy = L.score.y, bump = r.gt - fx.scoreT < 0.09 ? -1 : 0;
-  line(sx, sy - 4, sx, sy, "k");
-  nr(sx - 23, sy + bump, 46, 22, "k", 3); R(sx - 22, sy + 1 + bump, 44, 20, "q"); for (let yy = 4; yy < 20; yy += 4) R(sx - 22, sy + yy + bump, 44, 1, "m");
-  R(sx - 17, sy + bump, 34, 2, "D"); R(sx - 17, sy + 20 + bump, 34, 2, "D");
-  const ds = String(fx.disp); txt(ds, sx, sy + 6 + bump, { c: "k", sc: ds.length > 5 ? 1 : 2 });
-  // volley number on a second, smaller paper lantern; in practice it hangs unlit (grey paper)
-  const tx = L.tag.x, ty = L.tag.y, pr = v && v.grace && !r.stakes, tl = pr ? S("practice") : S("volley", v ? v.n : 1), tw = textW(tl, { px: 12, sc: 1 }) + 8, tx0 = tx - fl(tw / 2);
-  line(tx, ty - 5, tx, ty, "k"); nr(tx0, ty, tw, 16, "k", 2); R(tx0 + 1, ty + 1, tw - 2, 14, pr ? "m" : "q"); R(tx0 + 1, ty + 7, tw - 2, 1, pr ? "e" : "m");
-  R(tx0 + 3, ty - 1, tw - 6, 2, "D"); R(tx0 + 3, ty + 15, tw - 6, 2, "D");
-  txt(tl, tx, ty + (isLatin(tl) ? 6 : 2), { c: pr ? "D" : "k", px: 12, sc: 1 });
+function drawHud(x, now) {
+  const r = run, v = r.vol, hp = HP, s = hp.s, pr = !!(v && v.grace && !r.stakes);
+  for (let i = 0; i < 3; i++) drawLantern(x, hp.lx + (i - 1) * hp.lg, hp.ly, i, s);
+  // the score on a square paper lantern; it hops when it changes. Its second line: the volley (practice: unlit)
+  const bump = r.gt - fx.scoreT < 0.09 ? -2 * s : 0;
+  for (const d of [-40, 40]) hang(x, hp.ax + d * s, hp.ay + 4 * s + bump);
+  at(x, hp.ax, hp.ay + bump, s, 0, () => {
+    put(x, andonSpr(!pr), 0, 0);
+    text(x, fx.disp, 0, 31, 32, pr ? "greyD" : "ink", { f: ST.title, w: 900, max: 92, deep: pr ? "paperD" : "goldD" });
+    text(x, pr ? S("practice") : S("volley", v ? v.n : 1), 0, 59, 15, pr ? "greyD" : "redD", {});
+  });
   if (!v) return;
-  // goal beads: one per link the volley needs; they fill as the chain counts, and extra links glow pink
-  const goal = v.goal, extra = Math.max(0, v.chain - goal), nB = goal + Math.min(extra, 8), per = L.wide ? 8 : 14, bw = 6;
-  const rows = Math.ceil(nB / per), bx0 = L.beads.x - fl((Math.min(nB, per) * bw) / 2) - (L.wide ? 0 : 14);
-  for (let i = 0; i < nB; i++) {
-    const bx = bx0 + (i % per) * bw, by = L.beads.y + fl(i / per) * 6, on = i < v.chain;
-    R(bx, by, 5, 5, "k"); R(bx + 1, by + 1, 3, 3, i >= goal ? "h" : on ? "y" : "D"); if (on) P(bx + 1, by + 1, "w");
-  }
-  const left = goal - v.chain, gl = left > 0 ? S("toGoal", left) : S("goalOk"), gx = bx0 + Math.min(nB, per) * bw + 3;
-  if (!L.wide) txt(gl, gx, L.beads.y + (isLatin(gl) ? 0 : -4), { c: left > 0 ? "q" : "l", o: "k", px: 12, a: "l" });
-  else txt(gl, L.beads.x, L.beads.y + rows * 6 + 2, { c: left > 0 ? "q" : "l", o: "k", px: 12 });
-  // the chain counter: one number in the sky, its colour rising with the tier, squashing when it grows
+  // the goal: one small shell per link on a bamboo rack; they turn gold as the chain counts, extra links add pink ones
+  const goal = v.goal, extra = Math.max(0, v.chain - goal), n = goal + Math.min(extra, 8), per = 8, rows = Math.ceil(n / per);
+  for (const d of [-44, 44]) hang(x, hp.rx + d * hp.rs, hp.ry + 3 * hp.rs);
+  at(x, hp.rx, hp.ry, hp.rs, 0, () => {
+    for (let row = 0; row < rows; row++) {
+      const yy = row * 15, m = Math.min(per, n - row * per);
+      if (row) for (const d of [-44, 44]) cordLine(x, pLine(d, yy - 13, d, yy + 3), 1.4, "red", 0.45);
+      put(x, poleSpr(), 0, yy + 2.4);
+      for (let j = 0; j < m; j++) { const i = row * per + j; put(x, rackSpr(i >= goal ? 2 : i < v.chain ? 1 : 0), (j - (m - 1) / 2) * 11, yy); }
+    }
+    const left = goal - v.chain;
+    text(x, left > 0 ? S("toGoal", left) : S("goalOk"), 0, rows * 15 + 12, 15, left > 0 ? "paper" : "mint", { ol: "ink", ow: 0.3 });
+  });
+  // the chain: one number in the sky, its colour rising with the tier, a squash when it grows
   if (v.chain > 0 && (!v.resolved || r.gt - fx.chainT < 1.2)) {
-    const n = v.chain, col = n >= 15 ? "h" : n >= 10 ? "a" : n >= 5 ? "y" : "q", age = r.gt - fx.chainT, sq = age < 0.06 && age >= 0;
-    const cy = L.chain.y + (L.wide ? rows * 6 + 16 : 0);
-    txt(S("chainLbl"), L.chain.x - (L.wide ? 0 : 26), cy + (L.wide ? 0 : 6), { c: "q", o: "k", px: 12, sc: 1 });
-    bigText(String(n), L.chain.x + (L.wide ? 0 : 10), cy + (L.wide ? 16 : 0) + (sq ? 1 : 0), 4, col, "k", sq ? 5 : 4, sq ? 3 : 4, n >= 10 ? "R" : null);
+    const k = v.chain, col = k >= 15 ? "redL" : k >= 10 ? "orange" : k >= 5 ? "gold" : "goldL", age = r.gt - fx.chainT, sq = age >= 0 && age < 0.06;
+    at(x, hp.cx, L.wide ? hp.ry + rows * 15 * hp.rs + 84 * s : hp.cy, s, 0, () => {
+      if (L.wide) text(x, S("chainLbl"), 0, -38, 16, "paper", { ol: "ink", ow: 0.3 });
+      else text(x, S("chainLbl"), -26, 3, 15, "paper", { ol: "ink", ow: 0.3, a: "right" });
+      at(x, L.wide ? 0 : 8, 0, sq ? 1.18 : 1, 0, () => text(x, k, 0, 0, 46, col, { f: ST.title, w: 900, ol: "ink", ow: 0.2, deep: "ink" }));
+    });
   }
 }
-function drawCall(now) {
+// the judgement word: letters stamp in one by one; a word that starts with its number appears whole
+const CALLC = { q: "goldL", y: "gold", l: "mint", h: "redL", e: "grey" };
+function drawCall(x, now) {
   const cl = fx.call; if (!cl) return;
   const age = now - cl.t; if (age < 0) return;
   if (age > 1500) { fx.call = null; return; }
   if (age > 1380 && (fl(age / 40) & 1)) return; // blink out
-  const L = lay(), word = S(cl.key, cl.n), y = L.call.y + (L.wide ? 0 : 0);
-  // letters stamp in one by one (20 ms each)
-  // a word that starts with its number ("3 SHORT") appears whole, so a lone digit never sits beside the chain count
-  const chars = [...word], k = /^\d/.test(word) ? chars.length : Math.min(chars.length, 1 + fl(age / 20)), shown = chars.slice(0, k).join("");
-  const o = { c: cl.col, o: "k", px: cl.big ? 16 : 13, sc: 2 }, fw = textW(word, o), x = L.call.x - fl(fw / 2), st = cl.box = (fx.stamp && fx.stamp.key === cl.key && fx.stamp.box) || cl.box;
-  if (!st) txt(shown, x, y, Object.assign({ a: "l" }, o)); // the 2x stamp already says it
-  let yy = st ? st.y : y + (isLatin(word) ? 13 : cl.big ? 22 : 19);
-  const cx = st ? st.cx : L.call.x;
-  if (cl.stars) { for (let i = 0; i < 3; i++) { spr(SP.star, cx - 10 + i * 7, yy); if (i >= cl.stars) R(cx - 9 + i * 7, yy + 1, 3, 3, "k"); } yy += 8; }
-  if (cl.introOf) { const sp = SP.shell[cl.introOf === "gold" ? "gold" : cl.introOf === "wind" || cl.introOf === "fast" ? "peony" : cl.introOf]; spr(sp, x - sp.width - 4, y + 2); }
-  if (cl.sub && age > 160) txt(cl.sub, cx, yy, { c: cl.col === "h" ? "w" : "q", o: "k", px: 12, sc: 1 });
+  const u = L.u, word = S(cl.key, cl.n), col = CALLC[cl.col] || "goldL", size = cl.big ? 40 : cl.introOf ? 28 : 32, o = { f: ST.title, w: 900 }, [cx0, cy0] = HP.call;
+  const st = cl.box = (fx.stamp && fx.stamp.key === cl.key && fx.stamp.box) || cl.box;
+  if (!st) at(x, cx0, cy0, u, 0, () => {
+    let fw = textW(x, word, size, o), sz = size; if (fw > 320) { sz = size * 320 / fw; fw = 320; }
+    const chars = [...word], k = /^\d/.test(word) ? chars.length : Math.min(chars.length, 1 + fl(age / 20));
+    text(x, chars.slice(0, k).join(""), -fw / 2, 0, sz, col, { f: ST.title, w: 900, a: "left", ol: "ink", ow: 0.24, deep: "ink" });
+    if (cl.introOf) put(x, shellSpr(cl.introOf === "gold" || cl.introOf === "dud" ? cl.introOf : cl.introOf === "wind" || cl.introOf === "fast" ? "peony" : cl.introOf, "n"), -fw / 2 - 20, 0, 0, 1.4);
+  });
+  at(x, st ? st.cx : cx0, st ? st.y : cy0 + (size * 0.5 + 18) * u, u, 0, () => {
+    let y = 0;
+    if (cl.stars) { for (let i = 0; i < 3; i++) { const p = pStar(-24 + i * 24, 0, 10, 4.2, 5); ST.fill(x, p, i < cl.stars ? "gold" : "greyD"); ST.edge(x, p, 1.1); } y += 26; }
+    if (cl.sub && age > 160) for (const ln of cl.sub.split("\n")) { if (ln) text(x, ln, 0, y, 16, cl.col === "h" ? "paper" : "goldL", { ol: "ink", ow: 0.3, max: 330 }); y += 22; }
+  });
 }
-function drawHint() { // first runs: a finger presses where a good spark is, when it is time (bar 1.7.1)
-  const v = run.vol;
-  if (state !== "play" || !hint.active || !v || v.spark || v.resolved || !v.hint || aim.held) return;
-  const k = clamp(Math.abs(v.hint.t - v.t) / 0.7, 0, 1), x = Math.round(v.hint.x), y = Math.round(v.hint.y);
-  if (k < 0.5) dashRing(x, y, SPARK_R, "q", fl(fx.vt / 60), 4);
-  drawTapHint(x, y, k);
+const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
+// the hand points at a tag from its right (the hanabishi stands on the left of the bank)
+const pointAt = (x, e, now) => at(x, e.cx + (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, 1, 0, () => { x.scale(-1, 1); hand(x, 0, 0, Math.PI / 2, e.s); });
+// the broadsheet hangs lower when the system plaques in the top corners would touch it (narrow screens)
+function titleTop() {
+  const u = L.u, l = UI.lang, m = UI.mute, half = KW / 2 * u;
+  return hudTop() + (l.cx + l.w * u / 2 > 180 - half - 4 || m.cx - m.w * u / 2 < 180 + half + 4 ? 12 + 46 * u : 26);
 }
-function drawTitle(now) {
-  const L = lay(), y = L.wide ? L.T + 4 : Math.max(L.T + 8, 4), x = 6, w = 168, h = 92;
-  const drop = Math.round(-120 * (1 - easeOut((T() - (fx.titleT || 0)) / 240)));
-  g.translate(0, drop);
-  // the title cloth: a festival banner hung on the rope, pink and cream stripes at the edges
-  for (const rx of [x + 12, x + w - 13]) R(rx, L.T, 1, Math.max(0, y - L.T), "k");
-  nr(x, y, w, h, "k", 1); R(x + 1, y + 1, w - 2, h - 2, "q");
-  for (let i = 0; i < w - 2; i += 8) { R(x + 1 + i, y + 1, 4, 3, "h"); R(x + 1 + i, y + h - 4, 4, 3, "h"); }
-  R(x + 1, y + 4, w - 2, 1, "k"); R(x + 1, y + h - 5, w - 2, 1, "k"); D(x + 1, y + 5, w - 2, h - 10, "q", "m", 2);
-  const art = inkArt(KANJI, TITLE_JA, [1, 0, 2, 0], "k", "R"); noteText(TITLE_JA, 16);
-  spr(art, 90 - art.width, y + 9, false, 2, 2);
-  txt(TITLE_EN, 90, y + 50, { c: "r", sc: 2 });
-  // burst marks around the title (the game's own key art, small)
-  for (const [bx, by, c] of [[x + 10, y + 16, "h"], [x + w - 11, y + 20, "y"], [x + 14, y + 66, "l"], [x + w - 15, y + 64, "a"]]) for (let i = 0; i < 8; i++) { const a = i * TAU / 8; P(bx + Math.round(Math.cos(a) * 5), by + Math.round(Math.sin(a) * 5), c); P(bx + Math.round(Math.cos(a) * 3), by + Math.round(Math.sin(a) * 3), "w"); }
-  const b = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0;
-  if (b > 0) { // best, and from the second run the rank and the goals cleared
-    const s1 = S("best") + " " + b, rk = runs >= 2 ? S("ranks")[rankOf(b)] : "", md = Number(store.get("mis", 0)) || 0;
-    const w1 = textW(s1, { px: 12, sc: 1 }), w2 = rk ? textW(rk, { px: 12, sc: 1 }) + 8 : 0, pw = w1 + w2 + 12, px = 90 - fl(pw / 2), py = y + 66;
-    nr(px, py, pw, 16, "k", 1); R(px + 1, py + 1, pw - 2, 14, "w"); txt(s1, px + 6, py + (isLatin(s1) ? 6 : 2), { c: "k", px: 12, sc: 1, a: "l" });
-    if (rk) { seal(px + 6 + w1 + 3, py + 1, w2, 14); txt(rk, px + 6 + w1 + 7, py + (isLatin(rk) ? 5 : 1), { c: "r", px: 12, sc: 1, a: "l" }); }
-    if (runs >= 2 && md > 0) txt(S("misCount", md + "/" + MISSIONS.length), 90, py + 18, { c: "q", o: "k", px: 12, sc: 1 });
-  } else { // first visit: the night's programme, the six shells at x2, one of them lit in turn
-    const ks = ["peony", "willow", "cross", "ring", "gold", "dud"], on = fl(now / 500) % ks.length;
-    ks.forEach((k, i) => { const sp = (i === on ? SP.lit : SP.shell)[k], cx = 30 + i * 24; spr(sp, cx - sp.width, y + 82 - sp.height * 2, false, 2, 2); });
-  }
-  g.translate(0, -drop);
-  txt(S("how1"), 90, 222, { c: "q", o: "k", px: 12, sc: 1 }); txt(S("how2"), 90, 254, { c: "y", o: "k", px: 12, sc: 1 });
-  const [tx, ty, tw, th] = UI.start, bob = fl(now / 400) & 1;
-  fuda(tx, ty + bob, tw, th, S("start"), true);
-  spr(SP.pointer, tx - 15 + (fl(now / 300) & 1) * 2, ty + 6 + bob);
-  if (finePointer) txt(S("space"), tx + tw + 4, ty + 5 + bob, { c: "q", o: "k", px: 12, sc: 1, a: "l" }); // beside the tag, clear of the credit
-  txt(CREDIT, -PX.cx0 + 4, PX.LH - PX.cy0 - 9, { c: "e", a: "l" });
+function wrapText(x, str, size, max) { // one line, or two broken at the space nearest the middle
+  if (textW(x, str, size) <= max) return [str];
+  let best = -1; for (let i = 0; i < str.length; i++) if (str[i] === " " && (best < 0 || Math.abs(i - str.length / 2) < Math.abs(best - str.length / 2))) best = i;
+  return best < 0 ? [str] : [str.slice(0, best), str.slice(best + 1)];
 }
-// the game's own button: the paper tag shape of the house style, cream with a pink edge (not orange wood on navy)
-function fuda(x, y, w, h, label, big) {
-  for (let j = 0; j < h; j++) {
-    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j)), rj = (j % 5 === 2) ? 1 : 0;
-    R(x + cut, y + j, w - cut - rj, 1, "k");
-    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - cut - rj - 2, 1, j === 1 ? "w" : j >= h - 3 ? "m" : "q");
-  }
-  R(x + 3, y + 3, 4, 4, "m"); R(x + 4, y + 4, 2, 2, "D"); // the string hole by the cut corner
-  const tc = textCanvas(label, { c: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
-  spr(tc, fl(x + 9 + (w - 9 - tc.width) / 2), fl(y + (h - tc.height) / 2));
-}
-function drawPause(now) {
-  D(-PX.cx0, -PX.cy0, PX.LW, PX.LH, null, "k", 8);
-  const dy = Math.round(-30 * (1 - easeOut((T() - fx.pauseT) / 200))), y = pauseY();
-  g.translate(0, dy);
-  win(8, y, 164, 96);
-  txt(S("paused"), 90, y + 10, { c: "q", px: 14, sc: 2 });
-  fuda(...UI.resume, S("resume"), true); fuda(...UI.restart, S("restart")); fuda(...UI.quit, S("toTitle"));
-  g.translate(0, -dy);
-}
-const pauseY = () => Math.max(84, -PX.cy0 + 20);
-function drawOver(now) {
-  const res = run.result, play = state === "over", age = resAge(res, now), L = lay();
-  const x = 8, w = 164, h = play ? 178 : 122, y = L.over + Math.round(-200 * (1 - easeOut(age / RES.drop))) + (age > RES.drop && age < RES.drop + 80 ? 1 : 0);
-  for (const rx of [x + 14, x + w - 15]) R(rx, L.T, 1, Math.max(0, y - L.T), "k"); // hung from the rope like the title
-  win(x, y, w, h);
-  if (age > RES.head) { const t = S("over"); txt(t, 90, y + 7, { c: "q", o: "k", px: 16, sc: 2 }); }
-  if (age > RES.cause) txt(res.cause, 90, y + 27, { c: "h", px: 12, sc: 1 });
-  if (age > RES.count) {
-    const k = clamp((age - RES.count) / RES.countDur, 0, 1), shown = String(Math.round(res.score * easeOut(k)));
-    const rk = res.showRank && res.rankDone ? S("ranks")[res.rank] : "", rw = rk ? textW(rk, { px: 12, sc: 1 }) + 10 : 0, sw = textW(String(res.score)) * 4;
-    bigText(shown, res.showRank ? x + 12 + fl(sw / 2) : 90, y + 44, 4, "q", "k");
-    if (rk) { const rx = x + w - 10 - rw, ry = y + 46, j = age < RES.rank + 90 ? -2 : 0; seal(rx, ry + j, rw, 16); txt(rk, rx + 5, ry + (isLatin(rk) ? 6 : 2) + j, { c: "r", px: 12, sc: 1, a: "l" }); }
-  }
-  if (age > RES.rows) {
-    const rows = [["rChain", "x" + run.maxChain], ["rAll", S("times", run.alls)], ["rVolley", S("volleyN", run.volleyN)]];
-    if (play) rows.push(["rStars", String(run.stars)]);
-    rows.forEach(([k, v], i) => {
-      const ry = y + 70 + i * 14;
-      txt(S(k), x + 10, ry + (isLatin(S(k)) ? 3 : 0), { c: "s", px: 12, sc: 1, a: "l" }); txt(v, x + w - 10, ry + (isLatin(v) ? 2 : 0), { c: "q", px: 12, sc: isLatin(v) ? 2 : 1, a: "r" });
-      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 12, "b");
-    });
-    if (play && (res.newBest || res.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
-      const ry = y + 128;
-      txt(S("rBest"), x + 10, ry + (isLatin(S("rBest")) ? 3 : 0), { c: "s", px: 12, sc: 1, a: "l" });
-      if (res.newBest) { if (age > RES.best) { const t = textCanvas(S("newBest"), { c: "r", px: 12, sc: 2 }), bw = t.width + 8, bx = x + w - 10 - bw, j = age < RES.best + 90 ? -2 : 0; noteText(S("newBest"), 12); seal(bx, ry - 2 + j, bw, 15); spr(t, bx + 4, ry + 1 + j); } }
-      else { txt(String(res.best), x + 60, ry + 2, { c: "q", sc: 2, a: "l" }); const tb = res.score === res.best ? S("tieBest") : S("toBest", res.best - res.score); txt(tb, x + w - 10, ry + (isLatin(tb) ? 3 : 0), { c: "y", px: 12, sc: 1, a: "r" }); }
-      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 13, "b");
+function drawTitle(x, now) { // the title is a broadsheet hung from the rope; the start tag waits on the bank
+  const u = L.u, ty = titleTop(), still = Juice.reduce, ja = lang === "ja", b = bestOf(), runs = runsOf(), mis = Number(store.get("mis", 0)) || 0;
+  const lines = [];
+  for (const [k, sz, col] of [["how1", ja ? 17 : 15, "ink"], ["how2", 15, "redD"]]) for (const ln of wrapText(x, S(k), sz, 262)) lines.push([ln, sz, col]);
+  const rowY = 124 + lines.length * 22 + 10, best = !L.wide && b > 0, misOn = best && runs >= 2 && mis > 0, h = Math.round(rowY + (misOn ? 50 : 28));
+  const y = ty - (h + 70) * u * (1 - easeBack((T() - (fx.titleT || 0)) / 520));
+  for (const d of [-96, 96]) hang(x, 180 + d * u, y - 8 * u);
+  at(x, 180, y, u, still ? 0 : Math.sin(now / 900) * 0.01, () => {
+    put(x, kawaraSpr(h), 0, 0);
+    text(x, TITLE_JA, 0, 51, 42, "ink", { f: ST.title, w: 900, deep: "paperD", max: 190 });
+    text(x, TITLE_EN, 0, 84, 16, "redD", { w: 700 });
+    lines.forEach(([ln, sz, col], i) => text(x, ln, 0, 124 + i * 22, sz, col, { max: 262 }));
+    if (best) { // best and, from the second run, the rank and the goals cleared, printed at the foot of the sheet
+      const rk = runs >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b, tw = textW(x, t, 17), sw = rk ? textW(x, rk, 16) + 19.2 : 0, w = tw + (rk ? sw + 14 : 0);
+      text(x, t, -w / 2, rowY, 17, "ink", { a: "left" });
+      if (rk) seal(x, w / 2 - sw / 2, rowY, rk, 999, 16);
+      if (misOn) text(x, S("misCount", mis + "/" + MISSIONS.length), 0, rowY + 26, 15, "redD", {});
+    } else { // the night's programme: the six shells, one of them lit in turn
+      const ks = ["peony", "willow", "cross", "ring", "gold", "dud"], on = fl(now / 500) % ks.length;
+      ks.forEach((k, i) => put(x, shellSpr(k, i === on ? "l" : "n"), -100 + i * 40, rowY, 0, 1.5));
     }
+  });
+  if (L.wide && b > 0) { // on a wide screen the best and the rank hang on a plank in the right side area
+    const rk = runs >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b, s = hudS(), X = sideX(1), Y = hudTop() + 40;
+    const w = textW(x, t, 16) + (rk ? textW(x, rk, 16) + 26 : 0) + 36, pw = Math.round(w / 10) * 10 + 10;
+    for (const d of [-pw / 2 + 16, pw / 2 - 16]) hang(x, X + d * s, Y + 4 * s);
+    at(x, X, Y, s, 0, () => {
+      put(x, plankSpr(pw), 0, 0); text(x, t, rk ? -w / 2 + 18 : 0, 18, 16, "paper", { a: rk ? "left" : "center" });
+      if (rk) seal(x, w / 2 - textW(x, rk, 16) / 2 - 18, 18, rk, 999);
+      if (runs >= 2 && mis > 0) text(x, S("misCount", mis + "/" + MISSIONS.length), 0, 54, 15, "paper", { ol: "ink", ow: 0.3 });
+    });
   }
-  if (play && age > RES.goal && res.goal) { // the next goal, from the mission ladder
-    // a cleared goal gets its own row, so the next goal never reads as this run's score
-    const gt = S("nextGoal") + " " + S(res.goal.k, res.goal.n), mc = S("misCount", res.misDone + "/" + MISSIONS.length), gy = y + (res.newly ? 160 : 146);
-    if (res.newly) txt(S("misDone"), x + 10, y + 146 + (isLatin(S("misDone")) ? 4 : 0), { c: "l", px: 12, sc: 1, a: "l" });
-    spr(SP.pointer, x + 8, gy + 3); txt(gt, x + 22, gy + (isLatin(gt) ? 4 : 0), { c: "y", px: 12, sc: 1, a: "l" });
-    txt(mc, x + w - 10, y + (res.newly ? 146 : 162) + (isLatin(mc) ? 4 : 0), { c: "s", px: 12, sc: 1, a: "r" });
-  }
-  if (play) {
-    fuda(...UI.retry, S("retry"), true); fuda(...UI.toTitle, S("toTitle"));
-    if (retryReady()) spr(SP.pointer, UI.retry[0] + UI.retry[2] + 2 - (fl(now / 300) & 1) * 2, UI.retry[1] + 6, true);
-  }
+  const st = UI.start;
+  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => tagBtn(x, 0, 0, st.w, st.h, S("start"), 24));
+  pointAt(x, st, now);
+  if (finePointer) text(x, S("space"), st.cx, st.y + 68 * u, 14 * u, "paper", { ol: "ink", ow: 0.3 });
+  text(x, CREDIT, vLeft() + 10, vBot() - 14, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3, w: 700 });
 }
-function seal(x, y, w, h) { // a hanko pressed onto paper: a thick red ink frame with round corners, red letters, worn gaps where the ink missed
-  R(x + 1, y, w - 2, h, "r"); R(x, y + 1, w, h - 2, "r"); R(x + 2, y + 2, w - 4, h - 4, "q"); P(x + 2, y + 2, "r"); P(x + w - 3, y + h - 3, "r");
-  for (let i = 3; i < w - 3; i += 7) P(x + i + (i % 3), y + ((i >> 2) & 1 ? 0 : h - 1), "q");
-  P(x, y + 2 + (w % 4), "q"); P(x + w - 1, y + h - 4, "q");
+function drawPause(x, now) {
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 260)), y = pauseY() + dy;
+  for (const d of [-100, 100]) hang(x, 180 + d * u, y + 4 * u);
+  at(x, 180, y, u, 0, () => { board(x, 0, 0, 300, 206); text(x, S("paused"), 0, 38, 28, "paneT", { f: ST.title, w: 900, deep: "paneL" }); });
+  btn(x, UI.resume, S("resume"), 22, 0, dy); btn(x, UI.restart, S("restart"), 17, 0, dy); btn(x, UI.quit, S("toTitle"), 17, 0, dy);
 }
-function drawDemoLabel() { // ?demo=1: a small bilingual title instead of any tool, BEST or button (portrait: one line over the river, above the bottom 20 %)
-  if (lay().wide) { const y = PX.LH - PX.cy0 - 30; txt(TITLE_JA, 90, y, { c: "q", o: "k", px: 12 }); txt(TITLE_EN, 90, y + 18, { c: "q", o: "k" }); return; }
-  const y = RIVER_Y - WY + 5; txt(TITLE_JA, 88, y, { c: "q", o: "k", px: 12, a: "r" }); txt(TITLE_EN, 94, y + 4, { c: "q", o: "k", a: "l" });
+const bestSealAt = () => ({ x: 180 + 70 * L.u, y: overY() + 282 * L.u });
+function drawOver(x, now) {
+  const res = run.result, play = state === "over", age = resAge(res, now), u = L.u, H = play ? 372 : 256, big = { f: ST.title, w: 900, deep: "paneL" };
+  const y = overY() - (H + 80) * u * (1 - easeBack(age / RES.drop));
+  for (const d of [-110, 110]) hang(x, 180 + d * u, y + 4 * u);
+  at(x, 180, y, u, 0, () => {
+    board(x, 0, 0, 316, H);
+    if (age > RES.head) text(x, S("over"), 0, 40, 30, "paneT", big);
+    if (age > RES.cause) text(x, res.cause, 0, 73, 16, "paneS", { max: 272 });
+    if (age > RES.count) {
+      text(x, Math.round(res.score * easeOut((age - RES.count) / RES.countDur)), res.showRank ? -52 : 0, 118, 52, "paneT", Object.assign({ max: 170 }, big));
+      if (res.showRank && res.rankDone) seal(x, 84, 118, S("ranks")[res.rank], age - RES.rank);
+    }
+    if (age > RES.rows) {
+      const row = (ry, k, v) => { text(x, S(k), -134, ry, 17, "paneT", { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, "paneS", { a: "right", f: ST.title, w: 900 }); x.fillStyle = C("paneL"); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 15, 2, 2); };
+      row(162, "rChain", "x" + run.maxChain); row(192, "rAll", S("times", run.alls)); row(222, "rVolley", S("volleyN", run.volleyN));
+      if (play) row(252, "rStars", run.stars);
+      if (play && (res.newBest || res.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
+        row(282, "rBest", res.newBest ? null : res.best);
+        if (res.newBest) { if (age > RES.best) seal(x, 70, 282, S("newBest"), age - RES.best); }
+        else text(x, res.score === res.best ? S("tieBest") : S("toBest", res.best - res.score), 30, 282, 16, "paneS", {});
+      }
+    }
+    if (play && age > RES.goal && res.goal) { // the next goal from the ladder; a goal cleared in this run gets its own line
+      const mc = S("misCount", res.misDone + "/" + MISSIONS.length);
+      let gy = 318;
+      if (res.newly) { text(x, S("misDone"), -134, gy, 16, "paneS", { a: "left" }); text(x, mc, 134, gy, 15, "paneT", { a: "right" }); gy += 28; }
+      const gt = S("nextGoal") + " " + S(res.goal.k, res.goal.n), tw = Math.min(244, textW(x, gt, 16));
+      hand(x, -tw / 2 - 8, gy, Math.PI / 2, 0.7); text(x, gt, -tw / 2 + 4, gy, 16, "paneS", { a: "left", max: 244 });
+      if (!res.newly) text(x, mc, 134, gy + 28, 15, "paneT", { a: "right" });
+    }
+  });
+  if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, true); if (retryReady()) pointAt(x, UI.retry, now); }
+}
+function drawDemoLabel(x) { // ?demo=1: a small bilingual title on a plank instead of any tool, BEST or button
+  const u = L.u, wide = L.wide, X = wide ? 180 : vRight() - 76, Y = wide ? vBot() - 62 * u : hudTop() + 22;
+  if (!wide) for (const d of [-48, 48]) hang(x, X + d, Y + 4);
+  at(x, X, Y, u, 0, () => { put(x, plankSpr(wide ? 210 : 136, 46), 0, 0); text(x, TITLE_JA, 0, 15, 16, "paper", {}); text(x, TITLE_EN, 0, 33, 14, "tagL", { w: 700 }); });
+}
+function drawPlaques(x) {
+  const pq = (e, kind, label) => at(x, e.cx, e.y, e.s, 0, () => plaque(x, 0, 0, e.w, kind, label));
+  if (!btnMute.hidden) pq(UI.mute, AU.muted ? "mute" : "sound");
+  if (!btnPause.hidden) pq(UI.pause, "pause");
+  if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang", S("lang"));
 }
 function draw(now) {
   if (!run) return;
-  const sh = shakeOffset(5);
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  if (bgC) g.drawImage(bgC, sh.x - BGM, sh.y - BGM - WY);
-  g.setTransform(1, 0, 0, 1, PX.cx0 + sh.x, PX.cy0 + sh.y - WY);
-  for (let i = 0; i < 14; i++) { const sx = (i * 61 + 17) % CW, sy = 12 + (i * 37) % 120; if (((i * 7 + fl(fx.vt / 400)) % 5) === 0) P(sx, sy, "w"); } // twinkling stars
-  drawZones();
-  drawGlow();
-  pDraw(fx.vt);
-  drawShells();
-  if (!isTitle()) drawFail();
-  drawAim();
-  drawHint();
-  if (!isTitle()) drawStamp();
-  pReflect();
-  for (const s of fx.puffs) { const a = s.life / s.max; D(fl(s.x), fl(s.y), s.s, s.s, null, s.col, a > 0.6 ? 8 : a > 0.3 ? 4 : 2); }
-  drawBank(now);
-  g.setTransform(1, 0, 0, 1, PX.cx0, PX.cy0); // HUD and feedback never shake
-  if (!isTitle() && !isOver()) { drawHUD(now); drawCall(now); }
-  if (isTitle()) drawTitle(now);
-  if (state === "paused") drawPause(now);
-  if (isOver()) drawOver(now);
-  if (DEMO) drawDemoLabel();
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  if (!DEMO) {
-    if (!btnMute.hidden) icon(PX.LW - 17, 2, 15, 15, AU.muted ? "mute" : "sound");
-    if (!btnPause.hidden) icon(PX.LW - 17, 19, 15, 15, "pause");
-    if (isTitle() && !ovTitle.hidden) icon(2, 2, langW(), 15, S("lang"));
-  }
-  pixBlit(ctx, zoomNow(now));
+  const x = ctx, sh = shakeOffset(Math.min(10, 12 / L.kc)), zm = zoomNow(now), oy = sh.y - WYL;
+  HP = hudPos();
+  putLayer(x, BG, sh.x, oy, zm);
+  view(x, sh.x, oy, zm);
+  drawSky(x);
+  drawZones(x);
+  drawCores(x);
+  pDraw(x);
+  drawShells(x);
+  if (!isTitle()) drawFail(x);
+  drawAim(x);
+  drawHint(x);
+  if (!isTitle()) drawStamp(x);
+  pReflect(x);
+  drawBoat(x, now);
+  drawBank(x);
+  view(x); // the HUD and the boards never shake
+  drawRope(x);
+  if (!isTitle() && !isOver()) { drawHud(x, now); drawCall(x, now); }
+  if (isTitle()) drawTitle(x, now);
+  if (state === "paused") drawPause(x, now);
+  if (isOver()) drawOver(x, now);
+  if (DEMO) drawDemoLabel(x); else drawPlaques(x);
+  partsDraw(x); // the kit's particles: only the NEW BEST burst on the result board
+  grainOver(x);
+  textEnd();
 }
-const langW = () => textW(S("lang"), { px: 12, sc: 2 }) + 8;
 
-// ---------- screen, language, mute ----------
-const UI = { start: [52, 284, 76, 22], retry: [52, 284, 76, 22], toTitle: [4, 296, 58, 17], resume: [0, 0, 94, 22], restart: [0, 0, 66, 18], quit: [0, 0, 66, 18] };
+// ---------- screen ----------
+const UI = {};
 function layoutUI() {
-  const py = pauseY(), L = lay();
-  UI.resume = [43, py + 34, 94, 22]; UI.restart = [12, py + 66, 76, 18]; UI.quit = [92, py + 66, 76, 18];
-  const by = Math.min(284, PX.LH - PX.cy0 - 34); UI.start = [52, by, 76, 22]; UI.retry = [52, by, 76, 22]; UI.toTitle = L.wide ? [-PX.cx0 + 4, Math.min(298, PX.LH - PX.cy0 - 20), 58, 17] : [61, by - 21, 58, 17];
-  const core = (el, r, p) => place(el, r[0] - p + PX.cx0, r[1] - p + PX.cy0, r[2] + 2 * p, r[3] + 2 * p);
-  core($("btnStart"), UI.start, 3); core($("btnResume"), UI.resume, 1); core($("btnRestart"), UI.restart, 1); core($("btnQuit"), UI.quit, 1);
-  core($("btnRetry"), UI.retry, 2); core($("btnToTitle"), UI.toTitle, 1);
-  place(btnMute, PX.LW - 19, 0, 19, 18); place(btnPause, PX.LW - 19, 18, 19, 18); place($("btnLang"), 0, 0, langW() + 4, 19);
+  const u = L.u, ty = Math.min(548, vBot() - 66 * u), py = pauseY(), lw = Math.max(46, textW(ctx, S("lang"), 16) + 22), ui = (cx, y, w, h) => ({ cx, y, w, h, s: u });
+  UI.start = ui(180, ty, 176, 54);
+  UI.retry = ui(180, ty - 10 * u, 176, 54);
+  UI.toTitle = L.wide ? ui(180 + 162 * u, ty - 2 * u, 128, 40) : ui(180, ty + 52 * u, 128, 36);
+  UI.resume = ui(180, py + 70 * u, 196, 54);
+  UI.restart = ui(180 - 72 * u, py + 144 * u, 132, 42);
+  UI.quit = ui(180 + 72 * u, py + 144 * u, 132, 42);
+  UI.mute = ui(vRight() - 10 - 20 * u, vTop() + 9, 40, 46);
+  UI.pause = ui(UI.mute.cx - 48 * u, vTop() + 9, 40, 46);
+  UI.lang = ui(vLeft() + 10 + lw * u / 2, vTop() + 9, lw, 46);
+  const hit = (el, e, p) => place(el, e.cx - e.w * u / 2 - p, e.y - p, e.w * u + 2 * p, e.h * u + 2 * p);
+  hit($("btnStart"), UI.start, 6); hit($("btnRetry"), UI.retry, 4); hit($("btnToTitle"), UI.toTitle, 2);
+  hit($("btnResume"), UI.resume, 2); hit($("btnRestart"), UI.restart, 2); hit($("btnQuit"), UI.quit, 2);
+  hit(btnMute, UI.mute, 4); hit(btnPause, UI.pause, 4); hit($("btnLang"), UI.lang, 4);
 }
 function resize() {
-  const box = pixResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, CW, CH, [0, 40, 60, 80, 100], bay => bay >= 64);
-  for (const el of [cv, uiEl]) { el.style.width = box.w + "px"; el.style.height = box.h + "px"; el.style.left = box.left + "px"; el.style.top = box.top + "px"; }
-  WY = DEMO && PX.cx0 < 64 ? clamp(276 + PX.cy0 - fl(PX.LH * 0.79), 0, 28) : 0;
-  buildBg(); layoutUI();
+  artResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, SW, SH, 220);
+  WYL = DEMO && !L.wide ? clamp(552 + L.y0 - 0.79 * L.H, 0, 56) : 0;
+  BGM = 14 + WYL;
+  buildBg(); buildCrowd(); layoutUI();
+  if (run && manual) draw(simT);
 }
 window.addEventListener("resize", resize);
+
 function applyLang() {
   document.documentElement.lang = lang;
   document.title = lang === "ja" ? TITLE_JA + " / Hanabi Chain" : "Hanabi Chain / " + TITLE_JA;
@@ -1855,7 +2290,6 @@ function applyLang() {
   layoutUI();
 }
 function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
-
 // ---------- flow ----------
 function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
 const newSeed = () => (Math.random() * 4294967296) >>> 0;
@@ -1892,7 +2326,6 @@ function resumeGame() {
 }
 const retryReady = () => T() - overShownAt > 350; // a short lockout so a late tap does not restart by accident
 function retry() { if (state === "over" && retryReady()) startPlay(); }
-
 // ---------- input: the ring appears on pointerdown (drawn next frame); the spark lights on release ----------
 function playerFire(x, y) {
   const v = run && run.vol;
@@ -1900,7 +2333,7 @@ function playerFire(x, y) {
   if (!v.shells.some(s => catchable(s, v.t))) { refuse("early", x, y); return; }
   ignite(x, y, v.t);
 }
-function toCore(e) { const b = cv.getBoundingClientRect(), u = PX.K / PX.dpr; return { x: (e.clientX - b.left) / u - PX.cx0, y: (e.clientY - b.top) / u - PX.cy0 }; }
+function toCore(e) { const b = cv.getBoundingClientRect(), k = L.kc; return { x: ((e.clientX - b.left) / k - L.x0) / GU, y: ((e.clientY - b.top) / k - L.y0 + WYL) / GU }; } // CSS px -> game units
 auUnlock();
 cv.addEventListener("pointerdown", e => {
   e.preventDefault();
@@ -1946,7 +2379,6 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) { if 
 window.addEventListener("blur", () => { aim.keys = {}; if (state === "play") pauseGame(); });
 document.addEventListener("gesturestart", e => e.preventDefault());
 document.addEventListener("contextmenu", e => e.preventDefault());
-
 // ---------- update and loop ----------
 function update(now, dt) {
   if (!run) return;
@@ -1966,7 +2398,7 @@ function update(now, dt) {
   if (state === "demo-over" && now - run.result.at > 3400) startAI("demo"); // a short result hold, then the clip loops
   if (isOver()) resultStep(now);
   if (fx && fx.call && fx.call.snd && T() >= fx.call.t) { fx.call.snd = 0; if (loud()) sfx.notice(); } // 本番! and the shell intros ring the kane
-  juiceStep(dt);
+  juiceStep(dt); partsStep(dt); // the kit's particles: only the NEW BEST burst on the result board
   if (state === "paused" || (isDying() && now - run.dead.at < FREEZE_END * 1000) || run.freeze > 0) return; // the failure freeze holds every pose
   const sc = live() ? timeScale() : 0.4, vdt = (Juice.stop > 0 ? dt * 0.15 : dt) * sc;
   fx.vt += vdt * 1000;
@@ -1987,7 +2419,6 @@ function frame() {
   step(now, clamp(raw, 0, DEMO ? 250 : 50) / 1000); // a starved recorder must not stretch the demo past its 30 s (the fixed step keeps it exact)
   draw(now);
 }
-
 // ---------- test hooks (the contract in tools/README.md; tools/qa.mjs and review-kit read them) ----------
 window.__game = {
   get state() { return state === "demo-over" || state === "demo-dying" ? "demo" : state === "title-dying" ? "title" : state; },
@@ -2005,14 +2436,14 @@ window.__game = {
   autoplay(on) { autopilot = !!on; if (autopilot && run && run.vol && !run.vol.spark) run.vol.plan = planAI(run.vol); },
   fail() { if (state === "play" && !run.dead) { run.lanterns = 0; run.cause = run.cause || { kind: "short", n: 1 }; kill(); } },
   audioState() { return AU.ctx ? AU.ctx.state : "none"; },
-  view() { return { K: PX.K, dpr: PX.dpr, w: PX.LW, h: PX.LH, top: PX.TOP, reduce: Juice.reduce, textMin: TXT.min }; },
+  // K = device px per logical px; textMin = the smallest text drawn so far, in logical px as it shows on screen;
+  // left and cw = where the 360 x 640 scene sits across the screen (logical px), for the wide-sides check
+  view() { return { K: L.K, dpr: L.dpr, w: L.W, h: L.H, top: L.y0, left: L.x0, cw: SW, reduce: Juice.reduce, textMin: TXT.min, wide: L.wide }; },
   texts() { return TXT.last.slice(); },
-  target() { const u = PX.K / PX.dpr, b = cv.getBoundingClientRect(); return { x: b.left + (PX.cx0 + 90) * u, y: b.top + (PX.cy0 + 168) * u }; }, // a fixed point in the sky, never a moving shell
+  target() { const k = L.kc, b = cv.getBoundingClientRect(); return { x: b.left + (L.x0 + 90 * GU) * k, y: b.top + (L.y0 + 168 * GU - WYL) * k }; }, // a fixed point in the sky, never a moving shell
   peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](10))); }
 };
-
 // ---------- boot ----------
-buildSprites();
 resize();
 applyLang();
 AU.muted = !!store.get("mute", false); setMute(AU.muted);
