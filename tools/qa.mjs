@@ -79,6 +79,17 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
   };
   const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y]) => ({ x, y })) });
   const probe = (fn, ...a) => page.evaluate(([f, args]) => window.__qa[f](...args), [fn, a]);
+  // A long frame gap on a busy machine can make a game pause itself (the template does, so a stall is not time the
+  // player had). That pause menu is not a game over: resume it, note it once, and carry on.
+  let stallNoted = false;
+  async function resumeStall(where) {
+    if ((await probe('state')) !== 'paused') return false;
+    const rp = await probe('resume');
+    if (!rp) return false;
+    if (!stallNoted) { stallNoted = true; add('info', 'stall', `the game paused itself during ${where} (a frame gap on a busy machine); resumed and carried on`); }
+    await tap(rp); await sleep(200);
+    return true;
+  }
 
   // Long press-and-drag plus held keys: ends games that random taps cannot (timers, wear-out mechanics).
   async function stressAction() {
@@ -185,6 +196,7 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
     }
     // pause / resume (desktop only)
     if (!profile.hasTouch) {
+      await resumeStall('play');
       const pp = await probe('pause');
       if (!pp) add('warn', 'pause', 'no pause button found (expected [data-qa=pause] or #pauseBtn)');
       else {
@@ -209,9 +221,11 @@ async function runProfile(browser, origin, profile, analyzer, opts) {
       // phase 1: random input for playSec; phase 2 (only if still alive): stress input for extraSec more
       while (Date.now() - t0 < (opts.playSec + opts.extraSec) * 1000) {
         const st = await page.evaluate(() => ({ retry: !!window.__qa.retry(), go: window.__qa.log.gameOver, starts: window.__qa.log.gameplayStart, resume: window.__qa.resume(), state: window.__qa.state() }));
-        if (st.retry || st.go > goStart || st.state === 'over' || st.state === 'gameover') { over = true; break; }
+        // game over is what the game says (its state hook) or a Platform.gameOver call; a visible retry button
+        // counts only for games without a state hook, so a pause menu is never taken for a game over
+        if (st.go > goStart || st.state === 'over' || st.state === 'gameover' || (st.state == null && st.retry)) { over = true; break; }
         startsBefore = st.starts;
-        if (st.resume) { await tap(st.resume); await sleep(200); continue; }
+        if (st.resume) { if (st.state === 'paused' && !stallNoted) { stallNoted = true; add('info', 'stall', 'the game paused itself during play (a frame gap on a busy machine); resumed and carried on'); } await tap(st.resume); await sleep(200); continue; }
         if (errors.length >= 20) break; // the game keeps throwing; no point playing on
         if (!laterShot && Date.now() - t0 > 2500 && canvasRect) laterShot = await shot(page, '3-later', await probe('canvas') || undefined);
         if (Date.now() - t0 < opts.playSec * 1000) await randomAction();

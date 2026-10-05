@@ -31,7 +31,7 @@ Claude がマージや公開を自分ですることはありません。Claude 
 
 - 1 本のゲームは 1 つの HTML ファイルです。外部への通信はしません。
 - 日本語と英語の両方で遊べます。
-- 新しいゲームの絵は、すべてドット絵です。決まりは [STYLE.md](STYLE.md) にあります。
+- 新しいゲームの絵は「墨と和紙」です。筆の墨の線と平らな色で、絵本や木版画のように描き、物はなめらかに動きます。パソコンの横長の画面でも、左右まで世界が続きます。決まりは [STYLE.md](STYLE.md) にあります。
 - 既存の作品のキャラクターや名前は使いません。すべてオリジナルです。
 - くわしい仕様は [CLAUDE.md](CLAUDE.md) にあります。
 
@@ -48,7 +48,7 @@ crazygames/    CrazyGames に出すときのメモ
 .github/       公開のしくみ（GitHub Actions）と PR のテンプレート
 CLAUDE.md      Claude が守るルール
 QUALITY_BAR.md 品質の基準と関門
-STYLE.md       絵の決まり（ドット絵）
+STYLE.md       絵の決まり（墨と和紙）
 SETUP.md       最初に 1 回だけする設定
 BACKLOG.md     テーマ案の一覧
 NEXT.md        次のテーマを kouhei が指定する場所
