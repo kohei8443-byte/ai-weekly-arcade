@@ -159,8 +159,9 @@ function view(x, sx, sy, z) {
   x.setTransform(K * s, 0, 0, K * s, K * (fx * (1 - s) + s * (L.x0 + (sx || 0))), K * (fy * (1 - s) + s * (L.y0 + (sy || 0))));
 }
 // a cached layer: the whole screen plus a margin m for the shake; fn(x, X0, Y0, W, H) fills that rect in scene coords
-function layer(m, fn) {
-  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = c.getContext("2d");
+// op: the layer is painted edge to edge, so it is made opaque and each frame copies it without blending
+function layer(m, fn, op) {
+  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = op ? c.getContext("2d", { alpha: false }) : c.getContext("2d");
   x.setTransform(K, 0, 0, K, K * (m + L.x0), K * (m + L.y0));
   c.txt = baking(() => fn(x, -L.x0 - m, -L.y0 - m, L.W + 2 * m, L.H + 2 * m));
   c.m = m; return c;
@@ -350,6 +351,11 @@ function bake(key, w, h, ox, oy, fn, mono) {
   }
   return b;
 }
+// only the columns of a baked picture between l and r (in the frame it is drawn in): a long strip copies what shows
+function putSpan(x, b, X, Y, l, r) {
+  const K = b.c.width / b.w, a = Math.max(0, Math.floor((l - X + b.ox) * K)), e = Math.min(b.c.width, Math.ceil((r - X + b.ox) * K));
+  if (e > a) { x.drawImage(b.c, a, 0, e - a, b.c.height, X - b.ox + a / K, Y - b.oy, (e - a) / K, b.h); carry(x, b.txt); }
+}
 function put(x, b, X, Y, a, sx, sy) {
   if (!a && !sx) { x.drawImage(b.c, X - b.ox, Y - b.oy, b.w, b.h); carry(x, b.txt); return; }
   x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); if (a) x.rotate(a); x.drawImage(b.c, -b.ox, -b.oy, b.w, b.h); carry(x, b.txt); x.restore();
@@ -412,12 +418,12 @@ function text(x, str, X, Y, size, col, o) {
 function textW(x, str, size, o) { x.font = ((o && o.w) || 800) + " " + size + "px " + ((o && o.f) || ST.ui); return x.measureText(String(str)).width; }
 
 // ---------- in-world UI (cx, y = top centre): wooden tag buttons, boards, plaques, a seal, a pointing hand ----------
-function tagBtn(x, cx, y, w, h, label, size, dark) {
+function tagBtn(x, cx, y, w, h, label, size, dark, lx) { // lx: the label's shift right, to make room for an icon
   put(x, bake("tag" + w + "x" + h + (dark ? "d" : ""), w + 4, h + 16, w / 2 + 2, 13, q => {
     for (const hx of [-w * 0.3, w * 0.3]) cordLine(q, pLine(hx, -12, hx, 5), 1.4, "red");
     woodTag(q, -w / 2, 0, w, h, { holes: [-w * 0.3, w * 0.3], dark, seed: w + h });
   }), cx, y);
-  text(x, label, cx, y + h / 2 + 2, size || 20, dark ? "paper" : "ink", { deep: dark ? "plankD" : "tagD" });
+  text(x, label, cx + (lx || 0), y + h / 2 + 2, size || 20, dark ? "paper" : "ink", { deep: dark ? "plankD" : "tagD" });
 }
 // board: a dark wood frame round the style's pane (B washi, A lacquer); text on it uses paneT and paneS
 function board(x, cx, y, w, h) {
@@ -633,7 +639,14 @@ const CRACK_R = 200; // from here a clumsy heave cracks the window
 // -- timing (run clock ms)
 const SIM = 5; // fixed step (bar 1.10.2)
 const T_ARRIVE = 650, T_OPEN = 220, T_BELL = 1500, T_BELL_EARLY = 700, T_CLOSE = 700, T_PINCH = 520, T_DEPART = 950;
-const arriveMs = n => n >= 3 ? 520 : T_ARRIVE, departMs = n => n >= 3 ? 700 : T_DEPART;
+// The cadence changes twice a line (bar 1.5.2): a quick stop ("q") where the express halts for two beats and rings a
+// two-beat bell, and a last-stop rush ("r") at each terminal with twice the crowd and twice the time, so a line ends on
+// a set piece. Only on the three lines: the daily, the extras and the demo keep their own rhythm.
+const KIND = { 4: "q", 8: "r", 14: "q", 16: "r", 22: "q", 24: "r" };
+const kindOf = n => !run || run.daily || run.mode === "demo" || n > LAST ? "" : KIND[n] || "";
+const QUICK_BEATS = 2, RUSH_BONUS = 150, RUSH_UPB = 0.1; // a rush is packed a little past the line's steady pace
+const arriveMs = n => kindOf(n) === "q" ? 380 : n >= 3 ? 520 : T_ARRIVE, departMs = n => kindOf(n) === "q" ? 520 : n >= 3 ? 700 : T_DEPART;
+const bellOf = st => st.def.bell || T_BELL; // a quick stop rings its melody once, over two beats
 const STEP_MS = 220;               // a queued rider stepping up to the door
 const PW = 75, GW = 165;           // PERFECT and GOOD windows, early and late (bar 1.5.6)
 const EARLY = 110;                 // early press grace
@@ -664,14 +677,22 @@ function deal(q, note) {
 function stationDef(n) {
   const play = run.mode === "play";
   if (n <= LAST) {
-    const d = mkDef(LINES[lineOf(n)].s[(n - 1) % 8], n > 8), back = play && run.strong && n <= 8;
-    if (back) { d.q += LINE1_MORE[n - 1]; d.board = Math.round(d.board * 0.92); } // a player who has mastered line 1 finds it fuller and quicker, so the 25 to 45 s twist bites (bar 1.5.2)
+    const d = mkDef(LINES[lineOf(n)].s[(n - 1) % 8], n > 8), kind = kindOf(n);
+    // a player who has mastered line 1 finds it fuller and quicker, so the 25 to 45 s twist bites; a first run that is
+    // still clean at station 5 gets the same from there on, so its arc peaks at the line-1 rush near a minute (bar 1.5.2)
+    if (play && n <= 8 && !run.strong && n >= 5 && run.first && run.hot == null) run.hot = run.lives === 3 && run.complaints === 0 && [1, 2, 3, 4].reduce((a, i) => a + (run.hist[i] || 0), 0) >= 10;
+    const hot = play && n <= 8 && n >= 5 && !run.strong && !!run.hot, back = hot || (play && n <= 8 && run.strong);
+    if (back) { d.q += LINE1_MORE[n - 1]; d.board = Math.round(d.board * (hot ? 0.86 : 0.92)); }
+    d.kind = kind;
+    if (kind === "q") { d.runner = 0; d.surge = 0; d.note = d.note || "nQuick"; }
+    if (kind === "r") { d.q += d.q.slice(1); d.board *= 2; d.note = d.note || "nRush"; }
     if (play) {
       d.q = deal(d.q, d.note);
       if (d.surge) d.surge = Math.max(2, d.surge + fl(run.rQ() * 3) - 1);   // the surge varies per run
-      if (run.first) { d.q = d.q.replace(/p/g, "g"); if (d.note === "nPair" || d.note === "nRapid") d.note = 0; d.beat = RAPID_HOLD[n] || d.beat; } // the first run holds pairs and the rapid section
+      if (run.first && !run.hot) { d.q = d.q.replace(/p/g, "g"); if (d.note === "nPair" || d.note === "nRapid") d.note = 0; d.beat = RAPID_HOLD[n] || d.beat; } // the first run holds pairs and the rapid section, unless it came through line 1 clean
     }
-    return fitDef(d, upbOf(n) + (back ? 0.16 : 0));
+    if (kind === "q") d.board = d.bell = QUICK_BEATS * d.beat;
+    return fitDef(d, upbOf(n) + (hot ? 0.2 : back ? 0.16 : 0) + (kind === "r" ? RUSH_UPB : 0));
   }
   const k = n - LAST, boss = k % 4 === 0, f = "wpmcx"[(k - 1) % 5], mix = "smscpgscmp" + ("pmc".includes(f) ? f.repeat(3) : ""); // extra stations rotate a twist
   let q = ""; for (let i = 0; i < 8 + Math.min(2, k >> 1); i++) q += mix[(i * 3 + k * 7) % mix.length];
@@ -694,9 +715,10 @@ function dailyDef(n) {
 }
 // cut the queue until a steady player (upb) boards everyone
 function fitDef(d, upb) {
-  const beats = (d.board + T_BELL + T_CLOSE) / d.beat - 2;
+  const beats = (d.board + (d.bell || T_BELL) + T_CLOSE) / d.beat - 2;
   let R = d.R, cost = ((d.runner ? 1 : 0) + (d.surge || 0)) * needFor("r", d.R + 40) / upb, q = "";
-  for (const ch of d.two ? d.q.repeat(3).slice(0, 24) : d.q) { const k = needFor(ch, R) / upb; if (cost + k > beats && q.length >= 4) break; cost += k; q += ch; R += RIDER[ch].fill; } // two doors: filled to the brim
+  const min = d.kind === "q" ? 2 : 4; // a quick stop may take just two
+  for (const ch of d.two ? d.q.repeat(3).slice(0, 24) : d.q) { const k = needFor(ch, R) / upb; if (cost + k > beats && q.length >= min) break; cost += k; q += ch; R += RIDER[ch].fill; } // two doors: filled to the brim
   return q === d.q ? d : Object.assign({}, d, { q });
 }
 // s salaryman, g student, c luggage, m sumo, r runner, p pair
@@ -743,6 +765,7 @@ const STRINGS = {
     pinch: "はさまった!", pop: "パリーン!", complain: "苦情5件!", allAboard: "全員乗車!", left: "乗り残し {n}人", term: "終点 到着!", hold: "まった!",
     nCase: "かたい荷物|よしは半分だけ", nSumo: "おすもうさん|何回も押す", nExpress: "急行|テンポアップ", nRapid: "快速区間|テンポアップ",
     nRunner: "かけこみ乗車|ベルの間に来る", nFaster: "ラッシュの山|もっと速く", nCrack: "200%から|ミスで窓にヒビ", nBoss: "大ラッシュ!|人の波とおすもう",
+    nQuick: "ちょい停車|すぐドアが閉まる", nRush: "終点ラッシュ|乗る人が2倍", quick: "ちょい停車", rush: "終点ラッシュ",
     nTwo: "ドアが2つ|左右をタップ", nPair: "ふたり組|まとめて押す", nSurge: "人の波|まとめて来る", wave: "人の波!", boss: "大ラッシュ 突破!",
     nWait: "まにあわない人は|押さずに待つ", wait: "まって", pinchTeach: "半分で閉まると はさまる", pinchFree: "今回はセーフ",
     station: "{n}駅目", chain: "せーの ×{n}", chainUp: "せーの {n}連!", chainOff: "せーの 途切れた", rate: "乗車率", complaints: "苦情", gloves: "軍手", warn: "あと{n}件",
@@ -757,6 +780,8 @@ const STRINGS = {
     feat: ["ドア2つ", "ふたり組", "おすもう", "かたい荷物", "人の波", "急行"], slot: ["軍手", "バッジ", "車両"],
     col: { y: "きん", h: "さくら", s: "そらいろ", a: "ゆうやけ", r: "あか", g: "わかば", w: "しろ", q: "ふつう", l: "ももいろ" }, rw: "{c}の{s}",
     gTomorrow: "あした連続{n}日", gRank: "{n}点で{s}", gGot: "{s}をゲット!", rTmr: "あした", gStart: "{s}から出発OK!", gStar: "あと★{n}で{s}", gFrom: "あと★{n}で{s}発", gGo: "{s}まで行く", g3: "{s}で★3つ", gDaily: "今日のダイヤへ",
+    seals: "達人の印", sealN: ["せーの50連", "★3つ一路線", "ドンピシャ一路線", "大ラッシュ突破"], nSeal: "達人の印!|{s}", gSeal: "{s}の印をゲット!",
+    sealG: ["印: せーの 50連", "印: 1つの線を全駅★3つで", "印: 1つの線をドンピシャだけで", "印: 臨時4の大ラッシュ突破"],
     gHome: "豆ヶ丘から出ると点がのびる", gGoFrom: "{s}から出発", tmrTease: "あしたのダイヤ: {s}", dailyTease: "今日のダイヤ: {s}", equipped: "つけた!"
   },
   en: {
@@ -767,6 +792,7 @@ const STRINGS = {
     pinch: "PINCHED!", pop: "SMASH!", complain: "5 GRIPES!", allAboard: "ALL ABOARD!", left: "{n} LEFT BEHIND", term: "END OF LINE!", hold: "HOLD IT!",
     nCase: "HARD LUGGAGE|GOOD MOVES IT HALF", nSumo: "SUMO|MANY HEAVES", nExpress: "EXPRESS|FASTER BEAT", nRapid: "RAPID SECTION|FASTER BEAT",
     nRunner: "LATE RUNNERS|AT THE BELL", nFaster: "PEAK RUSH|FASTER", nCrack: "FROM 200%|MISSES CRACK", nBoss: "BIG RUSH!|SURGE AND SUMO",
+    nQuick: "QUICK STOP|DOORS SHUT FAST", nRush: "LAST-STOP RUSH|TWICE THE CROWD", quick: "QUICK STOP", rush: "LAST-STOP RUSH",
     nTwo: "TWO DOORS|TAP LEFT OR RIGHT", nPair: "PAIRS|ONE PUSH FOR TWO", nSurge: "CROWD SURGE|MANY AT ONCE", wave: "SURGE!", boss: "BIG RUSH CLEARED!",
     nWait: "CAN'T MAKE IT?|DON'T PUSH", wait: "WAIT", pinchTeach: "HALF IN = PINCHED", pinchFree: "FREE THIS TIME",
     station: "STATION {n}", chain: "HEAVE x{n}", chainUp: "{n} IN A ROW!", chainOff: "HEAVES BROKEN", rate: "LOAD", complaints: "GRIPES", gloves: "LIVES", warn: "{n} MORE",
@@ -781,6 +807,8 @@ const STRINGS = {
     feat: ["2 DOORS", "PAIRS", "SUMO", "LUGGAGE", "SURGE", "EXPRESS"], slot: ["GLOVES", "BADGE", "TRAIN"],
     col: { y: "GOLD", h: "SAKURA", s: "SKY", a: "SUNSET", r: "RED", g: "LEAF", w: "WHITE", q: "PLAIN", l: "PINK" }, rw: "{c} {s}",
     gTomorrow: "TOMORROW: {n} DAYS", gRank: "{n} FOR {s}", gGot: "GOT {s}!", rTmr: "NEXT DAY", gStart: "START AT {s}!", gStar: "{n}★ TO {s}", gFrom: "{n}★: START {s}", gGo: "REACH {s}", g3: "3★ AT {s}", gDaily: "TRY THE DAILY",
+    seals: "MASTER SEALS", sealN: ["50 IN A ROW", "ALL-3★ LINE", "ALL-PERFECT LINE", "BIG RUSH"], nSeal: "MASTER SEAL!|{s}", gSeal: "SEAL: {s}!",
+    sealG: ["SEAL: 50 HEAVES IN A ROW", "SEAL: 3★ AT EVERY STOP OF A LINE", "SEAL: A LINE OF ONLY PERFECTS", "SEAL: BEAT EXTRA 4'S BIG RUSH"],
     gHome: "START AT STATION 1 FOR MORE", gGoFrom: "START AT {s}", tmrTease: "TOMORROW: {s}", dailyTease: "DAILY: {s}", equipped: "ON!"
   }
 };
@@ -841,6 +869,19 @@ const rwName = w => S("rw").replace("{c}", S("col")[w[2]]).replace("{s}", S("slo
 const featNames = (f, j) => [...f].map(c => S("feat")[FEAT.indexOf(c)]).join(j);
 const dailyFeat = seed => { const r = seeded(seed * 3 + 1), i = fl(r() * 6); return FEAT[i] + FEAT[(i + 1 + fl(r() * 5)) % 6]; };
 const bestFrom = () => { const v = DEMO ? {} : store.get("bestFrom", {}); return v && typeof v === "object" ? v : {}; };
+// Master seals (bar 1.6.3): hard optional goals for a player whose stamp book is nearly full, easiest first. c: a chain
+// of 50; s: three stars at every stop of a line in one run; a: a whole line with only PERFECT heaves, nobody left, no
+// pinch and no broken glass; b: the big rush of extra 4 cleared. The save keeps the ids earned, in a string ("cs")
+const SEALS = "csab", SEAL_CHAIN = 50, NEAR_FULL = 54;
+const sealsGot = () => { const v = DEMO ? "" : String(store.get("seals", "")); return [...SEALS].filter(c => v.includes(c)).join(""); };
+const nearFull = () => starSum(1, LAST) >= NEAR_FULL;
+function earnSeal(id, now) {
+  if (run.mode !== "play" || sealsGot().includes(id)) return;
+  run.seals = (run.seals || "") + id; store.set("seals", sealsGot() + id);
+  notice("nSeal", S("nSeal", null, S("sealN")[SEALS.indexOf(id)]), true); fx.sealT = now;
+}
+// a fault on a line: a GOOD or an OOF heave, a pinch, broken glass or anyone left behind
+const lineFault = st => { if (st.n <= LAST && run.lf) run.lf[lineOf(st.n)]++; };
 
 // fx: visual state only (never read by the rules)
 function newFx() {
@@ -859,7 +900,7 @@ function newRun(mode, seed, opt) {
     offset: T(), holdAt: null, pauseClock: 0, startAt: T(), c: 0, lag: 0,
     score: 0, lives: mode === "demo" ? 2 : 3, chain: 0, maxChain: 0, boarded: 0, stars: 0, perfects: 0, star3: 0, n: 0, hist: [],
     complaints: 0, ids: 0, coolUntil: -1e9, grid: null, st: null, dead: null, result: null, starts0: mode === "play" ? starts() : [], rw0: mode === "play" ? REWARDS.filter(hasRw) : [], rank0: mode === "play" ? careerRank() : 0,
-    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false
+    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false, lf: [0, 0, 0], seals: ""
   };
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
   newStation(run.from, 0, true);
@@ -903,7 +944,7 @@ function newStation(n, t, atPlatform) {
   run.st = st;
   setTempo(def.beat, t);
   if (atPlatform) st.doors.forEach((d, i) => { stepUp(t, i); st.doors[i].state = "ready"; });
-  if (def.note && run.mode === "play") notice(def.note, def.note === "nDaily" ? S("nDaily") + featNames(run.feat, "|") : null);
+  if (def.note && run.mode === "play") notice(def.note, def.note === "nDaily" ? S("nDaily") + featNames(run.feat, "|") : null, false, def.note === "nQuick" || def.note === "nRush");
   else if (!atPlatform && run.mode !== "attract") notice(null, stLabel(st) + (def.tw >= 0 ? "|" + S("feat")[def.tw] : ""));
   if (run.mode === "play" && !run.daily && n > num("maxSt") && n <= LAST) store.set("maxSt", n);
 }
@@ -921,7 +962,7 @@ function setPh(ph, c) {
   if (ph === "open" && loud()) sfx.doorOpen();
   if (ph === "bell") {
     const done = !busy(st);
-    st.bellLen = done ? T_BELL_EARLY : T_BELL;
+    st.bellLen = done ? Math.min(T_BELL_EARLY, bellOf(st)) : bellOf(st);
     if (done) { call("allAboard", "gold", T()); if (loud()) sfx.allAboard(); }
     if (st.def.runner && !st.runnerIn) { st.runnerIn = true; const r = newRider("r"); r.runAt = c; r.delay = runDelay(); st.queue.splice(0, 0, r); }
     const owed = st.queue.length + st.doors.filter(r => r && r.d === 0).length; // riders who would be left: each one a complaint
@@ -960,7 +1001,7 @@ function judgeWait(st, c) {
 function slamAt(st) {
   if (st.ph === "close") return st.phAt + T_CLOSE;
   if (st.ph === "bell") return st.phAt + st.bellLen + T_CLOSE;
-  if (st.ph === "board") return st.boardEnd + T_BELL + T_CLOSE;
+  if (st.ph === "board") return st.boardEnd + bellOf(st) + T_CLOSE;
   return -1;
 }
 // two doors: half-pushed first, then one who can make it, then the shorter job
@@ -991,13 +1032,14 @@ function press(tc, side) {
   fx.heaveTier = tier; fx.jostleT = now;
   if (loud()) musicDuck(0.5, 0.1);
   if (tier === "bad") {
-    breakChain(now); st.bads++; r.d = Math.max(0, r.d - 1); run.coolUntil = tc + STAGGER;
+    breakChain(now); st.bads++; lineFault(st); r.d = Math.max(0, r.d - 1); run.coolUntil = tc + STAGGER;
     call("bad", "paperD", now); if (loud()) sfx.bad();
     burst(x + 12, y + 8, 5, 100, { col: "paperD", g: 280, kind: "chip", s: 2 });
     if (st.R >= CRACK_R) crack(tc, now);
     return;
   }
   run.coolUntil = tc + COOL;
+  if (tier === "good") lineFault(st);
   if (tier === "good" && r.type === "c" && !r.half) { // hard luggage gives half to a GOOD: two GOODs move it one step (bar 1.4.3)
     r.half = true; call("clang", "mist", now, S("clangSub")); if (loud()) sfx.clang();
     burst(x - 16, y + 16, 6, 140, { col: "gold", kind: "spark", s: 2 });
@@ -1007,6 +1049,7 @@ function press(tc, side) {
   r.d += tier === "perfect" ? 2 : 1;
   if (tier === "perfect") {
     run.chain++; run.maxChain = Math.max(run.maxChain, run.chain); r.perf++; run.perfects++; if (run.mode === "play") hint.success();
+    if (run.chain >= SEAL_CHAIN) earnSeal("c", now);
     if (run.chain % 10 === 0) { fx.chainT = now; fx.chainKey = "chainUp"; fx.chainN = run.chain; fx.sv += 1.2; if (loud()) sfx.chainUp(run.chain / 10); }
   } else run.chain >>= 1;                           // a GOOD halves the chain: only a run of PERFECTs climbs (bar 1.6.4)
   if (r.d >= r.need) { boardRider(r, tc, now, tier); return; }
@@ -1028,7 +1071,8 @@ function boardRider(r, tc, now, tier) {
   if (giri) { // the near miss between closing doors
     const big = !st.giri || run.chain >= 3; st.giri = true; // the camera punches on a station's first giri or on a chain (bar 1.2.7)
     call("giri", "gold", now, "+" + pts); addTrauma(0.6); hitstop(0.1); if (big) zoomPunch(x, y, 1.06, 420, now);
-    burst(x, y, run.chain >= 3 ? 30 : 18, 240, { col: "gold", kind: "chip", s: 3 }); burst(x, SILL_Y - 4, 10, 150, { col: "paperD", g: 320, s: 2 }); // the doors thunk at the sill burst(x, y, 6, 260, { kind: "star", col: "goldL", s: 3 }); if (loud()) sfx.giri();
+    burst(x, y, run.chain >= 3 ? 30 : 18, 240, { col: "gold", kind: "chip", s: 3 }); burst(x, SILL_Y - 4, 10, 150, { col: "paperD", g: 320, s: 2 }); // dust where the doors thunk at the sill
+    burst(x, y, 6, 260, { kind: "star", col: "goldL", s: 3 }); if (loud()) sfx.giri();
   } else {
     const key = run.mode === "demo" && r.type === "m"; // the demo's key-art beat: the sumo goes in without a word (bar 1.9.5)
     if (key) fx.keyT = now; else call(tier === "perfect" ? "boardP" : "board", tier === "perfect" ? "gold" : "paper", now, "+" + pts);
@@ -1049,7 +1093,7 @@ function crack(tc, now) {
 }
 const crackWin = st => { const L = LAY[st.two ? 1 : 0]; return L.w[L.cw]; };
 function popWindow(tc, now) {
-  const st = run.st, w = crackWin(st); st.cracks = 0; st.R = Math.max(100, st.R - 10); st.popped = (st.popped || 0) + 1; run.popDone = true;
+  const st = run.st, w = crackWin(st); st.cracks = 0; st.R = Math.max(100, st.R - 10); st.popped = (st.popped || 0) + 1; run.popDone = true; lineFault(st);
   const wx = DX + (w[0] + w[1]) / 2, wy = WIN_T + 24;
   fx.flyer = { t: now, x0: wx, y0: wy, x1: CUSH.x + 40, y1: CUSH.y - 8, look: run.n % LOOKS };
   fx.hit = { t: now, x: wx, y: wy };
@@ -1073,7 +1117,7 @@ function slam(c) {
   });
   if (pin.length) { // one glove per slam
     const x = doorX(st, pin[0].di);
-    st.pinched = pin; fx.pinchT = now; fx.hit = { t: now, x, y: FEET_DOOR - 60 };
+    st.pinched = pin; fx.pinchT = now; fx.hit = { t: now, x, y: FEET_DOOR - 60 }; lineFault(st);
     const teach = run.mode === "play" && !run.pinchTaught; // the first pinch is forgiven (bar 1.7.2)
     run.pinchTaught = true;
     call("pinch", "red", now, teach ? S("pinchTeach") : ""); if (loud()) sfx.pinch();
@@ -1093,9 +1137,15 @@ function depart(c) {
   if (st.pinched) { for (const p of st.pinched) { st.queue.unshift(p); p.state = "q"; p.backAt = c; p.wasPinched = true; } st.pinched = null; }
   setPh("depart", c); bellMusic(false);
   const tier = tierOf(st.R), stars = (st.left === 0 ? 1 : 0) + (st.R >= 200 ? 1 : 0) + (st.bads === 0 && st.boarded > 0 ? 1 : 0);
-  const boss = st.def.boss && st.left === 0, bonus = (st.left === 0 ? 30 + 10 * st.n : 0) + stars * 20 + (boss ? 300 : 0);
+  const boss = st.def.boss && st.left === 0, rushed = st.def.kind === "r" && st.left === 0, bonus = (st.left === 0 ? 30 + 10 * st.n : 0) + stars * 20 + (boss ? 300 : 0) + (rushed ? RUSH_BONUS : 0);
   run.score += bonus; run.stars += stars; run.hist[st.n] = stars; if (stars === 3) run.star3++; if (bonus) fx.scoreT = now;
-  if (st.left === 0) run.clears++; else run.clean = false;
+  if (st.left === 0) run.clears++; else { run.clean = false; lineFault(st); }
+  if (play && !run.daily && st.n <= LAST && st.n % 8 === 0 && run.from <= st.n - 7) { // a whole line in this run: the line seals
+    if (!run.lf[lineOf(st.n)]) earnSeal("a", now);
+    let all3 = true; for (let i = st.n - 7; i <= st.n; i++) if (run.hist[i] !== 3) all3 = false;
+    if (all3) earnSeal("s", now);
+  }
+  if (boss && play && !run.daily) earnSeal("b", now);
   if (play && !run.daily && st.n <= LAST && stars > starAt(st.n)) { const a = starStr().padEnd(LAST, "0").split(""); a[st.n - 1] = stars; store.set("stars", a.join("")); }
   fx.stamp = { t: now, tier, stars, bonus, R: st.R, left: st.left };
   if (loud()) { sfx.depart(); sfx.stamp(tier); }
@@ -1177,7 +1227,7 @@ function aiStep(c) {
 function demoAct(st, r, b) {
   let ph = st.ph, bellAt = st.phAt;
   if (ph === "board" && b >= st.boardEnd) { ph = "bell"; bellAt = st.boardEnd; }
-  if (ph === "bell" && b >= bellAt + (st.ph === "bell" ? st.bellLen : T_BELL)) ph = "close";
+  if (ph === "bell" && b >= bellAt + (st.ph === "bell" ? st.bellLen : bellOf(st))) ph = "close";
   if (run.n === 2) return "perfect";                          // a clean station: ALL ABOARD
   if (run.n >= 3) {
     if (!st.popped) return st.R >= CRACK_R ? "bad" : "perfect"; // clumsy at 200 %: three cracks and the window breaks
@@ -1203,9 +1253,10 @@ function kill(reason, tc, now, x, y) {
 // ---------- KEEP: one judgement slot and one notice line (never stacked popups) ----------
 function call(key, col, now, sub) { fx.call = { key, col, t: now, sub: sub || "" }; }
 const noteGap = () => run && run.first ? 15000 : 9000; // the first run spaces its new rules wider (bar 1.7.2)
-function notice(key, text, q) {
-  if (key && !q && run.mode === "play" && (fx.noteQ.length || T() - fx.ruleT < noteGap())) { fx.noteQ.push([key, text]); return; }
-  fx.note = { key, text, t: T() }; if (key) fx.ruleT = T(); if (loud() && key) sfx.notice();
+// q: show it now; ann: a station announcement (a quick stop, a rush) shows now and leaves the spacing of new rules alone
+function notice(key, text, q, ann) {
+  if (key && !q && !ann && run.mode === "play" && (fx.noteQ.length || T() - fx.ruleT < noteGap())) { fx.noteQ.push([key, text]); return; }
+  fx.note = { key, text, t: T() }; if (key && !ann) fx.ruleT = T(); if (loud() && key) sfx.notice();
 }
 const noteParts = n => String(n.text || S(n.key)).split("|");
 const noteLife = n => 1500 * noteParts(n).length;
@@ -1480,18 +1531,31 @@ const dot = (x, X, Y, r, c) => { x.fillStyle = C(c || "ink"); x.fill(pEll(X, Y, 
 const ln = (x, pts, w, c) => ST.line(x, pSmooth(pts, true), w || 0.9, c);
 
 // ---------- GAME-SPECIFIC: people. Every figure is drawn once per size by the kit's sprite cache ----------
-const LOOKS = 8;
-const LOOK = [ // jacket, its shade, trousers, hair, tie, hair style
-  ["indigo", "ink", "mid", "ink", "red", 0], ["far", "mid", "indigo", "plankD", "gold", 1], ["plankL", "plank", "plankD", "ink", "mist", 2], ["tagD", "plankL", "plank", "paperD", "leaf", 3],
-  ["mid", "indigo", "plankD", "ink", "orange", 1], ["tag", "tagD", "plankL", "plank", "redL", 0], ["plank", "plankD", "mid", "ink", "red", 2], ["sky1", "sky0", "mid", "plankD", "gold", 3]
+const LOOKS = 12;
+// jacket, its shade, trousers (a skirt when there is no tie), hair, tie (0: a blouse and a scarf), hair style, what
+// they wear, and how they look at rest. Hair: 0 parted, 1 a cowlick, 2 a side lock, 3 bald on top, 4 a bob, 5 a bun.
+// Wear: 0 nothing, 1 a flat cap, 2 glasses, 3 a mask, 4 headphones, 5 a knit cap. At rest: 0 plain, 1 asleep,
+// 2 a frown, 3 a yawn, 4 turned aside, 5 behind a mask, 6 bored, 7 content (STYLE.md 10: a crowd, never one face copied)
+const LOOK = [
+  ["indigo", "ink", "mid", "ink", "red", 0, 0, 0], ["far", "mid", "indigo", "plankD", "gold", 1, 1, 6], ["plankL", "plank", "plankD", "ink", "mist", 2, 2, 2], ["tagD", "plankL", "plank", "paperD", "leaf", 3, 0, 1],
+  ["mid", "indigo", "plankD", "ink", "orange", 1, 0, 3], ["tag", "tagD", "plankL", "plank", "redL", 0, 4, 7], ["plank", "plankD", "mid", "ink", "red", 2, 0, 4], ["sky1", "sky0", "mid", "plankD", "gold", 3, 3, 5],
+  ["red", "redD", "indigo", "ink", 0, 4, 0, 6], ["mist", "sky2", "plankD", "plankD", 0, 5, 2, 1], ["goldD", "plank", "mid", "ink", "indigo", 0, 5, 3], ["greyD", "mid", "ink", "grey", "plankD", 3, 3, 4]
 ];
-const HSH = { ink: null, plankD: "ink", plank: "plankD", paperD: "tagG" };
+const HSH = { ink: null, plankD: "ink", plank: "plankD", paperD: "tagG", grey: "greyD" };
+// each look has its own skin tone and face proportions (width, height), so a packed window is many people (STYLE.md 10)
+const SKIN = ["paper", "tagL", "paper", "poolB", "tagL", "paper", "poolB", "paper", "tagL", "paper", "poolB", "tagL"];
+const FACE = [[9.6, 11], [9, 11.8], [10.2, 10.4], [9.4, 11.4], [9.8, 10.8], [9.2, 11.6], [10.4, 10.6], [9.6, 11.2], [9, 11], [9.4, 11.6], [10, 11.2], [9.8, 10.4]];
 const PACKS = ["red", "leaf", "orange", "mist"];
 // a commuter seen from behind, feet at (0, 0): sleeves, jacket with a vent, a white collar, the back of the head
 function backMan(x, lk, walk, o) {
   o = o || {};
-  const [jc, js, tr, hr, , hs] = o.look || LOOK[lk], sh = o.shoe || "ink";
-  if (walk) {
+  const own = !o.look, [jc, js, tr, hr, tie, hs, wear] = o.look || LOOK[lk], sh = o.shoe || "ink";
+  if (own && tie === 0) { // a skirt over legs in dark tights
+    const leg = (pts, ex, ey, ea) => { sq(x, pts, "ink", null, 1); shape(x, pEll(ex, ey, 4.2, 2.2, ea || 0), sh, 1); };
+    if (walk) { leg([[-7, -17], [-2.4, -17], [-4.6, -6], [-9.6, -7]], -7.8, -5.6, -0.35); leg([[2.4, -17], [7, -17], [10.4, -4], [5.4, -3.6]], 8.8, -2); }
+    else { leg([[-7.4, -17], [-2.2, -17], [-2.6, -4], [-7, -4]], -5, -2.4); leg([[2.2, -17], [7.4, -17], [7, -4], [2.6, -4]], 5.2, -2.2); }
+    sp(x, [[-11, -32], [11, -32.4], [13.4, -15.4], [0, -14.4], [-13.2, -15.6]], tr, null, 1.1);
+  } else if (walk) {
     sq(x, [[-9, -30], [-1, -30], [-4.5, -9], [-12, -10]], tr, null, 1.1); sq(x, [[1, -30], [9.5, -30], [12.5, -4.5], [4.5, -4]], tr, null, 1.1);
     shape(x, pEll(-8.6, -8, 4.8, 2.6, -0.35), sh, 1); shape(x, pEll(9.2, -2.4, 5, 2.6), sh, 1);
   } else {
@@ -1505,12 +1569,30 @@ function backMan(x, lk, walk, o) {
   sp(x, [[-15, -57], [-7, -61.5], [7, -61.5], [15.5, -56.5], [16.5, -42], [15, -27], [0.5, -25.5], [-14.5, -27], [-16, -42]], jc, js, 1.3);
   ST.line(x, pLine(0.6, -39, 0.4, -26.5), 0.9); ln(x, [[-12, -50], [-6, -48.4], [-1, -49.6]], 0.6, js);
   sq(x, [[-5.5, -62], [5.5, -62], [4.2, -58.8], [-4.2, -58.8]], "paper", null, 0.9);
-  for (const s of [-1, 1]) shape(x, pEll(s * 8.6, -68.4, 2.2, 3.2), "paper", 0.9, "paperD", 0.6, 0.6);
-  shape(x, pBlob(0, -70, 8.8, 9.6, 0.05, lk + 1), hr, 1.2, HSH[hr], 1.4, 1.4);
-  if (hs === 1) sq(x, [[-1.5, -78.5], [1.5, -84], [3.5, -78.5]], hr, null, 0.9);
-  else if (hs === 2) ln(x, [[-6, -63], [-7.5, -60], [-5, -59.5]], 1.4, hr);
-  else if (hs === 3) shape(x, pEll(0.6, -75.5, 4.6, 3), "paper", 0.8);
-  else ln(x, [[-2, -74], [0.5, -75.5], [2, -73.5], [0, -72.5]], 0.7, hr === "ink" ? "far" : "ink");
+  if (own && lk === 8) ST.line(x, pSmooth([[-12, -58], [-2, -44], [10, -30]], true), 1.6, "plankD"); // a shoulder bag's strap
+  if (hs === 4) { // a bob covers the ears and the nape
+    sp(x, [[-10.6, -61], [-11.2, -71], [-6.4, -80], [0, -81.4], [6.6, -80], [11.2, -71], [10.6, -61], [5, -59.6], [-5, -59.8]], hr, HSH[hr], 1.2, 1.4, 1.4);
+    for (const k of [-5, -1, 3.6]) ST.line(x, pLine(k, -76, k * 1.2, -62), 0.5, HSH[hr] || "far");
+  } else {
+    for (const s of [-1, 1]) shape(x, pEll(s * 8.6, -68.4, 2.2, 3.2), own ? SKIN[lk] : "paper", 0.9, "paperD", 0.6, 0.6);
+    shape(x, pBlob(0, -70, 8.8, 9.6, 0.05, lk + 1), hr, 1.2, HSH[hr], 1.4, 1.4);
+    if (hs === 1) sq(x, [[-1.5, -78.5], [1.5, -84], [3.5, -78.5]], hr, null, 0.9);
+    else if (hs === 2) ln(x, [[-6, -63], [-7.5, -60], [-5, -59.5]], 1.4, hr);
+    else if (hs === 3) shape(x, pEll(0.6, -75.5, 4.6, 3), "paper", 0.8);
+    else if (hs === 5) { shape(x, pBlob(1.4, -79.6, 4.4, 3.8, 0.06, lk), hr, 1, HSH[hr], 0.8, 0.8); ST.line(x, pLine(-2.4, -81.8, 5, -77.6), 0.9, "gold"); } // a bun and its pin
+    else ln(x, [[-2, -74], [0.5, -75.5], [2, -73.5], [0, -72.5]], 0.7, hr === "ink" ? "far" : "ink");
+  }
+  if (!own) return;
+  if (wear === 1) { sp(x, [[-9.8, -70], [-9.4, -77.5], [-3.6, -81.6], [4.4, -81.2], [9.6, -76.6], [10, -70.4], [0.4, -72.2]], "plankD", "ink", 1.1, 1, 1.2); dot(x, 0.6, -80.6, 1.1, "tagD"); }
+  else if (wear === 4) { ST.line(x, pSmooth([[-9.6, -66.5], [-9.4, -77], [0, -81.8], [9.4, -77], [9.6, -66.5]], true), 2.2); for (const s of [-1, 1]) shape(x, pEll(s * 9.8, -68, 2.6, 3.8), "greyD", 1); }
+  else if (wear === 5) knit(x, -70);
+}
+// a knit cap with a turned-up band, ribs and a pompom; y = the lower edge of its band
+function knit(x, y) {
+  sp(x, [[-10.2, y - 0.6], [-9.8, y - 7.4], [-4.4, y - 12.8], [4, y - 13], [9.6, y - 7.8], [10.2, y - 0.6]], "orange", "tagD", 1.1, 1, 1.2);
+  for (let i = -6; i <= 6; i += 3) ST.line(x, pLine(i, y - 3.6, i * 0.9, y - 11.4 + Math.abs(i) * 0.3), 0.5, "tagD");
+  sq(x, [[-10.8, y - 3.6], [10.8, y - 3.8], [10.8, y + 0.4], [-10.8, y + 0.6]], "orange", "tagD", 1, 0, 1.2);
+  shape(x, pBlob(0.6, y - 15, 3, 2.8, 0.1, 5), "paper", 0.9, "paperD", 0.6, 0.6);
 }
 // a student: shorter, a high-collar jacket, white shoes and a big backpack
 function backStudent(x, lk, walk, pack) {
@@ -1556,68 +1638,96 @@ function riderArt(x, type, lk, walk) {
     dot(x, 20.8, -21 + dy, 1, "gold");
   }
 }
-const riderSpr = (type, lk, walk) => bake("rd" + type + lk + (walk ? 1 : 0), 92, 104, 46, 98, x => riderArt(x, type, lk, walk));
+// each kind of rider is baked in a box that just holds it (left, right, top): a tight box is a cheaper copy each frame
+const RBOX = { s: [24, 31, 90], r: [24, 31, 90], c: [39, 24, 90], g: [23, 23, 82], p: [35, 34, 84], m: [35, 35, 97] };
+const riderSpr = (type, lk, walk) => { if (type === "m") lk = 0; const [l, r, t] = RBOX[type]; return bake("rd" + type + lk + (walk ? 1 : 0), l + r, t + 6, l, t, x => riderArt(x, type, lk, walk)); };
 
-// the crowd inside the car, facing us: shoulders at y 0, a long torso so a window stays full
-function faceArt(x, f, cx, cy, s) {
-  s = s || 1;
-  const E = (X, Y) => [cx + X * s, cy + Y * s];
-  if (f === 0) { for (const k of [-1, 1]) dot(x, ...E(k * 3.6, -1), 1.15 * s); ln(x, [E(-2.2, 5), E(0, 5.6), E(2.2, 5)], 0.8 * s); }
-  else if (f === 1) { for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.8, -1), E(k * 3.6, 0.2), E(k * 3.6 + 1.8, -1)], 0.8 * s); x.fillStyle = C("ink"); x.fill(pEll(...E(0, 5.4), 1.3 * s, 1.6 * s)); }
+// the crowd inside the car, facing us: shoulders at y 0, a long torso so a window stays full. Every look has its own
+// face at rest, its hair and what it wears, and keeps them in every mood (a sleeper even sleeps through a squeeze)
+function faceArt(x, f, cx, cy, lk) {
+  const E = (X, Y) => [cx + X, cy + Y], lo = LOOK[lk], mask = lo[6] === 3, rest = lo[7];
+  const dots = () => { for (const k of [-1, 1]) dot(x, ...E(k * 3.6, -1), 1.15); };
+  if (rest === 1 && (f === 1 || f === 2)) f = 0;
+  if (f === 0) {
+    if (rest === 1) { for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.8, -1.2), E(k * 3.6, 0.3), E(k * 3.6 + 1.8, -1.2)], 0.8); if (!mask) dot(x, ...E(0.8, 5.4), 0.95); } // asleep, mouth a little open
+    else if (rest === 2) { dots(); for (const k of [-1, 1]) ln(x, [E(k * 5.8, -4.8), E(k * 1.8, -3)], 0.85); if (!mask) ln(x, [E(-2.4, 6.2), E(0, 4.8), E(2.4, 6.2)], 0.8); } // a frown
+    else if (rest === 3) { for (const k of [-1, 1]) ln(x, [E(k * 5.4, -1.8), E(k * 2.2, -0.6)], 0.9); if (!mask) { shape(x, pEll(...E(0, 5.6), 2.3, 3.2), "ink", 0.6); x.fillStyle = C("redL"); x.fill(pEll(...E(0, 7.2), 1.3, 1)); } } // a yawn
+    else if (rest === 6) { for (const k of [-1, 1]) { ST.line(x, pLine(...E(k * 3.6 - 2.1, -1.8), ...E(k * 3.6 + 2.1, -1.6)), 0.8); dot(x, ...E(k * 3.6, -0.6), 0.9); } if (!mask) ln(x, [E(-2.2, 5.6), E(2.2, 5.2)], 0.8); } // bored, half-lidded
+    else if (rest === 7) { for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.8, 0), E(k * 3.6, -1.6), E(k * 3.6 + 1.8, 0)], 0.85); if (!mask) ln(x, [E(-2.8, 4.2), E(0, 6.2), E(2.8, 4.2)], 0.85); } // content
+    else { dots(); if (!mask) ln(x, [E(-2.2, 5), E(0, 5.6), E(2.2, 5)], 0.8); }
+  }
+  else if (f === 1) { for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.8, -1), E(k * 3.6, 0.2), E(k * 3.6 + 1.8, -1)], 0.8); if (!mask) { x.fillStyle = C("ink"); x.fill(pEll(...E(0, 5.4), 1.3, 1.6)); } }
   else if (f === 2) {
-    for (const k of [-1, 1]) { x.fillStyle = C("redL"); x.fill(pEll(...E(k * 5.6, 2.6), 2.4 * s, 1.5 * s)); ln(x, [E(k * 3.6 - 1.8, 0.2), E(k * 3.6, -1.6), E(k * 3.6 + 1.8, 0.2)], 0.9 * s); }
-    shape(x, pSmooth([E(-3.6, 3.8), E(3.6, 3.8), E(2, 7.2), E(-2, 7.2)]), "red", 0.8 * s);
+    for (const k of [-1, 1]) { x.fillStyle = C("redL"); x.fill(pEll(...E(k * 5.6, 2.6), 2.4, 1.5)); ln(x, [E(k * 3.6 - 1.8, 0.2), E(k * 3.6, -1.6), E(k * 3.6 + 1.8, 0.2)], 0.9); }
+    if (!mask) shape(x, pSmooth([E(-3.6, 3.8), E(3.6, 3.8), E(2, 7.2), E(-2, 7.2)]), "red", 0.8);
   } else if (f === 3) {
-    for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.6 * k, -2.4), E(k * 3.6 + 1.4 * k, -0.8), E(k * 3.6 - 1.6 * k, 0.6)], 0.9 * s);
-    ln(x, [E(-3, 5.6), E(-1.5, 4.6), E(0, 5.8), E(1.5, 4.6), E(3, 5.6)], 0.8 * s);
-    shape(x, pSmooth([E(7.6, -8), E(9, -5), E(7.6, -3.6), E(6.2, -5)]), "mist", 0.6 * s);
+    for (const k of [-1, 1]) ln(x, [E(k * 3.6 - 1.6 * k, -2.4), E(k * 3.6 + 1.4 * k, -0.8), E(k * 3.6 - 1.6 * k, 0.6)], 0.9);
+    if (!mask) ln(x, [E(-3, 5.6), E(-1.5, 4.6), E(0, 5.8), E(1.5, 4.6), E(3, 5.6)], 0.8);
+    shape(x, pSmooth([E(7.6, -8), E(9, -5), E(7.6, -3.6), E(6.2, -5)]), "mist", 0.6);
   } else {
-    for (const k of [-1, 1]) { shape(x, pEll(...E(k * 3.6, -1), 2.1 * s, 2.3 * s), "paper", 0.7 * s); dot(x, ...E(k * 3.6, -0.6), 0.9 * s); ln(x, [E(k * 3.6 - 2, -5.6), E(k * 3.6, -6.6), E(k * 3.6 + 2, -5.6)], 0.7 * s); }
-    shape(x, pEll(...E(0, 5.4), 1.8 * s, 2.4 * s), "ink", 0.6 * s);
+    for (const k of [-1, 1]) { shape(x, pEll(...E(k * 3.6, -1), 2.1, 2.3), "paper", 0.7); dot(x, ...E(k * 3.6, -0.6), 0.9); ln(x, [E(k * 3.6 - 2, -5.6), E(k * 3.6, -6.6), E(k * 3.6 + 2, -5.6)], 0.7); }
+    if (!mask) shape(x, pEll(...E(0, 5.4), 1.8, 2.4), "ink", 0.6);
   }
 }
 function headFront(x, lk, f, cy) {
-  const hr = LOOK[lk][3], hs = LOOK[lk][5];
-  for (const s of [-1, 1]) shape(x, pEll(s * 9.6, cy + 1, 2.2, 3.2), "paper", 0.9, "paperD", 0.6, 0.6);
-  shape(x, pBlob(0, cy, 9.6, 11, 0.04, lk * 3 + 7), "paper", 1.2, "paperD", 1.4, 1.4);
+  const [, , , hr, , hs, wear, rest] = LOOK[lk], turn = rest === 4, dx = turn ? 2.6 : 0; // turned aside: the face slides toward one cheek
+  const [fw, fh] = FACE[lk], sk = SKIN[lk];
+  for (const s of [-1, 1]) if (hs !== 4 && !(turn && s > 0)) shape(x, pEll(s * fw, cy + 1, 2.2, 3.2), sk, 0.9, "paperD", 0.6, 0.6);
+  shape(x, pBlob(0, cy + (fh - 11) * 0.4, fw, fh, 0.04, lk * 3 + 7), sk, 1.2, "paperD", 1.4, 1.4);
+  if (turn) sp(x, [[fw - 0.6, cy - 0.4], [fw + 3.2, cy + 3], [fw - 0.4, cy + 4.4]], sk, null, 0.8); // the nose shows past the cheek
   if (hs === 3) { sp(x, [[-10, cy + 1], [-10.5, cy - 6], [-8, cy - 7], [-7.6, cy - 1]], hr, null, 0.9); sp(x, [[10, cy + 1], [10.5, cy - 6], [8, cy - 7], [7.6, cy - 1]], hr, null, 0.9); }
-  else sp(x, [[-10.2, cy - 1], [-10.6, cy - 8], [-5, cy - 12.5], [3, cy - 12.6], [9.8, cy - 8.5], [10.2, cy - 1], [7.6, cy - 6.6 + (hs === 2 ? 2 : 0)], [0, cy - 7.6], [-6.6, cy - 5.4 - (hs === 2 ? 1.6 : 0)]], hr, HSH[hr], 1.1, 1, 1.2);
-  if (hs === 1) sq(x, [[-2, cy - 12], [1, cy - 17], [3, cy - 11.6]], hr, null, 0.8);
-  faceArt(x, f, 0, cy + 1);
+  else if (hs === 4) sp(x, [[-11.6, cy + 8.4], [-12.2, cy - 4], [-8, cy - 12], [0, cy - 13.4], [8.4, cy - 12], [12.2, cy - 4], [11.6, cy + 8.4], [8.6, cy + 8.6], [8.8, cy - 2], [2, cy - 6.6], [-4, cy - 6.2], [-8.8, cy - 2], [-8.6, cy + 8.6]], hr, HSH[hr], 1.1, 1, 1.2); // a bob with a fringe
+  else {
+    sp(x, [[-10.2, cy - 1], [-10.6, cy - 8], [-5, cy - 12.5], [3, cy - 12.6], [9.8, cy - 8.5], [10.2, cy - 1], [7.6, cy - 6.6 + (hs === 2 ? 2 : 0)], [0, cy - 7.6], [-6.6, cy - 5.4 - (hs === 2 ? 1.6 : 0)]], hr, HSH[hr], 1.1, 1, 1.2);
+    if (hs === 1) sq(x, [[-2, cy - 12], [1, cy - 17], [3, cy - 11.6]], hr, null, 0.8);
+    if (hs === 5) shape(x, pBlob(6.4, cy - 12.4, 4.2, 3.8, 0.06, lk + 4), hr, 1, HSH[hr], 0.8, 0.8); // a bun, off to one side
+  }
+  faceArt(x, f, dx, cy + 1, lk);
+  if (wear === 1) { sp(x, [[-11, cy - 3.5], [-10.4, cy - 11], [-2, cy - 15], [8, cy - 13.6], [11.4, cy - 6], [10.6, cy - 3]], "plankD", "ink", 1, 0.8, 1); sq(x, [[-11.6, cy - 4.4], [9, cy - 4], [11.6, cy - 1.6], [-10.6, cy - 1.4]], "plankD", null, 0.9); dot(x, 2.6, cy - 14, 1.1, "tagD"); }
+  else if (wear === 2) { for (const k of [-1, 1]) ST.line(x, pBlob(dx + k * 3.9, cy + 0.6, 3, 2.6, 0.04, k + 3), 0.8); ST.line(x, pLine(dx - 0.9, cy + 0.4, dx + 0.9, cy + 0.4), 0.7); }
+  else if (wear === 3) { // a white mask with two pleats and its loops
+    sp(x, [[dx - 6.8, cy + 3.6], [dx + 6.8, cy + 3.4], [dx + 6.2, cy + 9.6], [dx, cy + 11], [dx - 6.2, cy + 9.8]], "paper", "paperD", 0.9, 0.6, 0.8);
+    for (const y of [6, 8.2]) ST.line(x, pLine(dx - 4.6, cy + y, dx + 4.6, cy + y), 0.5, "paperD");
+    ln(x, [[dx - 6.8, cy + 4], [-9.6, cy + 1.6]], 0.6); if (!turn) ln(x, [[dx + 6.8, cy + 4], [9.6, cy + 1.6]], 0.6);
+  }
+  else if (wear === 4) { ST.line(x, pSmooth([[-10.6, cy + 1], [-10.8, cy - 8], [-5, cy - 14.4], [5, cy - 14.4], [10.8, cy - 8], [10.6, cy + 1]], true), 2.2); for (const s of [-1, 1]) shape(x, pEll(s * 10.6, cy + 1.6, 2.8, 4), "greyD", 1); }
+  else if (wear === 5) knit(x, cy - 3);
 }
 function bustArt(x, lk, f) {
   const [jc, js, , , tie] = LOOK[lk];
   if (lk === 4) { limb(x, [12, 0], [17, -24], 4.6, 4, jc, js); limb(x, [17, -24], [15, -46], 4, 3.4, jc, js); sp(x, [[11.5, -44], [12.5, -51], [17, -53], [19.5, -48], [18, -43]], "paper", "paperD", 0.9, 0.6, 0.6); } // up to a strap
   sp(x, [[-17.5, 44], [-17, -1], [-9, -7], [9, -7], [16.5, -1.5], [17.5, 44]], jc, js, 1.2);
-  sq(x, [[-5, -7], [5, -7], [0, 6]], "paper", null, 0.9);
-  sq(x, [[-1.8, -5.6], [1.8, -5.6], [2.6, 5], [0, 9], [-2.6, 5]], tie, null, 0.8);
+  if (tie) { sq(x, [[-5, -7], [5, -7], [0, 6]], "paper", null, 0.9); sq(x, [[-1.8, -5.6], [1.8, -5.6], [2.6, 5], [0, 9], [-2.6, 5]], tie, null, 0.8); }
+  else { sp(x, [[-6, -7.4], [6, -7.4], [4, -1.6], [0, 0.4], [-4, -1.6]], "paper", null, 0.9); sp(x, [[-2.6, -1.6], [3, -2], [4.6, 4.6], [1, 2.4], [-1.4, 6]], lk === 8 ? "goldL" : "redL", null, 0.8); } // a blouse and a knotted scarf
   ST.line(x, pLine(-9, 4, -10, 40), 0.7, js); ST.line(x, pLine(9, 4, 10, 40), 0.7, js);
-  sq(x, [[-4, -11], [4, -11], [3.6, -6.4], [-3.6, -6.4]], "paper", "paperD", 0.9, 1, 0);
+  if (lk === 8) ST.line(x, pLine(-14, -2, 12, 42), 1.6, "plankD"); // a shoulder bag's strap
+  sq(x, [[-4, -11], [4, -11], [3.6, -6.4], [-3.6, -6.4]], SKIN[lk], "paperD", 0.9, 1, 0);
   headFront(x, lk, f, -20);
-  // a few of them carry something of their own, so a full window never reads as one face copied (STYLE.md 10)
-  if (lk === 1) { sp(x, [[-11, -23.5], [-10.4, -31], [-2, -35], [8, -33.6], [11.4, -26], [10.6, -23]], "plankD", "ink", 1, 0.8, 1); sq(x, [[-11.6, -24.4], [9, -24], [11.6, -21.6], [-10.6, -21.4]], "plankD", null, 0.9); dot(x, 2.6, -34, 1.1, "tagD"); } // a flat cap
-  if (lk === 2) { for (const k of [-1, 1]) ST.line(x, pBlob(k * 3.9, -19.4, 3, 2.6, 0.04, k + 3), 0.8); ST.line(x, pLine(-0.9, -19.6, 0.9, -19.6), 0.7); } // glasses
   if (lk === 6) { // a folded newspaper held up at the chest
     sp(x, [[-15.5, 4], [14, 2.4], [15.6, 25], [-14, 26.4]], "paper", "paperD", 1, 1.2, 1.4);
     x.fillStyle = C("greyD"); x.fillRect(-11, 7, 12, 4.6); for (let i = 0; i < 4; i++) x.fillRect(3, 7.6 + i * 4, 9, 1.2); for (let i = 0; i < 2; i++) x.fillRect(-11, 15 + i * 4, 12, 1.2);
     for (const k of [-1, 1]) shape(x, pEll(k * 15, 12, 2.8, 3.6), "paper", 0.8, "paperD", 0.5, 0.5);
   }
 }
-const bustSpr = (lk, f) => bake("bu" + lk + f, 48, 102, 24, 58, x => bustArt(x, lk, f));
+const bustSpr = (lk, f) => bake("bu" + lk + "/" + f, 48, 102, 24, 58, x => bustArt(x, lk, f));
 // a face squashed flat on the window glass, both palms pressed beside it
 function glassArt(x, lk) {
-  const hr = LOOK[lk][3];
-  shape(x, pBlob(0, -16, 13.5, 10, 0.05, lk + 2), "paper", 1.2, "paperD", 0, 1.6);
-  sp(x, [[-13, -18], [-12, -25], [0, -27.5], [12, -25], [13, -18], [6, -22], [-6, -22]], hr, HSH[hr], 1);
+  const [, , , hr, , hs, wear, rest] = LOOK[lk];
+  if (hs === 4) sp(x, [[-15, -6], [-15.6, -18], [-12, -25], [12, -25], [15.6, -18], [15, -6], [11, -10], [-11, -10]], hr, HSH[hr], 1); // a bob, flattened too
+  shape(x, pBlob(0, -16, 13.5, 10, 0.05, lk + 2), SKIN[lk], 1.2, "paperD", 0, 1.6);
+  sp(x, [[-13, -18], [-12, -25], [0, -27.5], [12, -25], [13, -18], [6, -22], [-6, -22]], wear === 5 ? "orange" : hr, wear === 5 ? "tagD" : HSH[hr], 1);
   for (const s of [-1, 1]) {
     x.fillStyle = C("redL"); x.fill(pEll(s * 8, -12.5, 3.4, 2.2));
-    ln(x, [[s * 7.8, -17.6], [s * 4, -16.2]], 1);
+    if (rest === 4 && s > 0) dot(x, s * 6, -17, 1.1); else ln(x, [[s * 7.8, -17.6], [s * 4, -16.2]], 1);
     const hx = s * 21, hy = -12;
-    sp(x, [[hx - 5, hy + 6], [hx - 6.5, hy - 4], [hx - 3, hy - 10], [hx + 3, hy - 10], [hx + 6.5, hy - 4], [hx + 5, hy + 6]], "paper", "paperD", 1, 0.8, 0.8);
+    sp(x, [[hx - 5, hy + 6], [hx - 6.5, hy - 4], [hx - 3, hy - 10], [hx + 3, hy - 10], [hx + 6.5, hy - 4], [hx + 5, hy + 6]], SKIN[lk], "paperD", 1, 0.8, 0.8);
     for (const k of [-3.4, -1, 1.4, 3.6]) ST.line(x, pLine(hx + k, hy - 9, hx + k * 1.1, hy - 3), 0.6);
   }
-  shape(x, pBlob(0, -13.4, 3.6, 2.4, 0.05, 3), "paper", 0.9, "paperD", 0.4, 0.4);
-  ln(x, [[-4, -8], [-1.4, -9], [1.4, -7.6], [4, -8.6]], 0.9);
+  if (wear === 2) for (const s of [-1, 1]) ST.line(x, pEll(s * 6, -17, 4.4, 1.8), 0.8); // glasses pressed flat
+  shape(x, pBlob(0, -13.4, 3.6, 2.4, 0.05, 3), SKIN[lk], 0.9, "paperD", 0.4, 0.4);
+  if (wear === 3) sp(x, [[-8, -11], [8, -11.4], [7, -5.6], [-7, -5.4]], "paper", "paperD", 0.9, 0, 0.8); // the mask, squashed
+  else if (rest === 3) shape(x, pEll(0, -7.4, 3, 1.8), "ink", 0.6);
+  else ln(x, [[-4, -8], [-1.4, -9], [1.4, -7.6], [4, -8.6]], 0.9);
 }
 const glassSpr = lk => bake("gl" + lk, 64, 40, 32, 30, x => glassArt(x, lk));
 
@@ -1777,7 +1887,7 @@ function buildBg(tod) {
     if (Y0 < -30) shape(x, pStar(300, Math.max(Y0 + 30, -50), 4, 1.2, 4, 0.2), "paper", 0.6);
     for (let n = Math.floor((X0 - 200) / 190); n * 190 < X1; n++) cloudStreak(x, n * 190 + 70 * hash1(n * 9 + 1), 14 + 46 * h01(n * 9 + 2), 70 + 60 * h01(n * 9 + 3), n, h01(n * 4) < 0.5 ? sk[6] : sk[7]);
     x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(rest, 0, 0); x.restore();
-  });
+  }, true);
   if (rest.txt) BG.txt = (BG.txt || []).concat(rest.txt);
   if (BGS.filter(Boolean).length === SKIES.length) BGR = null; // every sky is baked: the clear layer can go
 }
@@ -1915,6 +2025,34 @@ function buildFg() {
     ST.fill(x, beam, "plank"); grain(x, beam, X0, Y0, W, top - Y0, 3.6, "plankL", 7); ST.shade(x, beam, "plankD", 0, 3.4); ST.edge(x, beam, 1.6);
     x.fillStyle = C("plankD"); for (let X = X0 - md(X0, 96); X < X1; X += 96) x.fillRect(X, top - 10, 3, 10);
   });
+  FG.runs = inkRuns(FG);
+}
+// The foreground is empty over the play area: keep the 32 px tiles that hold ink (the beam, the side world) as a few
+// rects, so a frame copies a band and two strips instead of blending a whole transparent screen (bar 1.10.5)
+function inkRuns(c) {
+  const T = 32, w = c.width, h = c.height, out = [];
+  let d; try { d = c.getContext("2d").getImageData(0, 0, w, h).data; } catch (e) { return null; }
+  let open = [];
+  for (let ty = 0; ty < h; ty += T) {
+    const th = Math.min(T, h - ty), row = [];
+    for (let tx = 0; tx < w; tx += T) {
+      const tw = Math.min(T, w - tx); let ink = false;
+      for (let y = ty; y < ty + th && !ink; y++) for (let i = (y * w + tx) * 4 + 3, e = i + tw * 4; i < e; i += 4) if (d[i]) { ink = true; break; }
+      if (!ink) continue;
+      const r = row[row.length - 1]; if (r && r[1] === tx) r[1] = tx + tw; else row.push([tx, tx + tw]);
+    }
+    const next = [];
+    for (const [a, b] of row) { const o = open.find(q => q[0] === a && q[2] === b - a && q[1] + q[3] === ty); if (o) { o[3] += th; next.push(o); } else { const q = [a, ty, b - a, th]; out.push(q); next.push(q); } }
+    open = next;
+  }
+  return out;
+}
+function putInk(x, c, sx, sy, z) {
+  if (!c.runs || (z && z.s !== 1)) { putLayer(x, c, sx, sy, z); return; }
+  const ox = Math.round(L.K * ((sx || 0) - c.m)), oy = Math.round(L.K * ((sy || 0) - c.m)); // as putLayer at zoom 1
+  x.setTransform(1, 0, 0, 1, ox, oy);
+  for (const r of c.runs) x.drawImage(c, r[0], r[1], r[2], r[3], r[0], r[1], r[2], r[3]);
+  carry(x, c.txt, 1);
 }
 
 // ---------- GAME-SPECIFIC: the train, frame by frame ----------
@@ -1949,62 +2087,80 @@ function doorOpen(c) { // 1 = fully open
   if (st.ph === "pinch") return 0.38 + (t < 120 ? 0.06 : 0);
   return 0;
 }
-function crowdFace(i, rate, now) {
+// The crowd's mood for a moment (4 shocked, 3 jostled, 2 squeezed by a boarding, -1 none), then each bust's face. At
+// rest every look shows its own face (asleep, a frown, a yawn ...), so a packed car reads as many people (STYLE.md 10)
+function crowdEv(now) {
   if (now - fx.pinchT < 600 || (fx.flyer && now - fx.flyer.t < 700)) return 4;
   if (now - fx.jostleT < 260 && fx.heaveTier === "bad") return 3;
   if (now - fx.boardT < 260) return 2;
-  return rate < 150 ? (i % 3 ? 0 : 1) : rate < 190 ? (i % 2 ? 1 : 2) : [2, 3, 1, 2, 0, 3][md(i, 6)];
+  return -1;
 }
-// the inside of a car behind its holes: a warm ceiling with straps, the closed doors across the aisle, the floor
-const interiorSpr = k => bake("in" + k, CAR_W + 4, SILL_Y - WIN_T + 8, CAR_W / 2 + 2, 2 - WIN_T, x => {
-  const lay = LAY[k];
-  for (const [a, b] of lay.w) {
-    x.fillStyle = C("tagL"); x.fillRect(a, WIN_T, b - a, WIN_B - WIN_T);
-    x.fillStyle = C("paperD"); x.fillRect(a, WIN_T, b - a, 10); x.fillStyle = C("paper"); x.fillRect(a, WIN_T + 3, b - a, 2.4);
-    ST.line(x, pLine(a, WIN_T + 10, b, WIN_T + 10), 0.8, "tagD");
-    for (let s = a + 9 + (b - a) % 17 / 2; s < b - 4; s += 17) put(x, strapSpr(), s, WIN_T + 10);
-  }
-  for (const o of lay.d) {
-    const l = o - lay.hw, r = o + lay.hw;
-    x.fillStyle = C("tagL"); x.fillRect(l, DOOR_T, r - l, SILL_Y - DOOR_T);
-    x.fillStyle = C("paperD"); x.fillRect(l, DOOR_T, r - l, 11); x.fillStyle = C("paper"); x.fillRect(l, DOOR_T + 4, r - l, 2.4);
-    sq(x, [[o - 27, DOOR_T + 20], [o + 27, DOOR_T + 20], [o + 27, SILL_Y], [o - 27, SILL_Y]], "paperD", null, 0.8, 0, 0);
-    x.fillStyle = C("sky3"); x.fillRect(o - 20, DOOR_T + 28, 16, 42); x.fillRect(o + 4, DOOR_T + 28, 16, 42);
-    x.fillStyle = C("goldL"); x.fillRect(o - 20, DOOR_T + 58, 16, 12); x.fillRect(o + 4, DOOR_T + 58, 16, 12);
-    ST.line(x, pLine(o, DOOR_T + 20, o, SILL_Y), 0.8);
-    x.fillStyle = C("tagG"); x.fillRect(l, SILL_Y - 18, r - l, 18);
-  }
-});
-// a commuter in a doorway, legs and all (feet at y 88 from the shoulders)
-const dmSpr = (lk, f) => bake("dm" + lk + f, 48, 156, 24, 60, x => {
+const rTier = R => R < 150 ? 0 : R < 190 ? 1 : 2;
+const crowdFace = (i, R, ev) => ev >= 0 ? ev : [i % 3 ? 0 : 1, [0, 1, 0, 2][md(i, 4)], [2, 0, 3, 1, 0, 2][md(i, 6)]][rTier(R)];
+// a commuter in a doorway, legs and all (feet at y 88 from the shoulders); a skirt and tights when there is no tie
+const dmSpr = (lk, f) => bake("dm" + lk + "/" + f, 48, 156, 24, 60, x => {
   const tr = LOOK[lk][2];
-  sq(x, [[-15, 34], [-1, 34], [-2, 87], [-14, 87]], tr, null, 1); sq(x, [[1, 34], [15, 34], [14, 87], [2, 87]], tr, null, 1);
+  if (LOOK[lk][4] === 0) { sq(x, [[-12, 50], [-3, 50], [-4, 87], [-11, 87]], "ink", null, 1); sq(x, [[3, 50], [12, 50], [11, 87], [4, 87]], "ink", null, 1); sp(x, [[-16.5, 34], [16.5, 34], [18, 58], [-18, 58]], tr, null, 1.1); }
+  else { sq(x, [[-15, 34], [-1, 34], [-2, 87], [-14, 87]], tr, null, 1); sq(x, [[1, 34], [15, 34], [14, 87], [2, 87]], tr, null, 1); }
   for (const s of [-1, 1]) shape(x, pEll(s * 8, 89, 7.4, 3), "ink", 0.8);
   bustArt(x, lk, f);
 });
 function leaves(x, dc, open, hw) { const b = leafSpr(hw), sh = hw * open; put(x, b, dc - hw - sh, 0); put(x, b, dc + hw + sh, 0, 0, -1, 1); }
-function drawCrowd(x, cx, k, R, seed, now, breath, open, main, st) {
-  const lay = LAY[k];
-  put(x, interiorSpr(k), cx, 0);
-  lay.w.forEach(([a, b], wi) => {
-    const n = R < 120 ? 2 : R < 150 ? 3 : R < 190 ? 4 : 5, sd = seed + wi * 5;
-    for (let i = 0; i < n; i++) { // uneven spacing, height and lean per bust
-      const j = sd * 13 + i * 7, X = cx + a + 15 + (i + (i && i < n - 1 ? 0.3 * hash1(j) : 0)) * (b - a - 30) / (n - 1), Y = WIN_T + 43 + breath * 2 + hsh(j, 9);
-      put(x, bustSpr(hsh(sd * 7 + i, 8), crowdFace(i + sd, R, now)), X, Y, 0.1 * hash1(j + 3));
+// what shows through one window, in car coords: a warm ceiling with straps, then the busts and the faces on the glass
+function winArt(x, k0, wi, sd, R, ev, breath) {
+  const [a, b] = LAY[k0].w[wi], n = R < 120 ? 2 : R < 150 ? 3 : R < 190 ? 4 : 5, pressed = R >= 235 ? 2 : R >= 155 ? 1 : 0;
+  x.fillStyle = C("tagL"); x.fillRect(a, WIN_T, b - a, WIN_B - WIN_T);
+  x.fillStyle = C("paperD"); x.fillRect(a, WIN_T, b - a, 10); x.fillStyle = C("paper"); x.fillRect(a, WIN_T + 3, b - a, 2.4);
+  ST.line(x, pLine(a, WIN_T + 10, b, WIN_T + 10), 0.8, "tagD");
+  for (let s = a + 9 + (b - a) % 17 / 2; s < b - 4; s += 17) put(x, strapSpr(), s, WIN_T + 10);
+  for (let i = 0; i < n; i++) { // uneven spacing, height and lean per bust
+    const j = sd * 13 + i * 7, X = a + 15 + (i + (i && i < n - 1 ? 0.3 * hash1(j) : 0)) * (b - a - 30) / (n - 1), Y = WIN_T + 43 + breath * 2 + hsh(j, 9);
+    put(x, bustSpr(hsh(sd * 7 + i, LOOKS), crowdFace(i + sd, R, ev)), X, Y, 0.1 * hash1(j + 3));
+  }
+  for (let i = 0; i < pressed; i++) put(x, glassSpr(hsh(sd + i, LOOKS)), (i ? b - 30 : a + 30) + ((sd + i) & 1) * 5, WIN_T + 52 + breath * 2); // faces squashed flat on the glass
+}
+// what shows through one doorway: the far doors across the aisle, the floor, the people standing in it
+function doorArt(x, k0, i, sd, R, ev, breath, sqz, nudge) {
+  const lay = LAY[k0], o = lay.d[i], l = o - lay.hw, r = o + lay.hw;
+  x.fillStyle = C("tagL"); x.fillRect(l, DOOR_T, r - l, SILL_Y - DOOR_T);
+  x.fillStyle = C("paperD"); x.fillRect(l, DOOR_T, r - l, 11); x.fillStyle = C("paper"); x.fillRect(l, DOOR_T + 4, r - l, 2.4);
+  sq(x, [[o - 27, DOOR_T + 20], [o + 27, DOOR_T + 20], [o + 27, SILL_Y], [o - 27, SILL_Y]], "paperD", null, 0.8, 0, 0);
+  x.fillStyle = C("sky3"); x.fillRect(o - 20, DOOR_T + 28, 16, 42); x.fillRect(o + 4, DOOR_T + 28, 16, 42);
+  x.fillStyle = C("goldL"); x.fillRect(o - 20, DOOR_T + 58, 16, 12); x.fillRect(o + 4, DOOR_T + 58, 16, 12);
+  ST.line(x, pLine(o, DOOR_T + 20, o, SILL_Y), 0.8);
+  x.fillStyle = C("tagG"); x.fillRect(l, SILL_Y - 18, r - l, 18);
+  if (R >= 160) for (let j = 0; j < 2; j++) put(x, bustSpr(hsh(sd + j + 11, LOOKS), crowdFace(j + 1, R, ev)), o - 17 + j * 34, CROWD_Y - 16 + breath * 2);
+  for (let j = 0; j < 3; j++) put(x, dmSpr(hsh(sd + j, LOOKS), crowdFace(j, R, ev)), o - 31 + j * 31 + (j === 0 ? -sqz : j === 2 ? sqz : 0), CROWD_Y + breath * 2 + sqz + nudge);
+}
+// Bar 1.10.5: the train is baked. A strip per layout and livery holds every car body with its holes, the bellows, both
+// cabs and the side cars' windows; the main car's windows and every doorway are small pictures kept in a short cache
+// by what they show (looks, faces, breath), so a frame copies a few small pictures and one strip instead of every car.
+const memo = (m, key, max, make) => { let v = m.get(key); if (v) { m.delete(key); m.set(key, v); return v; } v = make(); m.set(key, v); if (m.size > max) m.delete(m.keys().next().value); return v; };
+const bakeOnce = (w, h, ox, oy, fn) => { const k = "\u0001once"; SPR.delete(k); const b = bake(k, w, h, ox, oy, fn); SPR.delete(k); return b; };
+const WINS = new Map(), DOORS = new Map();
+const faceKey = (R, ev) => ev >= 0 ? "e" + ev : "r" + rTier(R);
+function winSpr(k0, wi, sd, R, ev, breath) {
+  const [a, b] = LAY[k0].w[wi], n = R < 120 ? 2 : R < 150 ? 3 : R < 190 ? 4 : 5, pressed = R >= 235 ? 2 : R >= 155 ? 1 : 0;
+  return memo(WINS, [k0, wi, sd, n, pressed, faceKey(R, ev), breath].join("/"), 24, () => bakeOnce(b - a + 2, WIN_B - WIN_T + 2, 1 - a, 1 - WIN_T, x => winArt(x, k0, wi, sd, R, ev, breath)));
+}
+function doorSpr(k0, i, sd, R, ev, breath, sqz, nudge) {
+  const lay = LAY[k0], l = lay.d[i] - lay.hw;
+  return memo(DOORS, [k0, i, sd, R >= 160 ? 1 : 0, faceKey(R, ev), breath, sqz, nudge].join("/"), 40, () => bakeOnce(lay.hw * 2 + 2, SILL_Y - DOOR_T + 4, 1 - l, 1 - DOOR_T, x => doorArt(x, k0, i, sd, R, ev, breath, sqz, nudge)));
+}
+const STRIP_T = ROOF_Y - 14, STRIP_B = SILL_Y + 4;
+const sideR = k => 186 + fl(44 * h01(k * 7));
+function trainStrip(k0, stripe) {
+  const [a, b] = carSpan(), X0 = DX + a * PITCH - CAR_W / 2 - 36, X1 = DX + b * PITCH + CAR_W / 2 + 36;
+  return bake("tr" + k0 + stripe + a + "/" + b, X1 - X0, STRIP_B - STRIP_T, -X0, -STRIP_T, x => {
+    const car = carSpr(k0, stripe);
+    for (let k = a; k <= b; k++) {
+      const cx = DX + k * PITCH;
+      if (k < b) bellows(x, cx + CAR_W / 2);
+      if (k) LAY[k0].w.forEach((_, wi) => at(x, cx, 0, 1, 0, () => winArt(x, k0, wi, k * 31 + 5 + wi * 5, sideR(k), -1, 0)));
+      put(x, car, cx, 0);
+      if (k === a) cab(x, cx - CAR_W / 2, -1, stripe);
+      if (k === b) cab(x, cx + CAR_W / 2, 1, stripe);
     }
-    const pressed = R >= 235 ? 2 : R >= 155 ? 1 : 0; // faces squashed flat on the glass
-    for (let i = 0; i < pressed; i++) put(x, glassSpr(hsh(sd + i, 8)), cx + (i ? b - 30 : a + 30) + ((sd + i) & 1) * 5, WIN_T + 52 + breath * 2);
-  });
-  lay.d.forEach((o, i) => {
-    const dc = cx + o, sd = seed + i * 7;
-    if (open > 0) {
-      if (R >= 160) for (let j = 0; j < 2; j++) put(x, bustSpr(hsh(sd + j + 11, 8), crowdFace(j + 1, R, now)), dc - 17 + j * 34, CROWD_Y - 16 + breath * 2);
-      const sqz = R >= 200 ? 3 : 0, nudge = main && i === fx.face && fx.heaveTier === "perfect" && fx.vt - fx.heaveT < 120 ? 3 : 0; // a PERFECT nudges the crowd in
-      for (let j = 0; j < 3; j++) put(x, dmSpr(hsh(sd + j, 8), crowdFace(j, R, now)), dc - 31 + j * 31 + (j === 0 ? -sqz : j === 2 ? sqz : 0), CROWD_Y + breath * 2 + sqz + nudge);
-    }
-    const pin = main && st.ph === "pinch";
-    if (!pin || !st.pinched.some(r => r.di === i)) leaves(x, dc, pin ? 0 : open, lay.hw);
-    if (main && st.giri && open < 0.05 && now - fx.slamT < 520) ST.line(x, pRR(dc - lay.hw, DOOR_T, lay.hw * 2, SILL_Y - DOOR_T, 3), 3 * (1 - (now - fx.slamT) / 520) + 0.5, "gold"); // a one-beat gold rim after a giri
   });
 }
 function bellows(x, X) {
@@ -2022,13 +2178,13 @@ function cab(x, X, d, stripe) {
   shape(x, pEll(e - d * 7, 296, 4.4, 3.4), d < 0 ? "warm" : "red", 1);
 }
 // dim 1: an unlit dot matrix (the car in play still moving, or a call or stamp over the panel); dim 3: a car not in
-// play runs lit chevrons the way the train goes, so a panel half behind a hanging sign never reads as cut-off text
+// play runs lit chevrons the way the train goes, so a panel half behind a hanging sign never reads as cut-off text.
+// Both are baked: seven steps of the chevrons and one unlit board.
+const ledSpr = (dim, p) => bake("led" + dim + "/" + p, 112, 20, 56, -(LED_Y + 6), x => {
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 26; i++) { const on = dim === 3 && md(i + p, 7) === (r === 0 || r === 3 ? 2 : 1); x.fillStyle = C(on ? "orange" : "greyD"); x.fillRect(-52 + i * 4.1, LED_Y + 7 + r * 5, on ? 2 : 1.6, on ? 2 : 1.6); }
+});
 function led(x, cx, R, dim, now) {
-  if (dim) {
-    const t = fl(now / 110);
-    for (let r = 0; r < 4; r++) for (let i = 0; i < 26; i++) { const on = dim === 3 && md(i + t, 7) === (r === 0 || r === 3 ? 2 : 1); x.fillStyle = C(on ? "orange" : "greyD"); x.fillRect(cx - 52 + i * 4.1, LED_Y + 7 + r * 5, on ? 2 : 1.6, on ? 2 : 1.6); }
-    return;
-  }
+  if (dim) { put(x, ledSpr(dim, dim === 3 ? md(fl(now / 110), 7) : 0), cx, 0); return; }
   const u = L.u, col = R >= 200 ? "red" : R >= 150 ? "gold" : "leaf", ns = R + "%", lab = S("rate"), n = 18 * u, l = 14 * u;
   const nw = textW(x, ns, n), lw = textW(x, lab, l);
   if (lw + nw + 6 > 112) { text(x, ns, cx, LED_Y + 15, n, col, {}); return; }
@@ -2067,32 +2223,40 @@ function cracks(x, cx, st) {
   }
   x.restore();
 }
-function lip(x) { // the platform edge in front of the car foot: a loaded car sinks behind it
-  const X0 = vLeft() - 24, W = vRight() - X0 + 24;
+// the platform edge in front of the car foot, baked once per screen width: a loaded car sinks behind it
+const lipSpr = () => { const X0 = vLeft() - 24, W = vRight() - X0 + 24; return bake("lip" + Math.round(X0) + "/" + Math.round(W), W, 16, -X0, -342, x => {
   x.fillStyle = C("paperD"); x.fillRect(X0, 343, W, 13); x.fillStyle = C("paper"); x.fillRect(X0, 344.6, W, 2); x.fillStyle = C("tagG"); x.fillRect(X0, 352.6, W, 3.4);
   ST.line(x, pLine(X0, 343, X0 + W, 343), 1.3); ST.line(x, pLine(X0, 356, X0 + W, 356), 1.2);
-}
+}); };
 function drawTrain(x, c, now) {
-  const st = run.st, off = carOffset(c), open = doorOpen(c), ph = beatPhase(c), k0 = st.two ? 1 : 0, sag = fx.sag;
-  const breath = ph > 0.8 || ph < 0.12 ? -1 : ph > 0.35 && ph < 0.6 ? 1 : 0;
-  const [a, b] = carSpan(), stripe = livery(), car = carSpr(k0, stripe), vl = vLeft() - 60, vr = vRight() + 60, pan = [];
-  x.save(); x.translate(0, sag);
+  const st = run.st, off = carOffset(c), open = doorOpen(c), ph = beatPhase(c), k0 = st.two ? 1 : 0, lay = LAY[k0], sag = fx.sag;
+  const breath = ph > 0.8 || ph < 0.12 ? -1 : ph > 0.35 && ph < 0.6 ? 1 : 0, ev = crowdEv(now);
+  const [a, b] = carSpan(), vl = vLeft() - 60, vr = vRight() + 60, pan = [], seen = k => { const X = DX + off + k * PITCH; return X + CAR_W / 2 + 40 >= vl && X - CAR_W / 2 - 40 <= vr; };
+  x.save(); x.translate(off, sag);
+  for (let k = a; k <= b; k++) { // first what shows through the holes: the main car's windows, every doorway in view
+    if (!seen(k)) continue;
+    const cx = DX + k * PITCH, main = k === 0, R = main ? st.R : 186 + fl(44 * h01(k * 7 + st.n)), seed = k * 31 + 5 + st.n * 3;
+    if (main) for (let wi = 0; wi < lay.w.length; wi++) put(x, winSpr(k0, wi, seed + wi * 5, R, ev, breath), cx, 0);
+    lay.d.forEach((o, i) => {
+      const dc = cx + o; if (dc + off + lay.hw < vLeft() - 4 || dc + off - lay.hw > vRight() + 4) return;
+      if (open > 0.01) put(x, doorSpr(k0, i, seed + i * 7, R, ev, main ? breath : 0, R >= 200 ? 3 : 0, main && i === fx.face && fx.heaveTier === "perfect" && fx.vt - fx.heaveT < 120 ? 3 : 0), cx, 0); // a PERFECT nudges the crowd in
+      const pin = main && st.ph === "pinch";
+      if (!pin || !st.pinched.some(r => r.di === i)) leaves(x, dc, pin ? 0 : open, lay.hw);
+      if (main && st.giri && open < 0.05 && now - fx.slamT < 520) ST.line(x, pRR(dc - lay.hw, DOOR_T, lay.hw * 2, SILL_Y - DOOR_T, 3), 3 * (1 - (now - fx.slamT) / 520) + 0.5, "gold"); // a one-beat gold rim after a giri
+    });
+  }
+  putSpan(x, trainStrip(k0, livery()), 0, 0, vl + 30 - off, vr - 30 - off); // then every car body over them in one copy of what shows
   for (let k = a; k <= b; k++) {
-    const cx = DX + off + k * PITCH; if (cx + CAR_W / 2 + 40 < vl || cx - CAR_W / 2 - 40 > vr) continue;
-    if (k < b) bellows(x, cx + CAR_W / 2);
-    const R = k === 0 ? st.R : 186 + fl(44 * h01(k * 7 + st.n));
-    drawCrowd(x, cx, k0, R, k * 31 + 5 + st.n * 3, now, breath, open, k === 0, st);
-    put(x, car, cx, 0);
-    if (k === a) cab(x, cx - CAR_W / 2, -1, stripe);
-    if (k === b) cab(x, cx + CAR_W / 2, 1, stripe);
-    if (!isTitle() || k !== 0) led(x, cx, R, k !== 0 ? 3 : Math.abs(cx - DX) > 40 || (!isOver() && ledHidden(now)) ? 1 : 0, now); // the car in play lights up once it stands at the door
+    if (!seen(k)) continue;
+    const cx = DX + k * PITCH;
+    if (!isTitle() || k !== 0) led(x, cx, st.R, k !== 0 ? 3 : Math.abs(cx + off - DX) > 40 || (!isOver() && ledHidden(now)) ? 1 : 0, now); // the car in play lights up once it stands at the door
     if (k === 0) { lamps(x, cx, c, now); cracks(x, cx, st); }
-    if (((k % 2) + 2) % 2 === 0) pan.push(cx);
+    if (((k % 2) + 2) % 2 === 0) pan.push(cx + off);
   }
   x.restore();
   const pk = (ROOF_Y - 2 + sag - WIRE_Y) / (ROOF_Y - 2 - WIRE_Y); // the pantograph keeps the wire while the car sinks
   for (const X of pan) at(x, X, WIRE_Y, 1, 0, () => { x.scale(1, pk); put(x, pantoSpr(), 0, -WIRE_Y); });
-  lip(x);
+  put(x, lipSpr(), 0, 0);
 }
 
 // ---------- GAME-SPECIFIC: people on the platform ----------
@@ -2105,23 +2269,23 @@ function drawRider(x, r, X, feet, walk, squash) { // squash: -1..1, a spring val
 }
 // heaves left to board: a paper tag of pips over the rider (orange for hard luggage, grey when it is too late)
 function pips(x, r, X, Y, late) {
-  const n = r.need, w = n * 11 + 8;
-  at(x, X, Y, L.u, 0, () => {
-    shape(x, pc("pipT" + n, () => pCut(-w / 2, -8, w, 16, 3)), late ? "grey" : r.type === "c" ? "orange" : "paper", 1.1);
+  const n = r.need, w = n * 11 + 8, u = L.u, lug = r.type === "c";
+  put(x, bake("pp" + n + r.d + (r.half ? 1 : 0) + (late ? 1 : 0) + (lug ? 1 : 0) + "/" + u.toFixed(2), w * u + 6, 16 * u + 6, w * u / 2 + 3, 8 * u + 3, x => { x.scale(u, u);
+    shape(x, pc("pipT" + n, () => pCut(-w / 2, -8, w, 16, 3)), late ? "grey" : lug ? "orange" : "paper", 1.1);
     for (let i = 0; i < n; i++) {
       const X0 = -w / 2 + 5 + i * 11, p = pc("pip" + n + "/" + i, () => pCut(X0, -4.5, 8, 9, 2));
       if (i < r.d) shape(x, p, "red", 0.8);
       else { if (i === r.d && r.half) { x.fillStyle = C("red"); x.fill(pc("pipH" + n + "/" + i, () => pCut(X0, -4.5, 4, 9, 1))); } ST.line(x, p, 0.8, late ? "greyD" : "ink"); } // a GOOD on luggage: half a pip
     }
-  });
+  }), X, Y);
 }
 const palm = (x, X, Y) => shape(x, pSmooth([[X - 5, Y + 6], [X - 6.5, Y - 1], [X - 5.6, Y - 6], [X - 3.4, Y - 2], [X - 2.4, Y - 8.6], [X - 0.4, Y - 8.6], [X + 0.2, Y - 2.6], [X + 1.6, Y - 8], [X + 3.6, Y - 7.4], [X + 3.6, Y - 1.4], [X + 6.2, Y - 4], [X + 7.4, Y - 3], [X + 5, Y + 3.6], [X + 2.6, Y + 6.4]]), "paper", 0.8);
 function waitTag(x, X, Y) { // a stop palm and "wait" over a rider who cannot make it: leaving him costs less
-  at(x, X, Y, L.u, 0, () => {
-    const t = S("wait"), w = textW(x, t, 15) + 36;
-    shape(x, pCut(-w / 2, -13, w, 26, 4), "red", 1.2, "redD", 1.2, 1.6);
+  const u = L.u, t = S("wait"), w = textW(x, t, 15) + 36;
+  put(x, bake("wt" + lang + "/" + u.toFixed(2), w * u + 8, 30 * u + 8, w * u / 2 + 4, 15 * u + 4, x => {
+    x.scale(u, u); shape(x, pCut(-w / 2, -13, w, 26, 4), "red", 1.2, "redD", 1.2, 1.6);
     palm(x, -w / 2 + 14, 0.5); text(x, t, -w / 2 + 26, 1, 15, "paper", { a: "left" });
-  });
+  }), X, Y);
 }
 const mark = (x, X, Y) => text(x, "!", X, Y, 22 * L.u, "red", { ol: "ink", ow: 0.26, f: ST.title, w: 900 });
 // the oshiya: right of one door, or between two doors facing the one he works. The heave is a spring (bar 1.2.2):
@@ -2299,7 +2463,7 @@ function drawCue(x, c, now) {
     if (rr > 13) cordLine(x, ring(rr), 2.2, late ? "grey" : dim ? "paperD" : k < 0.25 ? "gold" : "paper", 0.8);
     if (dim) x.setLineDash([]);
     x.translate(-p, -y);
-    if (st.two && !dim && !late) { const ty = y - 68 - (reduceMotion ? 0 : 3 * Math.abs(Math.sin(now / 180))); shape(x, pPoly([[p - 9, ty - 12], [p + 9, ty - 12], [p, ty]]), "gold", 1.4); } // an inked arrow over the door a centre tap or Space pushes
+    if (st.two && !dim && !late) { const ty = y - 68 - (reduceMotion ? 0 : 3 * Math.abs(Math.sin(now / 180))); shape(x, pPoly([[p - 13, ty - 17], [p + 13, ty - 17], [p, ty]]), "gold", 1.6); } // an inked arrow over the door a centre tap or Space pushes (big enough to read at 360)
     if (state === "play" && hint.active && !dim) drawTapHint(x, p + 8, y + 46, clamp(Math.min(ph, 1 - ph) * 3.2, 0, 1));
   });
 }
@@ -2336,26 +2500,36 @@ function bandText(x, now) {
   if (run.chain >= 2) return S("chain", run.chain);
   const l = stLabel(st); return fits(l) ? l : stName(st.name);
 }
-function drawRoute(x, X, Y, s, w, now) { // the line map: stations behind with their stars, the ones ahead, terminals as squares
-  const n = run.st.n, lc = i => COL[run.daily ? "y" : i > LAST ? "a" : LINES[lineOf(i)].c];
-  at(x, X, Y, s, 0, () => {
-    put(x, plankSpr(w, 44), 0, 0);
-    const ly = 15, gap = 26, side = fl((w / 2 - 16) / gap);
-    shape(x, pc("rbar" + w, () => pPoly([[-w / 2 + 12, ly - 2.6], [w / 2 - 12, ly - 2.6], [w / 2 - 12, ly + 2.6], [-w / 2 + 12, ly + 2.6]])), lc(n), 0.7);
-    for (let k = -side; k <= side; k++) {
-      const i = n + k, sx = k * gap; if (i < 1 || k === 0) continue;
-      if (!run.daily && i % 8 === 0 && i <= LAST) shape(x, pc("rsq" + k, () => pCut(sx - 5.5, ly - 5.5, 11, 11, 2)), k < 0 ? lc(i) : "paper", 1);
-      else shape(x, pc("rdot" + k, () => pEll(sx, ly, 4.4, 4.4)), k < 0 ? lc(i) : "paper", 0.9);
-      if (k < 0) { const sc = run.hist[i] || 0; for (let j = 0; j < 3; j++) { const p = pc("rst" + k + "/" + j, () => pEll(sx - 5.6 + j * 5.6, ly + 10, 2, 2)); if (j < sc) { x.fillStyle = C("gold"); x.fill(p); } else ST.line(x, p, 0.6, "tagL"); } }
-    }
-    shape(x, pc("rnow", () => pEll(0, ly, 8, 8)), fl(now / 250) & 1 ? "gold" : "goldL", 1.3); dot(x, 0, ly, 2.8, "paper");
-    text(x, S("stOf", run.daily || n > LAST ? n : (n - 1) % 8 + 1), 0, 33, 14, "tagL", {});
-  });
+// The hanging boards change a few times a station (a stop, a lost glove, a gripe), so each is baked at its HUD scale
+// with its cords and copied as one picture until it changes: ~40 strokes a frame become 3 copies (bar 1.10.5)
+const HUDC = new Map();
+const hudBake = (key, s, w, h, ox, oy, fn) => memo(HUDC, key + "/" + s.toFixed(3) + lang, 16, () => bakeOnce(w * s, h * s, ox * s, oy * s, q => { q.scale(s, s); fn(q); }));
+function routeArt(x, w, n) { // the line map: stations behind with their stars, the ones ahead, terminals as squares
+  const lc = i => COL[run.daily ? "y" : i > LAST ? "a" : LINES[lineOf(i)].c];
+  put(x, plankSpr(w, 44), 0, 0);
+  const ly = 15, gap = 26, side = fl((w / 2 - 16) / gap);
+  shape(x, pPoly([[-w / 2 + 12, ly - 2.6], [w / 2 - 12, ly - 2.6], [w / 2 - 12, ly + 2.6], [-w / 2 + 12, ly + 2.6]]), lc(n), 0.7);
+  for (let k = -side; k <= side; k++) {
+    const i = n + k, sx = k * gap; if (i < 1 || k === 0) continue;
+    if (!run.daily && i % 8 === 0 && i <= LAST) { shape(x, pCut(sx - 5.5, ly - 5.5, 11, 11, 2), k < 0 ? lc(i) : "paper", 1); if (k > 0) ST.line(x, pCut(sx - 8.5, ly - 8.5, 17, 17, 3), 1, "red"); } // a terminal: its rush ahead gets a red frame
+    else if (!run.daily && KIND[i] === "q" && i <= LAST) shape(x, pPoly([[sx, ly - 6.4], [sx + 6.4, ly], [sx, ly + 6.4], [sx - 6.4, ly]]), k < 0 ? lc(i) : "goldL", 0.9); // a quick stop: a diamond
+    else shape(x, pEll(sx, ly, 4.4, 4.4), k < 0 ? lc(i) : "paper", 0.9);
+    if (k < 0) { const sc = run.hist[i] || 0; for (let j = 0; j < 3; j++) { const p = pEll(sx - 5.6 + j * 5.6, ly + 10, 2, 2); if (j < sc) { x.fillStyle = C("gold"); x.fill(p); } else ST.line(x, p, 0.6, "tagL"); } }
+  }
+  text(x, S("stOf", run.daily || n > LAST ? n : (n - 1) % 8 + 1), 0, 33, 14, "tagL", {});
+}
+function drawRoute(x, X, Y, s, w, now, ct) { // ct: where its cords end, in board px above it
+  const n = run.st.n, side = fl((w / 2 - 16) / 26), h = [];
+  for (let k = -side; k < 0; k++) h.push(run.hist[n + k] || 0);
+  const t = Math.round(ct);
+  put(x, hudBake("rt" + n + (run.daily ? "d" : "") + "/" + w + "/" + h.join("") + "/" + t, s, w + 8, 54 - t, w / 2 + 4, 2 - t, q => {
+    cords(q, [[-(w / 2 - 18), 6], [w / 2 - 18, 6]], t); routeArt(q, w, n);
+  }), X, Y);
+  at(x, X, Y, s, 0, () => { shape(x, pc("rnow", () => pEll(0, 15, 8, 8)), fl(now / 250) & 1 ? "gold" : "goldL", 1.3); dot(x, 0, 15, 2.8, "paper"); });
 }
 function drawHud(x, now) {
   const P = hudPos(), s = P.s, top = beamB(), a = Juice.reduce ? 0 : fx.sa, [sx, sy] = P.sign, [rx, ry] = P.route, eq = eqv();
-  cords(x, [[rx - (P.rw / 2 - 18) * s, ry + 6 * s], [rx + (P.rw / 2 - 18) * s, ry + 6 * s]], sy + 60 * s);
-  drawRoute(x, rx, ry, s, P.rw, now);
+  drawRoute(x, rx, ry, s, P.rw, now, (sy + 60 * s - ry) / s);
   // the score sign swings a little when it scores
   cords(x, [-56, 56].map(h => [sx + s * h * Math.cos(a), sy + s * (h * Math.sin(a) + 4)]), top);
   at(x, sx, sy, s, a, () => {
@@ -2365,11 +2539,13 @@ function drawHud(x, now) {
   });
   // lives: three gloves pegged on a board; a lost one is the same glove printed grey
   const [gx, gy] = P.gloves;
-  cords(x, [[gx - 26 * s, gy + 4 * s], [gx + 26 * s, gy + 4 * s]], top);
+  const gt = Math.round((top - gy) / s);
+  put(x, hudBake("gb" + gt, s, 88, 82 - gt, 44, 2 - gt, q => {
+    cords(q, [[-26, 4], [26, 4]], gt); put(q, plankSpr(80, 76), 0, 0);
+    text(q, S("gloves"), 0, 15, 14, "tagL", {});
+    ST.line(q, pSmooth([[-35, 31], [0, 34], [35, 31]], true), 1, "tagL");
+  }), gx, gy);
   at(x, gx, gy, s, 0, () => {
-    put(x, plankSpr(80, 76), 0, 0);
-    text(x, S("gloves"), 0, 15, 14, "tagL", {});
-    ST.line(x, pSmooth([[-35, 31], [0, 34], [35, 31]], true), 1, "tagL");
     for (let i = 0; i < 3; i++) {
       const has = run.lives > i, X = -22 + i * 22, sw = Juice.reduce ? 0 : fx.gl[i].a;
       put(x, gloveSpr(eq[0], !has), X, 33, sw);
@@ -2380,7 +2556,7 @@ function drawHud(x, now) {
   // under it says how many more cost a glove, and it shakes at the bell when the last one is on the line (bar 1.4.7)
   const [cx, cy] = P.gripes, n = Math.min(5, run.complaints), k = clamp((now - fx.compT) / 220, 0, 1), wa = Juice.reduce ? 0 : fx.wa;
   cords(x, [[cx, cy + 3 * s]], top);
-  at(x, cx, cy, s, wa * 0.5, () => {
+  const slip = (x, n, k) => {
     put(x, slipSpr(92, 62), 0, 0);
     text(x, S("complaints"), 0, 15, 14, "ink", {});
     for (let i = 0; i < 5; i++) {
@@ -2388,7 +2564,9 @@ function drawHud(x, now) {
       if (i >= n) { x.setLineDash([2.2, 1.8]); ST.line(x, pCut(X, Y, 14, 18, 2.5), 0.9, "greyD"); x.setLineDash([]); if (i === 4) glove(x, X + 7.6, Y + 9, -Math.PI / 2, "paperD", 0.9); continue; }
       at(x, X + 7, Y + 9, last ? 1 + 0.6 * (1 - easeOut(k)) : 1, (i % 2 ? 0.08 : -0.06), () => gripeSeal(x, run.complaints >= 5));
     }
-  });
+  };
+  if (k < 1) at(x, cx, cy, s, wa * 0.5, () => slip(x, n, k)); // a seal stamping in
+  else put(x, hudBake("gr" + n + (run.complaints >= 5 ? "f" : ""), s, 104, 74, 52, 5, q => slip(q, n, 1)), cx, cy, wa * 0.5);
   const hot = now - fx.warnT < 1600;
   if ((run.complaints >= 3 || hot) && run.complaints < 5) { // the tag: "2 more" / "1 more", with the glove it costs
     const t = S("warn", 5 - run.complaints), tw = textW(x, t, 14) + 34;
@@ -2533,8 +2711,7 @@ function drawTitle(x, now) {
     if (starts().length > 1) fromPlank(x, UI.from);
   }
   const st = UI.start;
-  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => tagBtn(x, 0, 0, st.w, st.h, bk && fromSel() > 1 ? S("cont") : S("start"), 24));
-  pointAt(x, st, now);
+  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => { tagBtn(x, 0, 0, st.w, st.h, bk && fromSel() > 1 ? S("cont") : S("start"), 24, false, PT_LX); pointIn(x, st, now); });
   if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 10) * u, st.y + 30 * u, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3 });
   text(x, S("credit"), vLeft() + 10, vBot() - 14, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3, w: 700 });
 }
@@ -2580,18 +2757,22 @@ function drawBook(x, now) {
       }
     } else {
       text(x, S("streak", streak()) + "   " + S("stamped", days().length), 0, 68, 16, "paneT", {});
-      const rh = (H - 86 - 64) / REWARDS.length;
+      const rh = (H - 86 - 64) / (REWARDS.length + 1), ik = Math.min(1, rh / 28); // the last row holds the master seals
       REWARDS.forEach((w, i) => {
         const cy = 86 + i * rh + rh / 2, has = hasRw(w), on = eq[w[1]] === w[2], hit = fx.eqI === i ? now - fx.eqT : 1e9;
         at(x, 0, cy, 1 + (hit < 500 ? 0.08 * wob(hit / 500, 10, 4) : 0), 0, () => {
           if (on) ST.line(x, pCut(-138, -rh / 2 + 1.5, 276, rh - 3, 3), 1.6, "red");
-          put(x, rwSpr(w, !has), -114, 0);
+          put(x, rwSpr(w, !has), -114, 0, 0, ik, ik);
           text(x, rwName(w), -88, 1, 15, has ? (on ? "red" : "paneT") : "greyD", { a: "left" });
           text(x, w[0] > 0 ? "★" + w[0] : S("streak", -w[0]), 128, 1, 15, has ? "paneS" : "greyD", { a: "right" });
           if (on && hit < 900) seal(x, 40, 0, S("equipped"), hit, 15);
         });
         UI.cells.push({ x: 180 + ox - 138 * u, y: y0 + oy + (cy - rh / 2) * u, w: 276 * u, h: rh * u, i });
       });
+      const sy = 86 + REWARDS.length * rh + rh / 2, got = sealsGot(); // a hard goal for each seal; a near-full book names them on the result
+      x.fillStyle = C("paneL"); for (let j = -134; j < 134; j += 5) x.fillRect(j, sy - rh / 2, 2, 1.4);
+      text(x, S("seals"), -132, sy + 1, 15, got ? "paneT" : "greyD", { a: "left" });
+      for (let i = 0; i < SEALS.length; i++) at(x, 36 + i * 28, sy, 0.9 * ik, (i % 2 ? 0.08 : -0.08), () => sealMark(x, got.includes(SEALS[i]), SEALS[i]));
     }
     const fy = H - 56, nx = nextRw();
     text(x, "★" + tot + "/72", -132, fy + 12, 17, "paneT", { a: "left", f: ST.title, w: 900 });
@@ -2623,16 +2804,28 @@ function starRow(x, r, x0, y, x1) { // one small card per station of this run, i
     for (let j = 0; j < 3; j++) { x.fillStyle = C(j < s ? "red" : "paneL"); x.fillRect(sx + 3, y + 4 - j * 5, 3, 3); }
   }
 }
+// a master seal as a small red print (on: earned; off: a dashed outline still to earn)
+function sealMark(x, on, id) {
+  if (!on) { x.setLineDash([2.4, 2]); ST.line(x, pCut(-10, -11, 20, 22, 3), 1.1, "greyD"); x.setLineDash([]); return; }
+  shape(x, pCut(-10, -11, 20, 22, 3), "red", 1.1, "redD", 1, 1.4); ST.line(x, pCut(-7, -8, 14, 16, 2), 0.9, "paper");
+  const k = SEALS.indexOf(id);
+  if (k === 0) for (let i = 0; i < 3; i++) ST.line(x, pSmooth([[-4.4, -4 + i * 4], [0, -5.4 + i * 4], [4.4, -4 + i * 4]], true), 1.1, "paper"); // a chain of heaves
+  else if (k === 1) shape(x, pStar(0, 0.4, 5.2, 2.3, 5, 0), "paper", 0.6);
+  else if (k === 2) { shape(x, pEll(0, 0, 4.6, 4.6), "paper", 0.6); dot(x, 0, 0, 1.8, "red"); }
+  else if (k === 3) { ST.line(x, pPoly([[-4.6, 4], [-4.6, -2], [0, -5.4], [4.6, -2], [4.6, 4]]), 1.2, "paper"); }
+  else ST.line(x, pLine(-4, 0, 4, 0), 1.4, "paper");
+}
 // a goal line: an unlock is stamped on a plate (the new start station is a button), the forward goal points on
 function goalLine(x, r, g, gy, now, i) {
   const age = now - r.at - RES.goal - i * 120; if (age < 0) return null;
-  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go"].includes(g.kind), tw = textW(x, g.t, 17), w = tw + 46 + (go ? 18 : 0), fit = Math.min(1, 230 / w), s = (plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit; // a long line shrinks inside the board (bar 1.8.5)
+  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go", "sg"].includes(g.kind), tw = textW(x, g.t, 17), w = tw + 46 + (go ? 18 : 0), fit = Math.min(1, 230 / w), s = (plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit; // a long line shrinks inside the board (bar 1.8.5)
   at(x, 0, gy, s, 0, () => {
     if (plate) shape(x, pCut(-w / 2, -14, w, 28, 4), "paper", 1.1, "paperD", 1.4, 1.8);
     const x0 = -w / 2 + 22;
     if (g.kind === "w") put(x, rwSpr(g.w, false), x0 - 4, 0, 0, 0.7, 0.7);
     else if (go) startFlag(x, x0 - 6, 4, true);
     else if (g.kind === "d") { ST.line(x, pBlob(x0 - 6, 0, 9, 9, 0.04, 3), 2, "red"); dot(x, x0 - 6, 0, 3, "red"); }
+    else if (g.kind === "seal" || g.kind === "sg") at(x, x0 - 6, 0, 0.8, -0.1, () => sealMark(x, g.kind === "seal", g.id));
     else hand(x, x0 - 8, 0, Math.PI / 2, 0.55);
     text(x, g.t, x0 + 10, 1, 17, plate ? "redD" : "paneS", { a: "left" });
     if (go) shape(x, pPoly([[w / 2 - 8, 0], [w / 2 - 20, -7], [w / 2 - 20, 7]]), "red", 0.8); // a start station: the line is a button
@@ -2656,7 +2849,7 @@ function drawOver(x, now) {
     if (rows > 0) row("rRiders", r.boarded, 156);
     if (rows > 1) { const v = S("stOf", r.n); row("rStation", v, 186); starRow(x, r, -134 + textW(x, S("rStation"), 17, { w: 700 }) + 12, 186, 126 - textW(x, v, 20, { f: ST.title, w: 900 })); }
     if (rows > 2) { if (run.daily) row("rTmr", r.tmr, 216, 17); else row("rChain", r.maxChain, 216); }
-    if (rows > 3 && play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
+    if (rows > 3 && play && (r.newBest || r.best > 0 || r.fromBest)) { // no "BEST 0 / 0 TO GO" on a first record; a first run from a start shows its record
       const full = run.daily ? S("rDaily") : r.rowLate ? S("rBestFrom", null, stName(r.from)) : S("rBest");
       if (r.newBest) { text(x, full, -134, 246, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, 246, S("newBest"), age - RES.best, 18); }
       else if (r.fromBest) { // a quiet row: this start's best moved, no seal and no happytime
@@ -2682,11 +2875,11 @@ function drawOver(x, now) {
   if (!play) return;
   const e = UI.retry, ro = retryOpt(), lf = !ro.daily && ro.from > 1; // the retry tag says where the next run starts
   at(x, e.cx, e.y, e.s, 0, () => {
-    tagBtn(x, 0, 0, e.w, e.h, lf ? "" : S("retry"), 24);
-    if (lf) { text(x, S("retry"), 0, 21, 21, "ink", { deep: "tagD" }); text(x, S("fromOf", null, stName(ro.from)), 0, 42, 14, "redD", {}); }
+    tagBtn(x, 0, 0, e.w, e.h, lf ? "" : S("retry"), 24, false, PT_LX);
+    if (lf) { text(x, S("retry"), PT_LX, 21, 21, "ink", { deep: "tagD" }); text(x, S("fromOf", null, stName(ro.from)), PT_LX, 42, 14, "redD", {}); }
+    if (retryReady()) pointIn(x, e, now);
   });
   btn(x, UI.toTitle, S("toTitle"), 17, true);
-  if (retryReady()) pointAt(x, UI.retry, now);
 }
 function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
   const P = hudPos(), [dx, dy] = P.demo, s = P.s;
@@ -2701,7 +2894,10 @@ function drawPlaques(x) {
 }
 const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
 // a smaller hand whose finger touches the tag, so it stays off the queue beside the button (bar 1.8.5)
-const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 - 10 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, 0.72 * e.s);
+// the pointing hand rides on the tag's left end, in the tag's own frame, so it never lands on a queued commuter
+// beside the button (bar 1.8.5); the label moves right by PT_LX to make room for it
+const PT_LX = 13;
+const pointIn = (x, e, now) => hand(x, -e.w / 2 + 40 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 3), e.h / 2 + 1, Math.PI / 2, 0.5);
 
 // ---------- one frame: the world (shake, zoom), then the hanging UI that never shakes, then the washi grain ----------
 function draw(now) {
@@ -2725,7 +2921,7 @@ function draw(now) {
   drawCushion(xs, now); drawExtras(xs, c, now); drawPigeons(xs, c, now); drawOut(xs, now); drawPeople(xs, now, c);
   drawHit(xs, now); drawCue(xs, c, now);
   if (!isOver() && book < 0) partsDraw(xs);
-  putLayer(xs, FG, sh.x, sh.y, z0);
+  putInk(xs, FG, sh.x, sh.y, z0);
   if (lean) {
     const s = lean.s, cx = L.K * (lean.x + L.x0) * (s - 1) / s, cy = L.K * (lean.y + L.y0) * (s - 1) / s, W = cv.width, H = cv.height;
     x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(xs.canvas, cx, cy, W / s, H / s, 0, 0, W, H);
@@ -2767,6 +2963,8 @@ function makeGoal(r) {
   const need = m ? Math.max(1, m[1] - tot2, m[2] - star3()) : 99;
   if (rb < RANKS.length - 1) c.push(m && num("maxSt") >= m[0] && need <= 10 ? S("gStar", need, S("ranks")[rb + 1]) : S("gRank", RANKS[rb + 1], S("ranks")[rb + 1]));
   if (!c.length) c.push(S("gGo", null, stName(n + 1)));
+  const sg = nearFull() && [...SEALS].find(id => !sealsGot().includes(id)); // a near-full book: the next master seal leads
+  if (sg && num("runs") % 3 !== 2) { r.sealGoal = sg; return S("sealG")[SEALS.indexOf(sg)]; }
   return c[num("runs") % Math.min(3, c.length)];
 }
 function resultStep(now) {
@@ -2777,7 +2975,7 @@ function resultStep(now) {
     if (r.rankUp) { const gy = overY() + 108 * L.u; burst(180 + 86 * L.u, gy, 12, 170, { col: "red", kind: "chip", s: 2.4 }); burst(180 + 86 * L.u, gy, 4, 190, { kind: "star", col: "goldL", s: 3 }); }
   }
   const rows = clamp(fl((age - RES.rows) / 110) + 1, 0, 4); if (rows > (r.rows || 0)) { r.rows = rows; sfx.tick(10 + rows * 3); } // rising ticks
-  if (state === "over" && !r.unlockDone && r.lines.some(g => !["goal", "day", "home", "go"].includes(g.kind)) && age > RES.goal) {
+  if (state === "over" && !r.unlockDone && r.lines.some(g => !["goal", "day", "home", "go", "sg"].includes(g.kind)) && age > RES.goal) {
     r.unlockDone = true; sfx.unlock(); const gy = overY() + 288 * L.u;
     burst(180, gy, 14, 170, { col: "gold", kind: "chip", s: 2.6 }); burst(180, gy, 5, 190, { kind: "star", col: "goldL", s: 3 });
   }
@@ -2796,8 +2994,8 @@ const UI = { cells: [] };
 function layoutUI() {
   if (run && run.result) run.result.placed = false;
   const u = L.u, wd = L.wide, hs = hudS(), ty = Math.min(548, vBot() - 66 * u), py = pauseY(), lw = Math.max(46, textW(ctx, S("lang"), 16) + 22), ui = (cx, y, w, h, s) => ({ cx, y, w, h, s: s || u });
-  UI.start = ui(180, ty, 176, 54);
-  UI.retry = ui(180, ty - 10 * u, 176, 54);
+  UI.start = ui(180, ty, 190, 54);
+  UI.retry = ui(180, ty - 10 * u, 190, 54);
   UI.toTitle = wd ? ui(180 + 162 * u, ty - 2 * u, 128, 40) : ui(180, ty + 52 * u, 128, 36);
   UI.resume = ui(180, py + 70 * u, 196, 54);
   UI.restart = ui(180 - 72 * u, py + 144 * u, 132, 42);
@@ -2828,7 +3026,7 @@ function warmUp() {
   for (let l = 0; l < LOOKS; l++) q.push(() => glassSpr(l));
   for (const p of ["ready", "heave", "back", "slump", "m1", "m2"]) q.push(() => oshBodySpr(p, e[0]));
   for (const m of ["normal", "strain", "shock", "grin", "sad"]) q.push(() => oshHeadSpr(m, e[1]));
-  q.push(() => leafSpr(LAY[0].hw), () => leafSpr(LAY[1].hw), () => interiorSpr(0), () => interiorSpr(1), () => carSpr(0, livery()), () => carSpr(1, livery()), () => pantoSpr());
+  q.push(() => leafSpr(LAY[0].hw), () => leafSpr(LAY[1].hw), () => carSpr(0, livery()), () => carSpr(1, livery()), () => trainStrip(0, livery()), () => trainStrip(1, livery()), () => pantoSpr(), () => lipSpr());
   q.push(() => gloveSpr(e[0], false), () => gloveSpr(e[0], true));
   for (const p of ["stand", "peck", "fly", "fly2"]) q.push(() => pigeonSpr(p));
   for (const t of "smgcrp") for (let l = 0; l < LOOKS; l++) for (const w of [0, 1]) q.push(() => riderSpr(t, l, w));
@@ -2850,7 +3048,8 @@ function resize() {
     for (const ch of [480, 520, 560, 600]) { artResize(cv, w, h, CW, ch, 220); if (L.wide) { ok = true; L.y0 -= (CH - ch) * 0.5; break; } }
     if (!ok) artResize(cv, w, h, CW, CH, 220);
   }
-  BGS = []; BGR = null; buildBg(todNow()); buildFg(); layoutUI(); warmUp();
+  BGS = []; BGR = null; WINS.clear(); DOORS.clear(); HUDC.clear(); for (const k of SPR.keys()) if (/^(tr|lip)/.test(k)) SPR.delete(k);
+  buildBg(todNow()); buildFg(); layoutUI(); warmUp();
   if (run && manual) draw(simT);
 }
 window.addEventListener("resize", resize);
@@ -2892,6 +3091,7 @@ function showOver(now) {
   // every unlock gets its own plate (a new start station and a reward can land together), then the forward goal
   const ns = starts().filter(f => !run.starts0.includes(f)).pop(), rws = REWARDS.filter(w => hasRw(w) && !run.rw0.includes(w));
   if (ns) store.set("from", ns);
+  for (const id of run.seals) r.lines.push({ kind: "seal", id, t: S("gSeal", null, S("sealN")[SEALS.indexOf(id)]) });
   for (const w of rws) r.lines.push({ kind: "w", w, t: S("gGot", null, rwName(w)) });
   if (ns) r.lines.push({ kind: "st", st: ns, t: S("gStart", null, stName(ns)) });
   if (run.daily && !stamped) r.lines.push({ kind: "d", t: S("streak", streak()) });
@@ -2899,7 +3099,7 @@ function showOver(now) {
   const home = !run.daily && r.late && r.n - r.from < 4 && !ns, far = Math.max(...starts()), jump = retryOpt().from > run.from && !run.daily; // AGAIN jumps ahead
   const go = !run.daily && !ns && !home && (jump || far > run.from), to = jump ? run.from : far; // the other start is a button: back to this run's start, or on to the furthest
   if (go && !(L.wide && vBot() - vTop() < 500 && r.lines.length >= 2)) r.lines.push({ kind: "go", st: to, t: S("gGoFrom", null, stName(to)) }); // a short wide view keeps the board clear of the buttons
-  r.lines.push({ kind: home ? "home" : "goal", t: makeGoal(r) });
+  const gt = makeGoal(r); r.lines.push({ kind: home ? "home" : r.sealGoal ? "sg" : "goal", t: gt });
   if (r.lines.length < 2) r.lines.push({ kind: "day", t: days().includes(today().day) ? S("tmrTease", null, featNames(dailyFeat(today(1).ymd), "+")) : S("dailyTease", null, featNames(dailyFeat(today().ymd), "+")) }); // a reason to come back tomorrow
   r.tmr = featNames(dailyFeat(today(1).ymd), "+");
   r.newStart = ns || (home ? 1 : go ? to : 0);
