@@ -3,17 +3,17 @@
   "week": 3,
   "title_ja": "金魚すくい",
   "title_en": "Goldfish Scoop",
-  "tagline_ja": "あと1匹…いや、今あげて！ 欲ばると破れる夏祭りの金魚すくい。",
-  "tagline_en": "One more fish... no, lift NOW! A festival goldfish scoop where greed tears the paper.",
-  "how_to_play_ja": "金魚の上で長押しするとポイ（紙のすくい網）が沈みます。そのままゆっくり動かし、はなすとすくい上げます。紙の上にいる金魚がまとめて器へ。2匹で×2、3匹で×4、4匹以上で×8。ただし金魚の重さがポイのまわりのリングをあふれると紙が破れます（8割をこえるとリングが赤く点滅し、ポイがふるえます）。紙は水に入れるたびに少し弱り、水の中にいるほど・速く動かすほどもっと弱ります。やみくもに連打するとすぐ破れます。黒いでめきんは重さ3、らんちゅうは5、金の魚は10点。ポイが全部破れたら終わり。すくった数が10匹・25匹・45匹…に届くたびに予備のポイが1本もらえます（予備は最大3本）。",
-  "how_to_play_en": "Press and hold over the fish to dip your paper scoop, slide slowly, then release to lift. Every fish on the paper goes into your bowl: 2 fish score x2, 3 fish x4, 4 or more x8. But if their weight overflows the ring around the scoop, the paper tears (past 80% the ring flashes red and the scoop trembles). Every dip soaks the paper a little, and it weakens the longer it stays wet and faster when you drag it quickly, so blind tap-spamming tears it fast. Black moors weigh 3, lionheads 5, and the golden fish is worth 10. The run ends when every scoop is torn; spare scoops arrive at 10, 25, 45… fish caught (up to 3 in reserve).",
+  "tagline_ja": "紙が破れる寸前で、あと1匹いくか、今あげるか。夏の昼下がりの金魚すくい。",
+  "tagline_en": "One more fish, or lift now? A summer-afternoon goldfish scoop where greed tears the paper.",
+  "how_to_play_ja": "長押しでポイを水にしずめ、ゆっくり動かして、はなすと金魚をすくいます。ポイの上の目盛りは紙の強さで、金魚の重さがそれをこえると破れます。ちょうどぴったりならギリギリで1.5倍、4匹いっぺんなら8倍です。",
+  "how_to_play_en": "Hold to dip the paper scoop, slide slowly, and release to lift the fish. The pips above the scoop show how much weight the paper can hold; go over and it tears. An exact fit is a close call worth x1.5, and 4 fish at once score x8.",
   "controls": [
-    "press & hold (tap/click) to dip",
+    "hold tap/click to dip",
     "drag to slide",
     "release to lift",
-    "arrow keys to move",
-    "hold space to dip",
-    "shift for slow moves",
+    "space to dip and lift",
+    "arrow keys to move (shift for slow)",
+    "m to mute",
     "esc/p to pause"
   ],
   "genre": "risk-reward dexterity",
@@ -27,6 +27,7 @@
     "mobile-friendly",
     "high-score"
   ],
-  "session_length_sec": 90,
-  "video_hook_ja": "紙が破れる寸前…あと1匹いける？それとも今あげる？"
+  "session_length_sec": 75,
+  "video_hook_ja": "紙がもう限界。あと1匹いく？",
+  "quality_bar": 1
 }
