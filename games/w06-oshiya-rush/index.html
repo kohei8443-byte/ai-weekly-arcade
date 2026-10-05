@@ -477,7 +477,7 @@ function hand(x, X, Y, a, s) {
 const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
 function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
 function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
-function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms }; }
+function zoomPunch(x, y, s, ms, now, rin) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms, rin: rin || 0.12 }; } // rin: the share of ms spent pushing in
 function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
 const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
 function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
@@ -488,7 +488,7 @@ function shakeOffset(max) { // logical px
 function zoomNow(now) {
   const z = Juice.zoom; if (!z) return null;
   const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
-  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
+  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < z.rin ? (z.rin > 0.2 ? smooth(k / z.rin) : k / z.rin) : 1 - smooth((k - 0.5) / 0.5)) };
 }
 
 // ---------- particles: a capped pool of small turning shapes (dot, chip, spark, star) ----------
@@ -502,12 +502,19 @@ function partsStep(dt) {
     p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
   }
 }
+// particle shapes are cached by kind and quarter-px size instead of built per particle per frame
+const PART_P = new Map();
+function partPath(k, s) {
+  const key = k + Math.round(s * 4); let q = PART_P.get(key); if (q) return q;
+  s = Math.round(s * 4) / 4;
+  q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
+    : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+  if (PART_P.size > 400) PART_P.clear(); PART_P.set(key, q); return q;
+}
 function partsDraw(x) {
   const m = x.getTransform(); x.lineWidth = 0.6; x.strokeStyle = C("ink");
   for (const p of PARTS) {
-    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind;
-    const q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
-      : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind, q = partPath(k, s);
     x.setTransform(m); x.translate(p.x, p.y); x.rotate(p.rot); x.fillStyle = C(p.col); x.fill(q);
     if (k !== "dot" && s > 2) x.stroke(q);
   }
@@ -572,7 +579,7 @@ function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voi
 // (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
 async function auPeak(fire, sec) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
-  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
+  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * ((sec || 1.5) + 0.3)), 44100);
   auBuild(oc); AU.master.gain.value = AU.vol; AU.offline = true;
   try { fire(); } finally { Object.assign(AU, keep); AU.offline = false; }
   const d = (await oc.startRendering()).getChannelData(0); let p = 0;
@@ -704,20 +711,21 @@ const tierOf = R => R < 150 ? 0 : R < 200 ? 1 : R < 250 ? 2 : 3;
 // the first second, then the last one rides the bell half in and is shoved in between the closing doors at about 4 s.
 // Station 2 is a clean ALL ABOARD with the sumo. Station 3 turns clumsy at 200 %: the window breaks near 15 s and costs
 // a glove, the oshiya keeps going, and the last rider is caught in the doors at about 24 s. The clip is exactly
-// DEMO_LOOP long on the wall clock: the result holds to the seam, so any 30 s recording ends on the result and loops
-// back into its own first frame. A busy recorder may stall frames; the clip gives up at most DEMO_LAG of its clock to
+// DEMO_LOOP long on the wall clock: the result holds about 2.5 s, then the clip starts again, so a 30 s recording that
+// begins about 2 s in ends on the next run's opening near miss and loops back into the same scene. A busy recorder may stall frames; the clip gives up at most DEMO_LAG of its clock to
 // stalls (so short hitches stay smooth) and then keeps to the wall clock, so the failure still lands before 28 s.
 const DEMO_STATIONS = [
   { q: "sgsgrs", board: 2300, beat: 470, R: 150, name: 2 },
   { q: "ssmsgs", board: 4600, beat: 500, R: 165, name: 4 },
   { q: "sscssmsscs", board: 8500, beat: 480, R: 200, name: 5 }
 ];
-const DEMO_LOOP = 30000, DEMO_LAG = 1200; // the clip's wall-clock length; the most of its clock a stalled recorder may slow
+const DEMO_LOOP = 27500, DEMO_LAG = 1200; // the clip's wall-clock length; the most of its clock a stalled recorder may slow
 const RANKS = [0, 400, 1200, 2500, 4500, 7000, 10000, 14000, 20000, 28000, 38000, 50000]; // the top four keep a strong player's seal moving (bar 1.6.2)
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
 // the top four ranks also come from the stamp book: [station reached, stars]. Scores level off once runs start late,
-// so a strong player keeps climbing by reaching line 3 and filling the book (bar 1.6.2)
-const RANK_MILE = { 8: [17, 36], 9: [17, 48], 10: [24, 58], 11: [24, 72] };
+// so a strong player keeps climbing by reaching line 3 and filling the book: [station, stars, 3-star stations].
+// The top rank is the full 3-star book, so the ladder lasts several sessions (bar 1.6.2)
+const RANK_MILE = { 8: [17, 36, 6], 9: [17, 50, 12], 10: [24, 66, 18], 11: [24, 72, 24] };
 // [stars (negative: streak days), slot (gloves, badge, stripe), colour code]. Codes are what the save holds (eq).
 const REWARDS = [[4, 0, "y"], [8, 1, "h"], [14, 2, "s"], [20, 0, "s"], [28, 1, "y"], [36, 2, "a"], [50, 0, "r"], [64, 2, "y"], [-2, 1, "g"], [-7, 2, "g"]];
 const EQ0 = "wql"; // the default gloves, badge and stripe
@@ -741,7 +749,7 @@ const STRINGS = {
     tiers: ["まあまあ", "満員", "超満員!!", "限界突破!!!"],
     over: "運行終了", cPinch: "ドアにはさまった", cPop: "窓が割れた", cComplain: "苦情が5件たまった",
     rRiders: "乗せた人数", rStation: "とうちゃく", rChain: "最大せーの", rBest: "ベスト", rBestFrom: "{s}発ベスト", rDaily: "今日のベスト", rDailyS: "今日",
-    toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
+    toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!", upd: "こうしん",
     ranks: ["見習い", "新人", "一人前", "ベテラン", "エース", "名人", "押し屋長", "駅の守り神", "路線の顔", "ラッシュの鬼", "満員の達人", "伝説の押し屋"], best: "ベスト",
     space: "SPACE", credit: "Made with Claude", stOf: "{n}駅", fromOf: "{s}から",
     lines: ["ももいろ線", "そらいろ線", "ゆうやけ線"], extra: "臨時{n}", daily: "今日のダイヤ", book: "スタンプ帳", from: "出発", close: "とじる",
@@ -765,7 +773,7 @@ const STRINGS = {
     tiers: ["SO-SO", "PACKED", "JAMMED!!", "OVER LIMIT!!!"],
     over: "END OF SERVICE", cPinch: "CAUGHT IN THE DOOR", cPop: "THE WINDOW BROKE", cComplain: "5 GRIPES PILED UP",
     rRiders: "PUSHED IN", rStation: "REACHED", rChain: "BEST HEAVE", rBest: "BEST", rBestFrom: "BEST FROM {s}", rDaily: "TODAY", rDailyS: "TODAY",
-    toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
+    toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!", upd: "UP",
     ranks: ["TRAINEE", "ROOKIE", "PRO", "VETERAN", "ACE", "MASTER", "CHIEF", "GUARDIAN", "LINE STAR", "RUSH OGRE", "CRAM SAGE", "LEGEND"], best: "BEST",
     space: "SPACE", credit: "Made with Claude", stOf: "ST {n}", fromOf: "FROM {s}",
     lines: ["MOMOIRO LINE", "SORAIRO LINE", "YUYAKE LINE"], extra: "EXTRA {n}", daily: "DAILY", book: "STAMPS", from: "FROM", close: "CLOSE",
@@ -814,10 +822,11 @@ const starStr = () => DEMO ? "" : String(store.get("stars", ""));
 const starAt = n => +(starStr()[n - 1] || 0);
 const starSum = (a, b) => { let t = 0; for (let n = a; n <= b; n++) t += starAt(n); return t; };
 const starMin = (a, b) => { let m = 3; for (let n = a; n <= b; n++) m = Math.min(m, starAt(n)); return m; };
+const star3 = () => { let t = 0; for (let n = 1; n <= LAST; n++) if (starAt(n) >= 3) t++; return t; };
 // the career rank: the best score, or a milestone of the stamp book, whichever is higher
 function careerRank(best) {
-  const st = starSum(1, LAST), n = num("maxSt"); let k = rankOf(best == null ? num("best") : best);
-  for (let i = k + 1; i < RANKS.length; i++) { const m = RANK_MILE[i]; if (m && n >= m[0] && st >= m[1]) k = i; }
+  const st = starSum(1, LAST), s3 = star3(), n = num("maxSt"); let k = rankOf(best == null ? num("best") : best);
+  for (let i = k + 1; i < RANKS.length; i++) { const m = RANK_MILE[i]; if (m && n >= m[0] && st >= m[1] && s3 >= m[2]) k = i; }
   return k;
 }
 const canStart = n => n === 1 || (num("maxSt") >= n && starSum(n - 4, n - 1) >= 6);
@@ -1016,9 +1025,10 @@ function boardRider(r, tc, now, tier) {
   st.R += RIDER[r.type].fill; fx.sagV += 2.4 + RIDER[r.type].fill / 6; fx.boardT = now; fx.jostleT = now;
   if (run.mode === "play") hint.success();
   const x = doorX(st, r.di), y = FEET_IN - 52;
-  if (giri) { st.giri = true; // the near miss between closing doors
-    call("giri", "gold", now, "+" + pts); addTrauma(0.6); hitstop(0.1); zoomPunch(x, y, 1.06, 420, now);
-    burst(x, y, 18, 240, { col: "gold", kind: "chip", s: 3 }); burst(x, y, 6, 260, { kind: "star", col: "goldL", s: 3 }); if (loud()) sfx.giri();
+  if (giri) { // the near miss between closing doors
+    const big = !st.giri || run.chain >= 3; st.giri = true; // the camera punches on a station's first giri or on a chain (bar 1.2.7)
+    call("giri", "gold", now, "+" + pts); addTrauma(0.6); hitstop(0.1); if (big) zoomPunch(x, y, 1.06, 420, now);
+    burst(x, y, run.chain >= 3 ? 30 : 18, 240, { col: "gold", kind: "chip", s: 3 }); burst(x, SILL_Y - 4, 10, 150, { col: "paperD", g: 320, s: 2 }); // the doors thunk at the sill burst(x, y, 6, 260, { kind: "star", col: "goldL", s: 3 }); if (loud()) sfx.giri();
   } else {
     const key = run.mode === "demo" && r.type === "m"; // the demo's key-art beat: the sumo goes in without a word (bar 1.9.5)
     if (key) fx.keyT = now; else call(tier === "perfect" ? "boardP" : "board", tier === "perfect" ? "gold" : "paper", now, "+" + pts);
@@ -1185,7 +1195,7 @@ function kill(reason, tc, now, x, y) {
   run.dead = { reason, at: now, c: tc, x, y };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
-  addTrauma(1); hitstop(0.15); zoomPunch(x, y, 1.06, FREEZE + 300, now);
+  addTrauma(1); hitstop(0.15); zoomPunch(x, y, 1.08, FREEZE + 600, now, 0.26); // a 290 ms slow push-in as the doors bite (bar 1.9.2)
   if (loud()) sfx.fail(reason);
   musicLevel("duck");
 }
@@ -1219,7 +1229,7 @@ function thump(f, dur, peak, when, slap, dest) {
   hiss("bandpass", slap || 1200, 1.1, dur * 0.6, peak * 0.9, when, dest, (slap || 1200) * 0.6);
 }
 function bellNote(f, when, peak, dest) { tone("sine", f, f, 0.5, peak, when, dest, 0.003); tone("sine", f * 2.76, f * 2.76, 0.18, peak * 0.3, when, dest, 0.002); }
-const now0 = () => AU.ctx.currentTime;
+const now0 = () => AU.ctx.currentTime + (AU.offline ? 0.3 : 0); // the peak test fires once the compressor has settled (bar 1.3.2)
 // SFX levels sit in one band (bar 1.3.4): the core heave about -11 dBFS, payoffs a little above, UI and ticks a little
 // under. lv() is vary() with the sound's level folded in, so every peak below already carries it.
 const lv = (c, gv, k) => { const q = vary(c, gv); q.g *= k; return q; };
@@ -1227,13 +1237,14 @@ const sfx = {
   whiff() { if (!audioOn()) return; const w = now0(), q = lv(40, 0.1, 1.55); hiss("bandpass", 1600 * q.f, 1.2, 0.09, 0.9 * q.g, w, null, 600); tone("sine", 700 * q.f, 300, 0.07, 0.2 * q.g, w); }, // an empty-handed "fwip"
   good() { // a cloth slap and a two-part grunt ("mu-gyu") in the band a phone speaker plays
     if (!audioOn()) return; const w = now0(), q = lv(40, 0.1, 1.8), g = q.g;
-    tone("sine", 200 * q.f, 115, 0.1, 0.13 * g, w); tone("triangle", 400 * q.f, 240, 0.08, 0.15 * g, w); hiss("bandpass", 950 * q.f, 1.3, 0.06, 0.4 * g, w);
+    tone("sine", 200 * q.f, 115, 0.1, 0.13 * g, w); tone("triangle", 400 * q.f, 240, 0.08, 0.15 * g, w); hiss("lowpass", 800 * q.f, 1, 0.07, 0.45 * g, w); thump(115, 0.09, 0.2 * g, w, 700); // a dull cloth thud
     voice(185 * q.f, 160, 0.24, 1.0 * g, 640, 1100, w); voice(160 * q.f, 135, 0.24, 0.9 * g, 420, 1900, w + 0.06); tone("triangle", 560 * q.f, 520, 0.18, 0.06 * g, w + 0.01);
   },
   perfect(chain) {
     if (!audioOn()) return; const w = now0(), q = lv(35, 0.08, 1.8), d = 5 + Math.min(chain, 10) % 11;
     tone("sine", 215 * q.f, 120, 0.12, 0.14 * q.g, w); tone("triangle", 430 * q.f, 250, 0.09, 0.16 * q.g, w); hiss("bandpass", 1150 * q.f, 1.3, 0.06, 0.42 * q.g, w);
-    voice(200 * q.f, 170, 0.22, 1.1 * q.g, 720, 1250, w); voice(175 * q.f, 150, 0.22, 0.95 * q.g, 460, 2000, w + 0.05);
+    voice(210 * q.f, 178, 0.22, 1.1 * q.g, 720, 1250, w); voice(183 * q.f, 157, 0.22, 0.95 * q.g, 460, 2000, w + 0.05); // about 80 cents above GOOD
+    hiss("bandpass", 2800, 4, 0.015, 0.75 * q.g, w); tone("square", 1400 * q.f, 1150 * q.f, 0.018, 0.08 * q.g, w, null, 0.001, 3000); // a bright wooden clack
     tone("triangle", pz(d) * q.f, pz(d) * q.f, 0.16, 0.2 * q.g, w + 0.02); hiss("highpass", 5000, 1, 0.05, 0.09 * q.g, w); // the chime climbs with the chain
   },
   bad() {
@@ -1252,7 +1263,8 @@ const sfx = {
   },
   giri() {
     if (!audioOn()) return; const w = now0(), q = lv(30, 0.08, 1.4), k = q.g;
-    tone("sine", 320 * q.f, 1100 * q.f, 0.12, 0.3 * k, w); hiss("bandpass", 2400, 1.5, 0.05, 0.3 * k, w);
+    tone("sine", 320 * q.f, 1100 * q.f, 0.12, 0.3 * k, w); hiss("bandpass", 2400, 1.5, 0.05, 0.3 * k, w); thump(120, 0.16, 0.3 * k, w, 800); // the doors thunk shut behind
+
     [7, 9, 12, 14].forEach((n, i) => tone("triangle", pz(n) * q.f, pz(n) * q.f, 0.3, 0.14 * k, w + 0.04 + i * 0.05));
     hiss("bandpass", 900, 0.8, 0.35, 0.16 * k, w, null, 3000); voice(420 * q.f, 680 * q.f, 0.18, 0.45 * k, 700, 1800, w + 0.04);
   },
@@ -1333,7 +1345,7 @@ const sfx = {
 // an unlock) on top, UI ticks under; every single peak stays in one band of about 6 dB and at most touches the
 // compressor's knee (bar 1.3.2, 1.3.4). A function trims by its first argument (the stamp tier).
 const TRIM = { whiff: 0.35, tap: 1.33, good: 0.43, perfect: 0.41, bad: 0.54, clang: 0.38, board: 0.73, giri: 1.07, crack: 0.3, pop: 1.0, pinch: 0.81, slam: 0.37,
-  doorOpen: 0.44, doorClose: 0.97, bell: 1.15, allAboard: 1.31, warn: 1.81, depart: 1.15, stamp: t => [1.27, 1.37, 1.29, 1.29][t] || 1.29, lifeLost: 1.17, fail: 1.58,
+  doorOpen: 0.44, doorClose: 1.4, bell: 1.5, allAboard: 1.31, warn: 1.81, depart: 1.15, stamp: t => [1.27, 1.37, 1.29, 1.29][t] || 1.29, lifeLost: 1.17, fail: 1.58,
   notice: 1.15, best: 0.96, tick: 0.28, rank: 0.65, ui: 0.36, term: 1.27, unlock: 0.55, chainUp: 1.32, chainOff: 0.36 };
 for (const k of Object.keys(TRIM)) {
   const f = sfx[k];
@@ -1373,7 +1385,7 @@ function musicHurt() {
 function musicLevel(lv) {
   mus.level = lv;
   if (!mus.bus || !AU.ctx) return;
-  const v = { title: 0.42, play: 0.58, bed: 0.3, duck: 0.12, off: 0 }[lv], t = AU.ctx.currentTime;
+  const v = { title: 0.55, play: 0.7, bed: 0.3, duck: 0.12, off: 0 }[lv], t = AU.ctx.currentTime;
   mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" ? 0.02 : 0.2);
   if (lv === "duck") mus.drop = 24;
 }
@@ -1397,11 +1409,13 @@ function playStep(k0, w, half) {
   // bass
   const bf = on ? root : (beat & 1 ? root * 1.5 : root * 2), bk = on ? 1 : 0.6;
   tone("triangle", bf, bf, half * 0.9, 0.13 * bk, w, b, 0.006); tone("square", bf * 2, bf * 2, half * 0.7, 0.07 * bk, w, b, 0.006, 1200);
+  tone("triangle", bf * 4, bf * 4, half * 0.6, 0.05 * bk, w, b, 0.006, 1500); // a mid bass a phone speaker can play
   const st = run && run.st, fill = st && st.ph === "board" && mus.level === "play" && run.grid && st.boardEnd - clockNow() < run.grid.iv * 1.6;
   if (fill && !bell) for (let i = 0; i < 2; i++) hiss("bandpass", 1500 + i * 400, 1, 0.04, 0.16 + i * 0.05, w + i * half / 2, b);
   if (!on && hsh(k * 13 + bar, 3) === 0) { const f = 170 + hsh(k, 90); voice(f, f * 0.85, 0.22, 0.05, 600 + hsh(k + 3, 300), 1300, w, b); } // the crowd murmurs
   if (bell) return;
-  if (lay >= 1) { let m = (B ? LEAD_C : run && run.st && run.st.n % 2 ? LEAD : LEAD_B)[k % 32] + li; if (m >= li) { if (m >= 13) m -= 5; tone("square", pz(m), pz(m) * 0.998, half * 1.6, B ? 0.12 : 0.11, w, b, 0.004, B ? 1600 : 2200); } } // an octave under the chain chimes; the top notes of a late line fold down, so the lead stays under 1.6 kHz
+  const lg = lay >= 1 ? (B ? 0.12 : 0.11) : mus.drop > 0 ? 0 : 0.06; // a soft lead even at layer 0, so the bed never thins to hats
+  if (lg) { let m = (B ? LEAD_C : run && run.st && run.st.n % 2 ? LEAD : LEAD_B)[k % 32] + li; if (m >= li) { if (m >= 13) m -= 5; tone("square", pz(m), pz(m) * 0.998, half * 1.6, lg, w, b, 0.004, B ? 1600 : 2200); } } // an octave under the chain chimes; the top notes of a late line fold down, so the lead stays under 1.6 kHz
   if (lay >= 2) {
     if (on && beat % 2 === 1) { hiss("bandpass", 1500, 0.9, 0.1, 0.26, w, b); hiss("highpass", 4200, 1, 0.05, 0.1, w, b); }
     const a = (B ? [5, 9, 12, 9] : [7, 9, 10, 12])[k % 4]; tone("triangle", pz(a), pz(a), half * 0.7, 0.1, w, b, 0.003);
@@ -1611,7 +1625,9 @@ const glassSpr = lk => bake("gl" + lk, 64, 40, 32, 30, x => glassArt(x, lk));
 const POSE = {
   ready: { f1: [-11, 0], k1: [-12, -16], f2: [9, 0], k2: [6, -16], hip: [-1, -31], sh: [-5, -55], e1: [-16, -45], h1: [-25, -52], e2: [-12, -44], h2: [-21, -50], head: [-7, -67], tilt: -0.08 },
   heave: { f1: [-21, 0], k1: [-22, -16], f2: [14, 0], k2: [5, -14], hip: [-3, -28], sh: [-15, -51], e1: [-27, -50], h1: [-38, -52], e2: [-24, -47], h2: [-35, -48], head: [-18, -62], tilt: -0.25 },
-  back: { f1: [-6, 0], k1: [-4, -15], f2: [12, 0], k2: [13, -15], hip: [4, -30], sh: [9, -55], e1: [-2, -62], h1: [-7, -73], e2: [18, -60], h2: [23, -71], head: [10, -68], tilt: 0.22 }
+  back: { f1: [-6, 0], k1: [-4, -15], f2: [12, 0], k2: [13, -15], hip: [4, -30], sh: [9, -55], e1: [-2, -62], h1: [-7, -73], e2: [18, -60], h2: [23, -71], head: [10, -68], tilt: 0.22 },
+  // the failure: down on one knee, arms hanging, head bowed (never the arms-up cheer; bar 1.4.1)
+  slump: { f1: [-17, 0], k1: [-15, -14], f2: [15, -1], k2: [-3, -2], hip: [3, -21], sh: [-7, -44], e1: [-13, -31], h1: [-15, -17], e2: [-2, -31], h2: [-4, -17], head: [-15, -53], tilt: -0.5 }
 };
 // two in-between poses, so the heave reaches out and comes back through the arms instead of popping (bar 1.2.2)
 for (const [n, t] of [["m1", 1 / 3], ["m2", 2 / 3]]) {
@@ -1988,6 +2004,7 @@ function drawCrowd(x, cx, k, R, seed, now, breath, open, main, st) {
     }
     const pin = main && st.ph === "pinch";
     if (!pin || !st.pinched.some(r => r.di === i)) leaves(x, dc, pin ? 0 : open, lay.hw);
+    if (main && st.giri && open < 0.05 && now - fx.slamT < 520) ST.line(x, pRR(dc - lay.hw, DOOR_T, lay.hw * 2, SILL_Y - DOOR_T, 3), 3 * (1 - (now - fx.slamT) / 520) + 0.5, "gold"); // a one-beat gold rim after a giri
   });
 }
 function bellows(x, X) {
@@ -2112,7 +2129,7 @@ const mark = (x, X, Y) => text(x, "!", X, Y, 22 * L.u, "red", { ol: "ink", ow: 0
 function drawOshiya(x, now, c) {
   const since = fx.vt - fx.heaveT, st = run.st, bad = fx.heaveTier === "bad" && since < STAGGER, flip = st.two && fx.look === 1, eq = eqv(), ph = beatPhase(c);
   let body = "ready", face = "normal", dx = 0, dy = 0, w = 0;
-  if (isDying() || isOver()) { body = "back"; face = "sad"; }
+  if (isDying() || isOver()) { body = "slump"; face = "sad"; }
   else if (bad) { body = "back"; face = "shock"; dx = 4 + 6 * wob(since / 300, 9, 3.5); }
   else if (now - fx.holdT < 260) { body = "back"; face = "shock"; dx = 3; } // he stops himself
   else if (since < 240) {
@@ -2241,12 +2258,20 @@ function drawPigeons(x, c, now) {
     put(x, pigeonSpr(peck ? "peck" : "stand"), X, h.y - (walking && fl(now / 120) & 1 ? 1.5 : 0), 0, right ? -1 : 1, 1);
   }
 }
+// the landing mat: a quilted cushion with a cut edge, stitching and one corner folded back (STYLE.md 10)
+const cushSpr = () => bake("cush", CUSH.w + 10, CUSH.h + 14, 4, 4, x => {
+  const { w, h } = CUSH;
+  sq(x, [[-1, h + 0.6], [w + 2, h], [w + 2, h + 5], [-0.6, h + 5.6]], "sky2", null, 1, 0, 0);                  // the cut edge
+  sq(x, [[0, 0], [w, -1], [w + 2, h], [-1, h + 0.6]], "mist", "sky2", 1.3, 0, 3);
+  for (let i = 16; i < w - 6; i += 16) ST.line(x, pLine(i, 3, i + 1, h - 2), 0.8, "sky2");                     // quilted channels
+  x.setLineDash([2.4, 2.2]); ST.line(x, pPoly([[4, 3.4], [w - 4, 2.6], [w - 2.6, h - 3.4], [3, h - 2.8]]), 0.7, "paper"); x.setLineDash([]);
+  sq(x, [[0, 0], [13, -0.2], [0.2, 10]], "sky2", null, 0.9, 0, 0);                                            // the folded corner
+  sq(x, [[13, -0.2], [0.2, 10], [10.5, 9]], "paper", "paperD", 0.9, 0.6, 0.8);
+});
 function drawCushion(x, now) {
   const st = run.st, f = fx.flyer, show = st.R >= 155 || (f && now - f.t < 4000);
   if (!show || st.ph === "arrive") return;
-  const { x: X, y: Y, w, h } = CUSH;
-  sq(x, [[X, Y], [X + w, Y - 1], [X + w + 2, Y + h], [X - 1, Y + h + 0.6]], "mist", "sky2", 1.3, 0, 3);
-  for (let i = X + 14; i < X + w - 6; i += 16) ST.line(x, pLine(i, Y + 3, i + 1, Y + h - 2), 0.8, "sky2");
+  put(x, cushSpr(), CUSH.x, CUSH.y);
   if (!f) return;
   const k = clamp((now - f.t) / 1000, 0, 1);
   if (k < 1) put(x, riderSpr("s", f.look, true), lerp(f.x0, f.x1, k), lerp(f.y0, f.y1, k) - Math.sin(k * Math.PI) * 100 + 40, k * 7);
@@ -2269,9 +2294,12 @@ function drawCue(x, c, now) {
     const ring = q => { const h = Math.round(q * 2); return pc("ring" + h, () => pEll(0, 0, h / 2, h / 2)); }; // half-px steps
     const rr = reduceMotion ? 10 + 42 * Math.ceil(k * 4) / 4 : rad; // reduced motion: the ring closes in four still steps
     x.translate(p, y);
+    if (dim) x.setLineDash([4, 5]); // the other door of two: a dashed ring, so the pushed door reads by shape (bar 1.4.6)
     cordLine(x, ring(9), 2.6, late ? "grey" : dim ? "paperD" : ph > 0.85 || ph < 0.1 ? "gold" : "goldL", 0.9);
     if (rr > 13) cordLine(x, ring(rr), 2.2, late ? "grey" : dim ? "paperD" : k < 0.25 ? "gold" : "paper", 0.8);
+    if (dim) x.setLineDash([]);
     x.translate(-p, -y);
+    if (st.two && !dim && !late) { const ty = y - 68 - (reduceMotion ? 0 : 3 * Math.abs(Math.sin(now / 180))); shape(x, pPoly([[p - 9, ty - 12], [p + 9, ty - 12], [p, ty]]), "gold", 1.4); } // an inked arrow over the door a centre tap or Space pushes
     if (state === "play" && hint.active && !dim) drawTapHint(x, p + 8, y + 46, clamp(Math.min(ph, 1 - ph) * 3.2, 0, 1));
   });
 }
@@ -2412,7 +2440,8 @@ function drawCall(x, now) {
   x.globalAlpha = age > life - 160 ? (life - age) / 160 : 1;
   const cy = callY(), size = loud ? 32 : 27, word = S(cl.key), sub = cl.sub && age > 80 && !fx.waitOn ? cl.sub : "", inl = sub && subInline(cl);
   const ww = Math.min(216, textW(x, word, size, { f: ST.title, w: 900 })), sw = inl ? textW(x, sub, 20, { f: ST.title, w: 900 }) + 8 : 0;
-  at(x, 180, cy - Math.min(age, 600) * 0.01, sc, 0, () => {
+  const fit = L.wide ? 1 : Math.min(1, 236 / (ww + sw)); // a long call with its +N keeps clear of the route board on a phone (bar 1.4.5)
+  at(x, 180, cy - Math.min(age, 600) * 0.01, sc * fit, 0, () => {
     text(x, word, -sw / 2, 0, size, cl.col, { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink", max: 216 });
     if (inl) text(x, sub, -sw / 2 + ww / 2 + 8, 2, 20, "paper", { a: "left", f: ST.title, w: 900, ol: "ink", ow: 0.3 });
     else if (sub) text(x, sub, 0, loud ? 29 : 26, 16, "paper", { ol: "ink", ow: 0.3, max: 216 });
@@ -2597,7 +2626,7 @@ function starRow(x, r, x0, y, x1) { // one small card per station of this run, i
 // a goal line: an unlock is stamped on a plate (the new start station is a button), the forward goal points on
 function goalLine(x, r, g, gy, now, i) {
   const age = now - r.at - RES.goal - i * 120; if (age < 0) return null;
-  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go"].includes(g.kind), tw = textW(x, g.t, 17), w = tw + 46 + (go ? 18 : 0), s = plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1;
+  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go"].includes(g.kind), tw = textW(x, g.t, 17), w = tw + 46 + (go ? 18 : 0), fit = Math.min(1, 230 / w), s = (plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit; // a long line shrinks inside the board (bar 1.8.5)
   at(x, 0, gy, s, 0, () => {
     if (plate) shape(x, pCut(-w / 2, -14, w, 28, 4), "paper", 1.1, "paperD", 1.4, 1.8);
     const x0 = -w / 2 + 22;
@@ -2608,7 +2637,7 @@ function goalLine(x, r, g, gy, now, i) {
     text(x, g.t, x0 + 10, 1, 17, plate ? "redD" : "paneS", { a: "left" });
     if (go) shape(x, pPoly([[w / 2 - 8, 0], [w / 2 - 20, -7], [w / 2 - 20, 7]]), "red", 0.8); // a start station: the line is a button
   });
-  return w;
+  return w * fit;
 }
 function drawOver(x, now) {
   const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, H = overH(r, play), big = { f: ST.title, w: 900, deep: "paneL" };
@@ -2628,12 +2657,17 @@ function drawOver(x, now) {
     if (rows > 1) { const v = S("stOf", r.n); row("rStation", v, 186); starRow(x, r, -134 + textW(x, S("rStation"), 17, { w: 700 }) + 12, 186, 126 - textW(x, v, 20, { f: ST.title, w: 900 })); }
     if (rows > 2) { if (run.daily) row("rTmr", r.tmr, 216, 17); else row("rChain", r.maxChain, 216); }
     if (rows > 3 && play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
-      const full = run.daily ? S("rDaily") : r.late ? S("rBestFrom", null, stName(r.from)) : S("rBest");
+      const full = run.daily ? S("rDaily") : r.rowLate ? S("rBestFrom", null, stName(r.from)) : S("rBest");
       if (r.newBest) { text(x, full, -134, 246, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, 246, S("newBest"), age - RES.best, 18); }
+      else if (r.fromBest) { // a quiet row: this start's best moved, no seal and no happytime
+        const lb = textW(x, full, 17, { w: 700 }) + textW(x, String(r.score), 20, { f: ST.title, w: 900 }) + textW(x, S("upd"), 17) + 30 > 268 ? S("fromOf", null, stName(r.from)) : full;
+        text(x, lb, -134, 246, 17, "paneT", { a: "left", w: 700 }); text(x, String(r.score), -134 + textW(x, lb, 17, { w: 700 }) + 12, 246, 20, "paneS", { a: "left", f: ST.title, w: 900 });
+        text(x, S("upd"), 134, 246, 17, "paneS", { a: "right" });
+      }
       else {
         const bs = String(r.best), bw = textW(x, bs, 20, { f: ST.title, w: 900 }), diff0 = r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score);
         let lb = full, d = diff0;
-        if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268 && r.late) lb = S("fromOf", null, stName(r.from));
+        if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268 && r.rowLate) lb = S("fromOf", null, stName(r.from));
         if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268 && r.score !== r.best) d = "-" + (r.best - r.score);
         text(x, lb, -134, 246, 17, "paneT", { a: "left", w: 700 }); text(x, bs, -134 + textW(x, lb, 17, { w: 700 }) + 12, 246, 20, "paneS", { a: "left", f: ST.title, w: 900 });
         text(x, d, 134, 246, 17, "paneS", { a: "right" });
@@ -2666,7 +2700,8 @@ function drawPlaques(x) {
   if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang", S("lang"));
 }
 const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
-const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, e.s);
+// a smaller hand whose finger touches the tag, so it stays off the queue beside the button (bar 1.8.5)
+const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 - 10 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, 0.72 * e.s);
 
 // ---------- one frame: the world (shake, zoom), then the hanging UI that never shakes, then the washi grain ----------
 function draw(now) {
@@ -2710,11 +2745,13 @@ function draw(now) {
 const RES = { drop: 300, head: 200, cause: 300, count: 420, countDur: 700, rows: 450, best: 1400, goal: 1560 };
 function makeResult(now) {
   const play = run.mode === "play", late = !run.daily && run.from > 1, bf = bestFrom();
-  const best = run.daily ? (num("dDay") === today().day ? num("dBest") : 0) : late ? +bf[run.from] || 0 : num("best");
+  // only the overall best stamps NEW BEST; a late start that beats just its own start's best gets a quiet row (bar 1.8.3)
+  const all = num("best"), beatAll = play && !run.daily && run.score > all && run.score > 0, own = late ? +bf[run.from] || 0 : 0;
+  const best = run.daily ? (num("dDay") === today().day ? num("dBest") : 0) : late && !beatAll ? own : all;
   const reason = run.dead.reason, cause = S(reason === "pinch" ? "cPinch" : reason === "pop" ? "cPop" : "cComplain");
   // a run from a late start is measured against the best from that start; the seal is the career rank (the demo shows its own score's)
   const rank = play && !run.daily ? careerRank(Math.max(num("best"), run.score)) : rankOf(run.score);
-  return { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0, rank, rankUp: play && !run.daily && rank > run.rank0, showRank: !play || num("runs") >= 1, late,
+  return { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0 && (run.daily || !late || beatAll), fromBest: play && late && !beatAll && run.score > own && run.score > 0, rowLate: late && !beatAll, rank, rankUp: play && !run.daily && rank > run.rank0, showRank: !play || num("runs") >= 1, late,
     cause, ticks: 0, rankDone: false, rankAt: 0, stamped: false, bestAt: null, lines: [], boarded: run.boarded, n: run.n, from: run.from, hist: run.hist.slice(), maxChain: run.maxChain };
 }
 // the forward goal is always there, whatever was unlocked (bar 1.6.1)
@@ -2727,7 +2764,8 @@ function makeGoal(r) {
   if (n >= num("maxSt") && n < LAST) c.push(S("gGo", null, stName(n + 1)));
   for (let i = r.from; i <= Math.min(n, LAST); i++) if (starAt(i) < 3) { c.push(S("g3", null, stName(i))); break; }
   const rb = careerRank(Math.max(num("best"), r.score)), m = RANK_MILE[rb + 1], tot2 = starSum(1, LAST);
-  if (rb < RANKS.length - 1) c.push(m && num("maxSt") >= m[0] && m[1] - tot2 <= 10 ? S("gStar", m[1] - tot2, S("ranks")[rb + 1]) : S("gRank", RANKS[rb + 1], S("ranks")[rb + 1]));
+  const need = m ? Math.max(1, m[1] - tot2, m[2] - star3()) : 99;
+  if (rb < RANKS.length - 1) c.push(m && num("maxSt") >= m[0] && need <= 10 ? S("gStar", need, S("ranks")[rb + 1]) : S("gRank", RANKS[rb + 1], S("ranks")[rb + 1]));
   if (!c.length) c.push(S("gGo", null, stName(n + 1)));
   return c[num("runs") % Math.min(3, c.length)];
 }
@@ -2788,7 +2826,7 @@ function warmUp() {
   const e = eqv(), q = [];
   for (let f = 4; f >= 0; f--) for (let l = 0; l < LOOKS; l++) { q.push(() => bustSpr(l, f)); q.push(() => dmSpr(l, f)); }
   for (let l = 0; l < LOOKS; l++) q.push(() => glassSpr(l));
-  for (const p of ["ready", "heave", "back", "m1", "m2"]) q.push(() => oshBodySpr(p, e[0]));
+  for (const p of ["ready", "heave", "back", "slump", "m1", "m2"]) q.push(() => oshBodySpr(p, e[0]));
   for (const m of ["normal", "strain", "shock", "grin", "sad"]) q.push(() => oshHeadSpr(m, e[1]));
   q.push(() => leafSpr(LAY[0].hw), () => leafSpr(LAY[1].hw), () => interiorSpr(0), () => interiorSpr(1), () => carSpr(0, livery()), () => carSpr(1, livery()), () => pantoSpr());
   q.push(() => gloveSpr(e[0], false), () => gloveSpr(e[0], true));
@@ -2988,7 +3026,8 @@ function update(now, dt) {
   if (race) fx.dzx = doorX(st, race.di);
   else fx.dzx += (DX - fx.dzx) * Math.min(1, vdt * 4);
   // a wide screen shows the doorway small: lean in on it through the push phases (bar 1.9.4, 1.11.2)
-  const wideIn = L.wide && !reduceMotion && !isTitle() && !isOver() && !run.dead && pushPhase(st.ph) ? 1.1 : 1;
+  const peak = isDying() || (fx.flyer && now - fx.flyer.t < 1600); // the smash and the pinch lean in a little more on wide screens
+  const wideIn = L.wide && !reduceMotion && !isTitle() && !isOver() && (peak || (!run.dead && pushPhase(st.ph))) ? (peak ? 1.15 : 1.1) : 1;
   const zt = wideIn * (!race ? 1 : demo ? 1.05 : 1 + 0.04 * smooth((clockNow() - st.phAt) / T_CLOSE));
   fx.dz += (zt - fx.dz) * Math.min(1, vdt * (race ? 9 : zt > fx.dz ? 3 : 6));
 }
