@@ -427,7 +427,7 @@ const PALS = { B: {
   bamboo: "#d8b16a", bambooL: "#efd89e", bambooD: "#9c7843", tag: "#e2c18b", tagG: "#c8a26e",
   red: "#d24f36", redD: "#922f24", redL: "#ec8a6d", gold: "#e2b44d", litL: "#fad282", lit: "#ec963f",
   bean: "#cf9a5c", beanD: "#a26e3b", pink: "#e07888", pinkL: "#f6d4d6", green: "#4f835a", leafD: "#35612e",
-  poolA: "#7e5d50", poolB: "#c39158", shadeK: "#1b1530", hlK: "#fff6df"
+  poolA: "#a8774f", poolB: "#dcaa66", shadeK: "#1b1530", hlK: "#fff6df"
 } };
 const C = PALS.B;
 // role names used by the drawing code, each one of the 40 colours above (STYLE.md section 3)
@@ -1071,7 +1071,13 @@ function drawBackdrop(x, st, V) {
   for (const [y0, sag, sz] of [[150, 16, 2.4], [118, 10, 1.8]]) {
     const n = Math.round(WW / 20), q = P2(); q.moveTo(X0, y0); q.quadraticCurveTo((X0 + X1) / 2, y0 + 2 * sag, X1, y0);
     x.strokeStyle = p.farL; x.lineWidth = 0.6; x.stroke(q);
-    for (let i = 1; i < n; i++) { const X = X0 + i * WW / n, Y = quadY([X0, y0], [X1, y0], sag, X) + sz * 1.8; x.fillStyle = i % 4 ? p.lanternL : p.litL; x.beginPath(); x.ellipse(X, Y, sz, sz * 1.3, 0, 0, TAU); x.fill(); }
+    // seeded jitter in spacing and size, and gaps where the string runs bare, so no stretch repeats evenly
+    const rl = rng32(977 + sz * 10);
+    for (let i = 1; i < n; i++) {
+      if (rl() < 0.12) continue;
+      const X = X0 + (i + (rl() - 0.5) * 0.7) * WW / n, Y = quadY([X0, y0], [X1, y0], sag, X) + sz * 1.8, z = sz * (0.8 + rl() * 0.45);
+      x.fillStyle = rl() < 0.75 ? p.lanternL : p.litL; x.beginPath(); x.ellipse(X, Y, z, z * 1.3, 0, 0, TAU); x.fill();
+    }
   }
   // the shrine's great torii far behind the kumade, its top beam lit along the edge
   const kasagi = P2();
@@ -1349,7 +1355,7 @@ function drawBackdrop(x, st, V) {
   x.fillStyle = p.ground; x.fillRect(X0, 560, WW, Math.max(0, Y1 - 560));
   x.fillStyle = p.groundL;
   [570, 586, 606, 630, 656, 686].forEach((yy, i) => { if (yy > Y1) return; x.fillRect(X0, yy, WW, 1); const h = [10, 16, 20, 24, 26, 30][i]; for (let X = X0 + ((i * 23) % 47); X < X1; X += 47) x.fillRect(X, yy - h, 1, h); });
-  for (const c of pools) if (c.x < 70 || c.x > 290) pool(x, c.x, 575, c.rx, c.ry, [p.ground, p.poolA, p.poolB]);
+  for (const c of pools) if (c.x < 70 || c.x > 290) pool(x, c.x, 575, c.rx * 0.76, c.ry * 0.76, [p.poolA, p.poolB, p.litL]);   // a thin warm rim, a lit core: light, not a rug
   // kumade back: a cloth panel, lantern spill as flat shapes, bamboo tines fanning from the handle
   const back = basketPath(4);
   st.fill(x, back, p.back);
@@ -2073,11 +2079,11 @@ const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
 // ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
 const STRINGS = {
   ja: {
-    title: "福よせ", titleEn: "LUCKY HEAP", how: "同じ縁起物をくっつけて合体!", rule: "縄より上は あふれて終わり", start: "タップではじめる", lang: "EN", book: "図鑑", close: "とじる",
+    title: "福よせ", titleEn: "LUCKY HEAP", how: "同じ縁起物をくっつけて合体!", rule: "縄より上は あふれて終わり", start: "タップではじめる", startClick: "クリックではじめる", lang: "EN", book: "図鑑", close: "とじる",
     next: "つぎ", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     chain: "{n}れんさ!", warn: "あふれる!", safe: "セーフ!", left: "あと{n}秒", over: "あふれた!", best: "ベスト", toGo: "あと {n}", newBest: "新記録", passBest: "ベストをこえた!", offer: "鏡餅を奉納!", ropeUp: "奉納! 縄が1段上がった",
     n_mallet: "打ち出の小槌が来る!", n_koban: "小判も落ちてくる", n_faster: "ひもが早く切れる", n_bigger: "大きいのが来る", n_daruma: "だるまも落ちてくる", n_rope: "縄が下がった!",
-    malletHow: "小槌でさわると大きくなる", newCharm: "{n}ができた!", ship: "宝船! 鏡餅まで あと一歩", shipMallet: "宝船! もうすぐ小槌が来る", malletShip: "小槌を宝船に当てよう", aimed: "ねらいどおり ×2", goal: "目標", goalMake: "{n}を作る", goalRank: "{n}点で つぎのランク",
+    malletHow: "小槌でさわると大きくなる", newCharm: "{n}ができた!", newMany: "新しく{k}つ! {n}まで", kagamiDone: "鏡餅ができた!", ship: "宝船! 鏡餅まで あと一歩", shipMallet: "宝船! もうすぐ小槌が来る", malletShip: "小槌を宝船に当てよう", aimed: "ねらいどおり ×2", goal: "目標", goalMake: "{n}を作る", goalRank: "{n}点で つぎのランク",
     goalChain: "{n}れんさを出す", stats: "奉納 {o} 回　最高 {c} れんさ", nextGoal: "つぎの目標", biggest: "いちばん大きく育てた", entered: "図鑑に入った", rank: "ランク",
     ranks: ["見習い", "なかなか", "上手", "名人", "達人", "福まねき", "宝船の主", "福の神"], bookTitle: "縁起物 図鑑", unknown: "まだ 見つけていません", credit: "Made with Claude",
     names: ["福豆", "鈴", "梅", "独楽", "小判", "だるま", "招き猫", "鯛", "宝船", "鏡餅", "打ち出の小槌"],
@@ -2085,11 +2091,11 @@ const STRINGS = {
       "七転び八起き 目を入れて願う", "手まねきで 客と福をよぶ", "めでたい の しるし", "宝をのせて 福がやって来る", "年神さまの いる場所", "ふれば 願いが かなう"]
   },
   en: {
-    title: "LUCKY HEAP", titleEn: "LUCKY HEAP", how: "Match two alike to merge them!", rule: "Keep charms below the rope", start: "TAP TO START", lang: "日本語", book: "BOOK", close: "CLOSE",
+    title: "LUCKY HEAP", titleEn: "LUCKY HEAP", how: "Match two alike to merge them!", rule: "Keep charms below the rope", start: "TAP TO START", startClick: "CLICK TO START", lang: "日本語", book: "BOOK", close: "CLOSE",
     next: "NEXT", paused: "PAUSED", resume: "RESUME", restart: "START OVER", toTitle: "TITLE", retry: "AGAIN",
     chain: "{n} CHAIN!", warn: "SPILLING!", safe: "SAFE!", left: "{n}s to spare", over: "SPILLED!", best: "BEST", toGo: "{n} to go", newBest: "NEW BEST", passBest: "Past your best!", offer: "Mochi offered!", ropeUp: "Offered! The rope goes up",
     n_mallet: "Lucky mallet ahead!", n_koban: "Gold coins now fall", n_faster: "The cord is quicker", n_bigger: "Bigger ones coming", n_daruma: "Daruma now fall", n_rope: "The rope came down!",
-    malletHow: "Mallet: one size up", newCharm: "New: {n}!", ship: "Ship! The mochi is next", shipMallet: "Ship! A mallet is on its way", malletShip: "Drop the mallet on the ship", aimed: "ON TARGET x2", goal: "Goal", goalMake: "Make a {n}", goalRank: "Next rank at {n}",
+    malletHow: "Mallet: one size up", newCharm: "New: {n}!", newMany: "{k} new, up to {n}!", kagamiDone: "Mirror mochi made!", ship: "Ship! The mochi is next", shipMallet: "Ship! A mallet is on its way", malletShip: "Drop the mallet on the ship", aimed: "ON TARGET x2", goal: "Goal", goalMake: "Make a {n}", goalRank: "Next rank at {n}",
     goalChain: "Make a {n} chain", stats: "Offered {o}   Best chain {c}", nextGoal: "NEXT GOAL", biggest: "Biggest you made", entered: "New in the book", rank: "RANK",
     ranks: ["Novice", "Not bad", "Skilled", "Master", "Expert", "Lucky one", "Captain", "Luck god"], bookTitle: "Book of Charms", unknown: "Not found yet", credit: "Made with Claude",
     names: ["Lucky bean", "Bell", "Plum flower", "Spinning top", "Gold coin", "Daruma", "Beckoning cat", "Sea bream", "Treasure ship", "Mirror mochi", "Lucky mallet"],
@@ -2160,7 +2166,7 @@ function buildKit() {   // everything with lettering: rebuilt on resize and on a
   const st = STYLE, S0 = V.S, SH = S0 * V.hb, SW = S0 * V.ws;
   SPRS = sprites(st, S0);
   const ts = fz(13, V.hs);
-  KIT = sceneKit(st, S0, SPRS, { key: lang + V.hb.toFixed(2) + ts.toFixed(1), lang: S("lang"), next: S("next"), start: S("start"), book: S("book"), toTitle: S("toTitle"), retry: S("retry"), ts,
+  KIT = sceneKit(st, S0, SPRS, { key: lang + V.hb.toFixed(2) + ts.toFixed(1), lang: S("lang"), next: S("next"), start: S(finePointer ? "startClick" : "start"), book: S("book"), toTitle: S("toTitle"), retry: S("retry"), ts,
     sign: { ja: STRINGS.ja.title, sub: STRINGS.en.titleEn, how: S("how"), rule: S("rule"), ts: fz(13, LY.sign[2]) } }, V.hb, LY.sign[2]);
   if (!KIT.bookP) { KIT.bookP = plaque(st, SH, "text", S("book"), ts); KIT.tagW = tagSprite(st, SH, 214, 50, "", 16); KIT.hand = fingerSprite(st, S0); }
   // window tags (pause and book) are baked at the window scale
@@ -2234,13 +2240,15 @@ const clockNow = () => {
 // The goal: the first charm never made (from 鈴 on; the bean is given), else a rank or a longer chain.
 // The ema board of that charm carries the same goal as a red ring, so the two never disagree.
 const goalLv = () => { const i = BOOK.slice(1, 10).indexOf(0); return i < 0 ? -1 : i + 1; };
-function goalNow(score) {
-  const lv = goalLv(), runs = Number(store.get("runs", 0)) || 0, best = Number(store.get("best", 0)) || 0, out = [];
+// On the result, chain is this run's best chain (not stored yet), so a goal is never one the run already met;
+// noRank (the first result, where no rank is shown) keeps the goal on a charm rather than an unseen rank.
+function goalNow(score, chain, noRank) {
+  const lv = goalLv(), runs = Number(store.get("runs", 0)) || 0, out = [];
   if (lv > 0) out.push({ k: "goalMake", n: nameOf(lv), lv });
-  const nr = score != null ? RANKS.find(t => t > score) : null;   // the rank above the one this run reached (shown on the same scroll)
+  const nr = score != null && !noRank ? RANKS.find(t => t > score) : null;   // the rank above the one this run reached (shown on the same scroll)
   if (nr) out.push({ k: "goalRank", n: nr });
-  out.push({ k: "goalChain", n: Math.max(5, (Number(store.get("chain", 0)) || 0) + 1) });
-  return lv > 0 && score == null ? out[0] : out[runs % out.length];
+  out.push({ k: "goalChain", n: Math.max(5, Math.max(Number(store.get("chain", 0)) || 0, chain || 0) + 1) });
+  return lv > 0 && (score == null || noRank) ? out[0] : out[runs % out.length];
 }
 // a goal as words; pre adds "Goal:" where the words alone would not say it is one
 const goalText = (g, pre) => (pre && (g.k === "goalMake" || g.k === "goalChain") ? S("goal") + (lang === "ja" ? "：" : ": ") : "") + S(g.k, g.n);
@@ -2271,13 +2279,17 @@ function onEvents(now) {
       if (e.lv === TOP) zoomPunch(e.x, e.y, 1.05, 480, now);
       if (e.ch >= 3) mus.kane = mus.i + 8;
       if (play && R.drops > 0) hint.success();
-      if (play && !BOOK[e.lv]) { BOOK[e.lv] = 1; store.set("book", BOOK); run.newBook.push(e.lv); say(S("newCharm", nameOf(e.lv)), 2, "red"); }
+      if (play && !BOOK[e.lv]) {   // several firsts inside one chain share one readable line (bar 1.4.5)
+        BOOK[e.lv] = 1; store.set("book", BOOK); run.newBook.push(e.lv);
+        const l = fx.line, k = l && l.newK && T() - l.t < 1500 ? l.newK + 1 : 1;
+        say(k > 1 ? S("newMany", nameOf(e.lv)).replace("{k}", k) : S("newCharm", nameOf(e.lv)), 2.2, "red"); fx.line.newK = k;
+      } else if (e.lv === TOP && run.mode !== "attract") say(S("kagamiDone"), 1.6, "red");
       if (e.lv < 10 && !fx.ema[e.lv].on) fx.ema[e.lv] = { on: true, t: 0 };
       // the seal sits over the charm it is about, but never on the 鏡餅: that one is pressed beside it (bar 1.4.5)
       const sy = e.lv === TOP ? e.y - e.r * 0.25 : e.y - e.r - 14, sa = e.lv === TOP ? e.r + 4 : 0;
       if (e.ch >= 2) stamp(S("chain", e.ch), e.x, sy, e.ch >= 4, "", sa);
       else if (e.aimed && run.mode !== "attract") {   // the seal only for gold coin and up or the run's first aimed merge
-        if (e.lv >= 4 || !fx.aimSeal) { fx.aimSeal = true; stamp(S("aimed"), e.x, sy, false, "", sa); } else say(S("aimed"), 1.2, "red");
+        if (e.lv >= 4 || !fx.aimSeal) { fx.aimSeal = true; stamp(S("aimed"), e.x, sy, false, "", sa); } else if (!newsNow() && T() - (fx.aimSaid || -1e9) > 4000) { fx.aimSaid = T(); say(S("aimed"), 1.2, "red"); }
       }
     } else if (e.type === "drop") { if (loud()) sfx.drop(e.lv); fx.ld = 1; fx.lift = 0; fx.liftV = -60; if (e.lv === 0 && !BOOK[0] && play) { BOOK[0] = 1; store.set("book", BOOK); } }
     else if (e.type === "land") {
@@ -2357,6 +2369,7 @@ const sfx = {
     if (lv >= 7 && lv < 10 && sp > 300) {   // a heavy one: the basket's wood answers (a phone speaker plays these) and the straw settles
       tone("triangle", 205 * q.f, 150, 0.2, 0.42 * k, w + 0.01, null, 0.003, 1100); tone("triangle", 330 * q.f, 260, 0.09, 0.2 * k, w + 0.05, null, 0.002, 1400);
       hiss("bandpass", 650, 1.6, 0.22, 0.16 * k, w + 0.04, null, 260); hiss("bandpass", 2600, 2, 0.08, 0.08 * k, w + 0.12);
+      tone("triangle", 900 * q.f, 450, 0.07, 0.3 * k, w, null, 0.002, 2000); hiss("bandpass", 1500, 2.5, 0.06, 0.22 * k, w + 0.02);   // carries on a phone
     }
   },
   merge(lv, ch, tier) { // a plucked note. A chain climbs one step of the scale per link from the note it started on (bar 1.3.6)
@@ -2374,6 +2387,9 @@ const sfx = {
   kagami() { // the peak: two taiko hits and the home chord (D, A, D) spread upward, a bell shimmer on top
     if (!audioOn()) return; const w = at();
     taiko(w, 0.4); tone("sine", 92, 40, 0.6, 0.4, w); taiko(w + 0.22, 0.34, null, 1.15);
+    // the drum's wooden body and two bright bells, up where a phone speaker plays them, so the peak tops a koban merge
+    tone("triangle", 450, 300, 0.16, 0.34, w, null, 0.002, 1400); tone("triangle", 470, 320, 0.15, 0.3, w + 0.22, null, 0.002, 1400);
+    kane(pz(10), w + 0.3, 0.12); kane(pz(12), w + 0.44, 0.11);
     [5, 8, 10, 13, 15].forEach((n, i) => pluck(pz(n), w + 0.06 + i * 0.06, 0.1, null, 0.9));
     [5, 8, 10].forEach(n => tone("triangle", pz(n), pz(n), 1.2, 0.05, w + 0.36));
     for (let i = 0; i < 7; i++) tone("sine", 1760 + i * 190, 1800 + i * 190, 0.14, 0.03, w + 0.4 + i * 0.05);
@@ -2391,19 +2407,23 @@ const sfx = {
   offer() { if (!audioOn()) return; const w = at(); [5, 8, 10, 12, 15].forEach((n, i) => pluck(pz(n), w + i * 0.09, 0.08, null, 0.6)); kane(pz(10), w + 0.5, 0.06); hiss("highpass", 6000, 1, 0.5, 0.03, w + 0.2); },
   warn() { if (!audioOn()) return; const w = at(), q = vary(35, 0.08); tone("sine", 70 * q.f, 50, 0.16, 0.4 * q.g, w); tone("triangle", 230 * q.f, 150, 0.14, 0.24 * q.g, w, null, 0.002, 700); tone("sine", 70 * q.f, 50, 0.16, 0.34 * q.g, w + 0.2); tone("triangle", 230 * q.f, 150, 0.14, 0.2 * q.g, w + 0.2, null, 0.002, 700); tone("triangle", 1320 * q.f, 1320 * q.f, 0.3, 0.05, w); kane(pz(8) * q.f, w, 0.12); kane(pz(8) * q.f, w + 0.2, 0.1); },
   safe() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.16 * q.g, null, 0.2); pluck(pz(10) * q.f, w + 0.1, 0.16 * q.g, null, 0.4); hiss("bandpass", 900, 1, 0.35, 0.05, w + 0.05, null, 400); },
-  rope() { if (!audioOn()) return; const w = at(); tone("sawtooth", 120, 95, 0.45, 0.12, w, null, 0.03, 700); hiss("bandpass", 500, 4, 0.4, 0.08, w, null, 300); taiko(w + 0.42, 0.22); },
+  rope() { // the rope comes down: a low groan, a straw creak and a falling bell pair (what a phone speaker plays)
+    if (!audioOn()) return; const w = at(); tone("sawtooth", 120, 95, 0.45, 0.12, w, null, 0.03, 700); hiss("bandpass", 500, 4, 0.4, 0.08, w, null, 300); taiko(w + 0.42, 0.22);
+    hiss("bandpass", 1100, 5, 0.32, 0.12, w + 0.02, null, 260); kane(pz(9), w + 0.1, 0.09); kane(pz(7), w + 0.3, 0.09);
+  },
   ropeUp() { // the rope is tied back up: a rising straw creak and two bright plucks after the offering's fanfare
     if (!audioOn()) return; const w = at() + 0.55; tone("sawtooth", 150, 210, 0.35, 0.08, w, null, 0.03, 900); hiss("bandpass", 700, 4, 0.3, 0.07, w, null, 420);
     pluck(pz(12), w + 0.36, 0.11, null, 0.3); pluck(pz(14), w + 0.46, 0.11, null, 0.5);
   },
-  tick(n) { if (!audioOn()) return; const w = at(), q = vary(30, 0.1), f = (n === 1 ? 1400 : 1050) * q.f; tone("square", f, f, 0.03, 0.3 * q.g, w, null, 0, 2600); hiss("bandpass", 2400, 3, 0.02, 0.25, w); tone("triangle", f * 0.6, f * 0.5, 0.04, 0.25 * q.g, w, null, 0.002, 2000); },
+  tick(n) { if (!audioOn()) return; const w = at(), q = vary(30, 0.1), f = (n === 1 ? 1400 : 1050) * q.f; tone("square", f, f, 0.03, 0.42 * q.g, w, null, 0, 2600); hiss("bandpass", 2400, 3, 0.02, 0.35, w); tone("triangle", f * 0.6, f * 0.5, 0.04, 0.35 * q.g, w, null, 0.002, 2000); },
   fail() { if (!audioOn()) return; const w = at() + 0.1; [9, 7, 4, 2].forEach((n, i) => pluck(pz(n), w + i * 0.15, 0.13, null, 0.3)); tone("sine", 160, 55, 0.7, 0.3, w + 0.6); taiko(w + 0.6, 0.12, null, 0.8); hiss("lowpass", 500, 1, 0.5, 0.2, w + 0.6, null, 90); },
   spill() { if (!audioOn()) return; const w = at(); tone("sine", 86, 38, 0.6, 0.45, w); taiko(w, 0.22, null, 0.85); hiss("lowpass", 800, 1, 0.5, 0.3, w, null, 100); for (let i = 0; i < 6; i++) { hiss("bandpass", 900 + i * 260, 3, 0.05, 0.14, w + 0.15 + i * 0.09); tone("triangle", 620 - i * 40, 420 - i * 30, 0.06, 0.2, w + 0.12 + i * 0.1, null, 0.002, 1600); }
     hiss("bandpass", 1300, 1.2, 0.45, 0.22, w + 0.05, null, 500); },
   notice() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.12 * q.g, null, 0.2); pluck(pz(9) * q.f, w + 0.08, 0.12 * q.g, null, 0.3); },
   best() { if (!audioOn()) return; const w = at(); [0, 2, 4, 5, 7, 10].forEach((n, i) => pluck(pz(n + 2), w + i * 0.07, 0.12, null, 0.35)); kane(pz(12), w + 0.42, 0.07); hiss("highpass", 5000, 1, 0.4, 0.04, w + 0.4); },
   count(i) { if (!audioOn()) return; const q = vary(25, 0.1), f = (900 + (i % 12) * 40) * q.f; tone("sine", f, f, 0.035, 0.4 * q.g, at()); },
-  stamp() { if (!audioOn()) return; const w = at(), q = vary(30, 0.1); tone("sine", 140 * q.f, 60, 0.15, 0.45 * q.g, w); tone("triangle", 260 * q.f, 160, 0.08, 0.2 * q.g, w, null, 0.002, 900); hiss("lowpass", 1200, 1, 0.08, 0.3, w); tone("triangle", 820 * q.f, 600, 0.05, 0.35 * q.g, w, null, 0.002, 2400); hiss("bandpass", 900, 2, 0.03, 0.25, w); },
+  stamp() { if (!audioOn()) return; const w = at(), q = vary(30, 0.1); tone("sine", 140 * q.f, 60, 0.15, 0.45 * q.g, w); tone("triangle", 260 * q.f, 160, 0.08, 0.2 * q.g, w, null, 0.002, 900); hiss("lowpass", 1200, 1, 0.08, 0.3, w); tone("triangle", 820 * q.f, 600, 0.05, 0.35 * q.g, w, null, 0.002, 2400); hiss("bandpass", 900, 2, 0.03, 0.25, w);
+    tone("triangle", 1150 * q.f, 700, 0.035, 0.3 * q.g, w + 0.005, null, 0.001, 2600); hiss("bandpass", 1000, 3, 0.03, 0.3, w); },   // a wooden clack a phone plays
   ui() { if (!audioOn()) return; const w = at(), q = vary(40, 0.1); tone("sine", 1320 * q.f, 1320 * q.f, 0.12, 0.34 * q.g, w); tone("sine", 1980 * q.f, 1980 * q.f, 0.1, 0.11, w + 0.02); }
 };
 const PEAK_SET = ["kagami", "big", "fail", "warn", "spill", "land", "stamp", "merge"]; // the 8 loudest, for the peak test
@@ -2458,11 +2478,11 @@ function musicVoices(i, w, s) {
   const bus = mus.bus, lay = s.lay, danger = s.danger, quiet = s.hushed || s.bed;
   if (i % 16 === 0) { const d = s.step * 16 + 0.6; pad(pz(-5), w, d, 0.04, "triangle", 650); pad(pz(-2), w + 0.03, d, 0.024, "triangle", 650); pad(pz(-10), w + 0.05, d, 0.012); }
   const beat = danger ? i % 2 === 0 : i % 8 === 0 || i % 8 === 3 || (lay >= 2 && i % 16 === 14);
-  if (!quiet && beat) taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1);
+  if (!quiet && beat) { taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1); if (danger) hiss("bandpass", 2000, 3, 0.025, 0.12, w, bus); }   // a rim click: urgent on a phone
   if (lay >= 1 && !s.hushed && i % 4 === 2) hiss("bandpass", 2400, 4, 0.03, 0.07, w, bus);
   const ph = Math.floor(i / 32) % 4, m = SONG[ph][i % 32];
   if (lay >= 1 && !s.hushed) {
-    if (danger) pluck(pz(KOTO_D[i % 8]), w, 0.08, bus, 0.18);
+    if (danger) pluck(pz(KOTO_D[i % 8]), w, 0.11, bus, 0.18);
     else { const k = (ph === 2 ? KOTO_B : KOTO)[i % 16]; if (k >= 0) pluck(pz(k), w, i % 4 === 0 ? 0.1 : 0.075, bus, 0.32); }
   }
   if (lay >= 2 && !danger && !s.hushed && m >= 0) flute(pz(m + 5), w, 0.36, 0.05);
@@ -2507,7 +2527,7 @@ const RES = { head: 120, count: 320, countDur: 700, rows: 1100, rank: 1250, book
 function makeResult(now) {
   const R = run.R, play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0;
   return { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, rank: rankOf(R.score), showRank: play && runs >= 1,
-    big: R.maxLv, offered: R.offered, chain: R.bestChain, book: play ? run.newBook.filter(l => l < 10).slice(-1)[0] : undefined, goal: play ? goalNow(R.score) : null,
+    big: R.maxLv, offered: R.offered, chain: R.bestChain, book: play ? run.newBook.filter(l => l < 10).slice(-1)[0] : undefined, goal: play ? goalNow(R.score, R.bestChain, runs < 1) : null,
     ticks: 0, rankDone: false, stamped: false };
 }
 const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
@@ -2648,6 +2668,10 @@ function drawDanger(x, ts) {
     const s = fz(14), ny = Math.max(V.y0 + s, b.y - b.r - 7 - s * 0.7), disc = pCirc(b.x, ny, s * 0.95);
     STYLE.fill(x, disc, p.red); STYLE.edge(x, disc, 1);
     tx(x, Math.max(0, R.hold - R.over).toFixed(1), b.x, ny + 1, s, p.paper, {});
+  } else {   // high water: when the heap's top comes within 30 px of the rope, the rope reddens before any count (bar 1.4.2)
+    let m = 99;
+    for (const o of R.world.bodies) if (!o.ghost && !(o.offer > 0) && o.age >= 1) m = Math.min(m, o.y - o.r - R.ropeAt(o.x));
+    if (m < 30) { const k = clamp(1 - m / 30, 0, 1); x.save(); x.globalAlpha = 0.3 + 0.6 * k; STYLE.line(x, rp, 1.4 + 1.2 * k, p.red); x.restore(); }
   }
 }
 // The cord: a trolley on the straw rope, the charm on a red cord right over the aim (the trolley runs ahead and the
@@ -2731,6 +2755,8 @@ function drawHUD(x, ts) {
     for (const X of [xa + 8, xb - 8]) st.line(x, pPoly([[X, row ? Y - E[3] : V.y0], [X, Y]], true), 1.1, p.cord);
     bamboo(x, st, xa, Y, xb, Y, 6 * sc, { node: 40 });
   }
+  // the goal tag's cord runs up behind the boards to the lower beam, so the tag hangs from the rack, not from the sky
+  if (V.wide && LY.goal && gl > 0) st.line(x, pPoly([[LY.goal[0], E[1] + E[3] - 8 * sc], [LY.goal[0], LY.goal[1] - 5]], true), 1.1, p.cord);
   for (let i = 0; i < 10; i++) {
     const e = fx.ema[i], X = E[0] + (i % E[4]) * E[2] + 13 * sc, Y = E[1] + Math.floor(i / E[4]) * E[3];
     const flip = Math.abs(Math.cos(Math.PI * e.t)), face = e.t < 0.5 ? !e.on : e.on;
@@ -2770,7 +2796,7 @@ function drawHUD(x, ts) {
   if (!demo) plq(AU.muted ? k.mute : k.sound, LY.sound);
   // the score tag hangs from the floor bar (portrait) or from the top (wide, and the vertical video); line 2 is the
   // news or the best; the number hops a little when it changes (bar 1.8.1)
-  if (state !== "over") {
+  if (!isOver()) {   // the result board carries the score, so the tag steps aside (no two numbers at once)
     const P = LY.score, best = Number(store.get("best", 0)) || 0, L = newsNow(), tall = !V.wide && LY.scoreTop;
     const l2 = L ? L.text : !demo && best > 0 ? S("best") + " " + best : "";
     let s2 = P[2], fs = fz(13, s2);
@@ -2810,6 +2836,7 @@ function drawTitle(x, ts, a) {
   const cs = fz(13), cr = S("credit"), cw = textW(cr, cs), tagL = LY.start[0] - k.start.w / 2 * LY.start[2] * 1.03, tagB = LY.start[1] + k.start.h * LY.start[2];
   const co = { align: "left", deep: p.ink };
   if (V.wide || LY.credit[0] + cw + 8 <= tagL) tx(x, cr, LY.credit[0], LY.credit[1] - 6, cs, p.paper, co);
+  else if (tagL - 10 - cw >= V.x0 + 6) tx(x, cr, tagL - 10 - cw, LY.credit[1] - 6, cs, p.paper, co);   // room further left (the 630x500 cover)
   else if (V.y1 - tagB >= cs * 1.5 + 6) tx(x, cr, LY.credit[0], V.y1 - cs * 0.75 - 3, cs, p.paper, co);
   else { const i = cr.lastIndexOf(" "); tx(x, cr.slice(0, i), LY.credit[0], LY.credit[1] - 6 - cs * 1.2, cs, p.paper, co); tx(x, cr.slice(i + 1), LY.credit[0], LY.credit[1] - 6, cs, p.paper, co); }
   x.restore();
@@ -3139,8 +3166,10 @@ function update(now, dt) {
   if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) {
     const target = Math.floor(clockNow() * 0.12 + 1e-6);
     let n = 0;
-    while (run.steps < target && n < 40 && !R.dead) { R.step(); run.steps++; n++; onEvents(now); }
-    if (run.steps < target && !R.dead) run.offset += (target - run.steps) / 0.12;   // a long stall drops the lost time
+    const demo = run.mode === "demo", cap = demo ? 72 : 40;
+    while (run.steps < target && n < cap && !R.dead) { R.step(); run.steps++; n++; onEvents(now); }
+    // a long stall drops the lost time; the demo keeps it (up to 4 s) and catches up over the next frames
+    if (run.steps < target && !R.dead && (!demo || target - run.steps > 480)) run.offset += (target - run.steps) / 0.12;
     if (R.dead && !run.dead) die(now);
   }
   if (isDying()) {
@@ -3173,7 +3202,7 @@ function frame() {
   let now = performance.now(); if (now < lastNow) now = lastNow;
   const raw = now - lastNow, prev = lastNow; lastNow = now;
   if (raw > 300 && state === "play") pauseGame(prev);   // a long stall must not count as time the player had
-  if (raw > 250 && run && run.mode !== "play" && run.holdAt == null && !isDying()) run.offset += raw - 16;   // the AI never teleports
+  if (raw > 250 && run && run.mode === "attract" && run.holdAt == null && !isDying()) run.offset += raw - 16;   // the attract AI never teleports
   step(now, clamp(raw, 0, 50) / 1000);
   draw(now);
 }
