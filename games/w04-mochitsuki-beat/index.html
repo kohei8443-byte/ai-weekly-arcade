@@ -60,7 +60,7 @@ const PALS = {
     ink: "#1c1a24", paper: "#f4ead3", paperD: "#dbc9a6", grey: "#b3aa9c", greyD: "#6f6862",
     tag: "#dfbb80", tagL: "#f1dcac", tagD: "#ae8752", tagG: "#c8a068", plank: "#5b4233", plankL: "#7c5c47", plankD: "#35271f",
     pane: "#f2e7cd", paneL: "#d9c6a0", paneT: "#1c1a24", paneS: "#9a3328",
-    red: "#d24a32", redD: "#94302a", redL: "#ef9a8e", gold: "#e2b24e", goldD: "#a37a34", goldL: "#f6dc98", orange: "#ec7b33", indigo: "#1f4f78",
+    red: "#cf3d2b", redD: "#8c2820", redL: "#ef9a8e", gold: "#dcb85a", goldD: "#9b7a32", goldL: "#f3e2a4", orange: "#ec7b33", indigo: "#1f4f78",
     sky0: "#4b5f9a", sky1: "#6481bb", sky2: "#97b0d8", sky3: "#f4c6a3", mist: "#8dba62", far: "#7b8bc0", mid: "#566b9c",
     ground: "#a99172", groundL: "#bea583", poolA: "#b89f7e", poolB: "#c9b08c", lit: "#f6c56f", warm: "#f2cea0", shadeK: "#1b1530", hlK: "#fff6df", pine: "#3f6b45"
   },
@@ -602,6 +602,7 @@ function gameBus(ctx) {
   const master = ctx.createGain(); master.gain.value = AU.muted ? 0 : AU.vol;
   master.connect(comp); comp.connect(lim); lim.connect(ctx.destination);
   const sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
+  const sfxR = pan(ctx, 0.25, sfx), sfxL = pan(ctx, -0.35, sfx); // the taishou stands right of the usu, obaa-chan kneels left
   const music = ctx.createGain(); music.gain.value = 0.55; music.connect(master);
   const echo = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), sendS = ctx.createGain();
   echo.delayTime.value = 0.15; fb.gain.value = 0.3; wet.gain.value = 0.14; sendS.gain.value = 0.45;
@@ -611,7 +612,7 @@ function gameBus(ctx) {
   echo2.connect(fb2); fb2.connect(echo2); echo2.connect(wet2); wet2.connect(pan(ctx, 0.65, master)); music.connect(echo2); sendS.connect(echo2);
   const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
-  Object.assign(AU, { ctx, comp, master, sfx, music, echo, echo2, noise: nb });
+  Object.assign(AU, { ctx, comp, master, sfx, sfxL, sfxR, music, echo, echo2, noise: nb });
 }
 function audioInit() {
   if (AU.ctx) return true;
@@ -659,28 +660,28 @@ const PHASES = [
   { bpm: 200, n: 16, v: ALLV, p: 0.32 },
   { bpm: 212, n: 12, v: ALLV, p: 0.3, gold: true }
 ];
-// ?demo=1: a scripted 30 s story, rising action for three quarters of the clip (the capture tool corrects a slow recorder):
-// OUCH at 2 s, near misses at 5, 13.5 and 19 s, gold blow at 8.5 s, BPM200, the night stage with a rush, a second OUCH
-// at 16 s, the fatal hit at about 22 s; then a 2.5 s result and the title sign for the last few seconds of the loop
+// ?demo=1: a scripted 30 s story, rising action for four fifths of the clip (the capture tool corrects a slow recorder):
+// OUCH at 2 s, near misses at 5, 13.5, 19 and 22 s, gold blow at 8.5 s, BPM200, the night stage with a rush, a second
+// OUCH at 16 s, the fatal hit at about 24.5 s; then a 1.5 s result and the title sign for the last seconds of the loop
 const DEMO_PHASES = [
   { bpm: 150, n: 8, v: ["double"], p: 0.18 },
   { bpm: 176, n: 8, v: ["double", "feint"], p: 0.2, gold: true },
   { bpm: 200, n: 8, v: ["double", "water"], p: 0.25 },
   { bpm: 248, n: 20, v: ["double", "feint"], p: 0.22, night: true, jump: true, jumpAt: 3 },
-  { bpm: 272, n: 24, v: ["double", "feint"], p: 0.22, night: true }
+  { bpm: 272, n: 36, v: ["double", "feint"], p: 0.22, night: true }
 ];
-const DEMO_SCRIPT = [{ at: 2300, act: "ouch", soft: true }, { at: 4500, act: "close" }, { at: 13600, act: "close" }, { at: 16000, act: "ouch" }, { at: 19000, act: "close" }, { at: 22000, act: "bonk" }];
+const DEMO_SCRIPT = [{ at: 2300, act: "ouch", soft: true }, { at: 4500, act: "close" }, { at: 13600, act: "close" }, { at: 16000, act: "ouch" }, { at: 19000, act: "close" }, { at: 22000, act: "close" }, { at: 24500, act: "bonk" }];
 const DEMO_LOOP = 30000, DEMO_SEED = 12345; // one fixed run restarted every 30.0 s of real time: a 30 s Short loops seamlessly
 // After the table, +12 BPM per mochi, and the late run keeps adding twists (play only):
 // 11 (224) big water (skip 3); 12+ a +12 rush mid-mochi (the next mochi never dips);
-// 13+ night falls, 15 gold, 16 (296) the final golden mochi: making it clears the run (天下一).
+// 11+ night falls (more runs see it), 15 gold, 16 (296) the final golden mochi: making it clears the run (天下一).
 // After a first clear, later runs go on past it (延長戦) for a higher top BPM.
 const FINAL = 16;
 let tw = 0; // the run's day (play, from run 3): 0 plain, 1 gold, 2 water, 3 rush, 4 fake
 function phaseOf(list, n) {
   const x = n - list.length, last = list[list.length - 1], late = list === PHASES;
   const p = Object.assign({}, n <= list.length ? list[n - 1] : { bpm: last.bpm + 12 * x + (late && n >= FINAL ? 12 : 0), n: 14, v: late && n > 10 ? LATEV : ALLV, p: min(0.42, 0.3 + 0.02 * x), gold: n % 5 === 0 || (late && n === FINAL),
-    jump: late && n >= 12 && n % 5 && n !== FINAL, night: late && n >= 13 });
+    jump: late && n >= 12 && n % 5 && n !== FINAL, night: late && n >= 11 });
   if (late && tw && n > 2) { // the day's twist: a different mix every run
     if (tw === 1) { p.gold = n % 3 === 0 || n === FINAL; if (p.gold) p.jump = false; }
     else if (tw === 3) p.jump = n > 5 && !p.gold;
@@ -690,7 +691,7 @@ function phaseOf(list, n) {
 }
 // every rank unlocks one mochi flavour (cosmetic)
 const FLAV = [["paper", "paperD"], ["mist", "pine"], ["tag", "tagD"], ["redL", "red"], ["plank", "plankD"], ["greyD", "ink"], ["red", "redD"]];
-const RANKS = [0, 140, 188, 224, 248, 272]; // top BPM reached (the late rushes count); the 7th rank, 天下一, only by clearing the run
+const RANKS = [0, 152, 200, 236, 260, 284]; // top BPM reached (the late rushes count); the 7th rank, 天下一, only by clearing the run
 const rankOf = (bpm, clr) => clr ? 6 : RANKS.reduce((a, t, i) => bpm >= t ? i : a, 0);
 const myRank = () => rankOf(num("bestBpm"), store.get("clear", false));
 // goals (お題): a fixed ladder, then an endless rotation that keeps rising; the first three unfinished are live
@@ -733,7 +734,7 @@ const STR = {
     bpmUp: "FASTER", jump: "RUSH!", night: "NIGHT", golden: "GOLD x2", last: "LAST ONE!", bpm200: "200 BPM!",
     causeBonk: "HIT THE HANDS", causeLate: "LATE {n}MS", causeEarly: "EARLY {n}MS", causeMiss: "MISSED A BEAT", causeWaitRed: "SKIP ONLY RED",
     cause_double: "RED = HANDS", cause_water: "WATER: SKIP 2", cause_glance: "GLANCE: BE EXACT", cause_triple: "BIG WATER: SKIP 3", causeDrift: "LATE TAPS ADD UP", causeDriftE: "EARLY TAPS ADD UP", causeClear: "TOP OF THE LAND", overClear: "CHAMPION!", causeHandLate: "HIT HANDS {n}MS", causeHandEarly: "HIT HANDS {n}MS",
-    rBpm: "TOP BPM", rCombo: "MAX COMBO", rBest: "BEST", toBest: "{n} TO GO", newBest: "NEW BEST!", rPerf: "PERFECT",
+    rBpm: "TOP BPM", rCombo: "COMBO", rBest: "BEST", toBest: "{n} TO GO", newBest: "NEW BEST!", rPerf: "PERFECT",
     tOn: "ON TIME", tLate: "LATE", tEarly: "EARLY", newFlav: "NEW: {f}!",
     flav: ["PLAIN", "YOMOGI", "KINAKO", "SAKURA", "ANKO", "SESAME", "KOHAKU"],
     g_bpm: "{f} AT ♩{n}", g_clr: "{f}: CLEAR", rStar: "FLAWLESS", star: "FLAWLESS!",
@@ -928,13 +929,13 @@ function newBus() {
 }
 const sfx = {
   // scheduled beat sounds (run bus, dropped on pause)
-  don(w, v) { const q = vary(20, 0.06); tone("sine", 150 * q.f, 60, 0.2, 0.14 * v * q.g, w, run.dl); hiss("lowpass", 380, 1, 0.06, 0.08 * v, w, run.dl); }, // under the player's own pound
+  don(w, v) { const q = vary(20, 0.06); tone("sine", 150 * q.f, 60, 0.2, 0.11 * v * q.g, w, run.dl); hiss("lowpass", 380, 1, 0.06, 0.08 * v, w, run.dl); }, // under the player's own pound
   fill(w, h) { for (let i = 1; i < 3; i++) { tone("sine", 140 + i * 30, 60, 0.1, 0.11, w + i * h / 1000 * 0.67, run.bus); hiss("lowpass", 700, 1, 0.05, 0.07, w + i * h / 1000 * 0.67, run.bus); } },
   ka(w) { hiss("bandpass", 3200 * vary(40).f, 5, 0.035, 0.18, w, run.kr); },
   rest(w) { tone("triangle", 520, 470, 0.05, 0.1, w, run.bus); hiss("bandpass", 1300, 6, 0.03, 0.07, w, run.bus); }, // a muted wood tick: never the DON
   stick(w, a) { tone("sine", 1250 * a, 1150 * a, 0.07, 0.26, w, run.bus); hiss("bandpass", 2500, 3, 0.03, 0.16, w, run.bus); },
   koto(w, f) { tone("triangle", f * 1.012, f * 0.995, 0.75, 0.1, w, run.kp, 0.002); tone("sine", f * 2, f * 2, 0.16, 0.035, w, run.kp, 0.002); }, // a pluck that settles in pitch and rings on
-  bass(w, f) { tone("sine", f, f * 0.97, 0.3, 0.2, w, run.mel, 0.005); },
+  bass(w, f) { tone("sine", f, f * 0.97, 0.3, 0.17, w, run.mel, 0.005); },
   shaker(w) { hiss("highpass", 6500, 0.8, 0.035, 0.06, w, run.sp); },
   roll(w, h) { // two beats, rising up to routine level, with a riser; only the last 1/8 beat before the blow is silent
     for (let i = 0; i < 13; i++) { const t = w + (4 * h / 1000) * (1 - Math.pow(1 - i / 13, 1.6)); hiss("lowpass", 240 + i * 45, 1, 0.07, 0.24 + i * 0.03, t, run.bus); tone("sine", 88 + i * 4, 60, 0.08, 0.12 + i * 0.035, t, run.bus); hiss("bandpass", 2400, 3, 0.02, 0.24 + i * 0.01, t, run.bus); }
@@ -950,43 +951,43 @@ const sfx = {
 // immediate sounds (sfx bus), varied per play: each gets the current audio time w, and is skipped while audio is off
 const imm = {
   pound(w, v, dull) { // a taiko: two skins about a fifth apart and a noise slap; GOOD is duller (no slap, darker body)
-    const q = vary(40, 0.1); v = v * 0.75;
-    tone("sine", 120 * q.f, 42, 0.24, 0.47 * v * q.g, w); tone("sine", 178 * q.f, 66, 0.13, 0.17 * v * q.g, w);
-    hiss("lowpass", dull ? 480 : 900, 1, 0.13, 0.38 * v, w, null, 200); if (!dull) hiss("bandpass", 650 * q.f, 4, 0.1, 0.24 * v, w + 0.01, null, 1600);
-    tone("triangle", 340 * q.f, 250, 0.09, (dull ? 0.2 : 0.3) * v, w); tone("triangle", 780 * q.f, 620, 0.05, (dull ? 0.14 : 0.18) * v, w); hiss("bandpass", 3000, 2, 0.025, (dull ? 0.16 : 0.2) * v, w); if (dull) tone("triangle", 1250 * q.f, 1100, 0.06, 0.16 * v, w); // skin, wood and stick: the part a phone speaker plays
+    const q = vary(40, 0.1); v = v * 0.72;
+    tone("sine", 120 * q.f, 42, 0.24, 0.47 * v * q.g, w, AU.sfxR); tone("sine", 178 * q.f, 66, 0.13, 0.17 * v * q.g, w, AU.sfxR);
+    hiss("lowpass", dull ? 480 : 900, 1, 0.13, 0.38 * v, w, AU.sfxR, 200); if (!dull) hiss("bandpass", 650 * q.f, 4, 0.1, 0.24 * v, w + 0.01, AU.sfxR, 1600);
+    tone("triangle", 340 * q.f, 250, 0.09, (dull ? 0.2 : 0.3) * v, w, AU.sfxR); tone("triangle", 780 * q.f, 620, 0.05, (dull ? 0.14 : 0.18) * v, w, AU.sfxR); hiss("bandpass", 3000, 2, 0.025, (dull ? 0.16 : 0.2) * v, w, AU.sfxR); if (dull) tone("triangle", 1250 * q.f, 1100, 0.06, 0.16 * v, w, AU.sfxR); // skin, wood and stick: the part a phone speaker plays
   },
   chime(w, combo, key) { // climbs the yo scale (band's key) two octaves over a streak, then a two-note figure on top; milestones resolve to the tonic
     const c = max(combo - 1, 0), d = [10, 25, 50, 100].includes(combo) ? 10 : c < 20 ? fl(c / 2) : 8 + (c & 1);
     w += 0.01; const f = yoF(d) * (key || 1), q = vary(8, 0.08);
-    tone("sine", f * q.f, f * q.f, 0.18, 0.3 * q.g, w); tone("sine", yoF(d + 2) * (key || 1), 0, 0.2, 0.1, w + 0.03);
-    if (combo >= 20) tone("triangle", f * 2, f * 2, 0.14, 0.07, w + 0.02);
-    if (combo >= 40) hiss("highpass", 7000, 1, 0.12, 0.05, w + 0.04);
+    tone("sine", f * q.f, f * q.f, 0.18, 0.28 * q.g, w, AU.sfxR); tone("sine", yoF(d + 2) * (key || 1), 0, 0.2, 0.1, w + 0.03, AU.sfxR);
+    if (combo >= 20) tone("triangle", f * 2, f * 2, 0.14, 0.07, w + 0.02, AU.sfxR);
+    if (combo >= 40) hiss("highpass", 7000, 1, 0.12, 0.05, w + 0.04, AU.sfxR);
   },
-  whoosh(w) { const q = vary(45, 0.1); hiss("bandpass", 600 * q.f, 1.5, 0.18, 0.9 * q.g, w, null, 2600 * q.f); tone("sine", 500 * q.f, 900 * q.f, 0.12, 0.36 * q.g, w + 0.04); tone("triangle", 1400 * q.f, 700, 0.1, 0.15, w + 0.1); },
-  clack(w) { const q = vary(45, 0.1); hiss("bandpass", 950 * q.f, 3, 0.05, 0.8 * q.g, w); tone("triangle", 1000 * q.f, 760 * q.f, 0.05, 0.44 * q.g, w); }, // EARLY / LATE: a dull wood clack a phone can play
-  thud(w) { const q = vary(50, 0.1); tone("sine", 95 * q.f, 55, 0.14, 0.7 * q.g, w); hiss("lowpass", 400, 1, 0.08, 0.43, w, null, 150); },
-  cool(w) { const q = vary(40, 0.1); tone("triangle", 330 * q.f, 150, 0.28, 0.4 * q.g, w); tone("sine", 1300 * q.f, 420 * q.f, 0.4, 0.13 * q.g, w + 0.05); },
+  whoosh(w) { const q = vary(45, 0.1); hiss("bandpass", 600 * q.f, 1.5, 0.18, 1.15 * q.g, w, AU.sfxL, 2600 * q.f); tone("sine", 500 * q.f, 900 * q.f, 0.12, 0.48 * q.g, w + 0.04, AU.sfxL); tone("triangle", 1400 * q.f, 700, 0.1, 0.2, w + 0.1, AU.sfxL); },
+  clack(w) { const q = vary(45, 0.1); hiss("bandpass", 950 * q.f, 3, 0.05, 0.85 * q.g, w); tone("triangle", 1000 * q.f, 760 * q.f, 0.05, 0.48 * q.g, w); }, // EARLY / LATE: a dull wood clack a phone can play
+  thud(w) { const q = vary(50, 0.1); tone("sine", 95 * q.f, 55, 0.14, 0.5 * q.g, w); hiss("lowpass", 400, 1, 0.08, 0.32, w, null, 150); },
+  cool(w) { const q = vary(40, 0.1); tone("triangle", 330 * q.f, 150, 0.28, 0.5 * q.g, w, AU.sfxL); tone("sine", 1300 * q.f, 420 * q.f, 0.4, 0.16 * q.g, w + 0.05, AU.sfxL); },
   bonk(w) { // the punchline: louder than a routine pound
     const q = vary(40, 0.08);
-    tone("sine", 720 * q.f, 480, 0.4, 0.95 * q.g, w); tone("square", 360 * q.f, 240, 0.3, 0.24, w); hiss("bandpass", 1400, 3, 0.3, 0.8, w); tone("sine", 140, 60, 0.35, 0.6, w); hiss("bandpass", 3200, 2, 0.05, 0.45, w);
-    tone("square", 520 * q.f, 980, 0.07, 0.12, w + 0.1, null, 0, 1600); tone("square", 1050 * q.f, 560, 0.26, 0.13, w + 0.17, null, 0, 1600);
+    tone("sine", 720 * q.f, 480, 0.4, 0.95 * q.g, w, AU.sfxL); tone("square", 360 * q.f, 240, 0.3, 0.24, w, AU.sfxL); hiss("bandpass", 1400, 3, 0.3, 0.8, w, AU.sfxL); tone("sine", 140, 60, 0.35, 0.6, w, AU.sfxL); hiss("bandpass", 3200, 2, 0.05, 0.45, w, AU.sfxL);
+    tone("square", 520 * q.f, 980, 0.07, 0.12, w + 0.1, AU.sfxL, 0, 1600); tone("square", 1050 * q.f, 560, 0.26, 0.13, w + 0.17, AU.sfxL, 0, 1600);
   },
-  deflate(w) { w += 0.25; [5, 3, 1, 0].forEach((n, i) => tone("triangle", YO[n], YO[n] * 0.94, 0.3, 0.24, w + i * 0.16)); tone("sine", 200, 70, 0.7, 0.3, w + 0.6); },
+  deflate(w) { const q = vary(30, 0.08); w += 0.25; [5, 3, 1, 0].forEach((n, i) => tone("triangle", YO[n] * q.f, YO[n] * 0.94 * q.f, 0.3, 0.43 * q.g, w + i * 0.16)); tone("sine", 200 * q.f, 70, 0.7, 0.52 * q.g, w + 0.6); },
   fin(w) { // the golden finisher sting: taiko, a bright chord on the yo scale, shimmer
     const q = vary(25, 0.06);
-    tone("sine", 110 * q.f, 40, 0.6, 0.5 * q.g, w); tone("sine", 165 * q.f, 60, 0.3, 0.2, w); hiss("lowpass", 700, 1, 0.35, 0.4, w, null, 120); hiss("bandpass", 700, 3, 0.12, 0.25, w);
-    tone("triangle", 300 * q.f, 200, 0.3, 0.4, w); hiss("bandpass", 2800, 2, 0.06, 0.7, w); hiss("bandpass", 1800, 1, 0.5, 0.3, w + 0.02, null, 600); // skin, crack and a crowd-like wash
-    [5, 7, 8, 10].forEach((n, i) => tone("triangle", YO[n] * q.f, YO[n] * q.f, 0.8, 0.2, w + 0.05 + i * 0.05));
-    for (let i = 0; i < 6; i++) tone("sine", 1500 + i * 220, 1560 + i * 220, 0.14, 0.03, w + 0.3 + i * 0.04);
+    tone("sine", 110 * q.f, 40, 0.6, 0.5 * q.g, w, AU.sfxR); tone("sine", 165 * q.f, 60, 0.3, 0.2, w, AU.sfxR); hiss("lowpass", 700, 1, 0.35, 0.4, w, AU.sfxR, 120); hiss("bandpass", 700, 3, 0.12, 0.25, w, AU.sfxR);
+    tone("triangle", 300 * q.f, 200, 0.3, 0.4, w, AU.sfxR); hiss("bandpass", 2800, 2, 0.06, 0.7, w, AU.sfxR); hiss("bandpass", 1800, 1, 0.5, 0.3, w + 0.02, AU.sfxR, 600); // skin, crack and a crowd-like wash
+    [5, 7, 8, 10].forEach((n, i) => tone("triangle", YO[n] * q.f, YO[n] * q.f, 0.8, 0.2, w + 0.05 + i * 0.05, AU.sfxR));
+    for (let i = 0; i < 6; i++) tone("sine", 1500 + i * 220, 1560 + i * 220, 0.14, 0.03, w + 0.3 + i * 0.04, AU.sfxR);
   },
   // the big moments sit clearly above a routine pound (levels.mjs / iso3.mjs)
-  tempo(w, gold) { for (let i = 0; i < 5; i++) { hiss("bandpass", 900 + i * 300, 1, 0.06, 0.3 + i * 0.08, w + i * 0.045); } [3, 5, 7].forEach((n, i) => tone("triangle", YO[n] * (gold ? 1.335 : 1), YO[n], 0.25, 0.38, w + 0.22 + i * 0.06)); },
+  tempo(w, gold) { const q = vary(20, 0.08); for (let i = 0; i < 5; i++) { hiss("bandpass", (900 + i * 300) * q.f, 1, 0.06, (0.3 + i * 0.08) * q.g, w + i * 0.045); } [3, 5, 7].forEach((n, i) => tone("triangle", YO[n] * (gold ? 1.335 : 1) * q.f, YO[n] * q.f, 0.25, 0.42 * q.g, w + 0.22 + i * 0.06)); },
   sting200(w) { tone("sawtooth", 300, 1200, 0.3, 0.3, w, null, 0, 3000); tone("sine", 600, 1800, 0.3, 0.45, w); [7, 8, 10].forEach((n, i) => tone("triangle", YO[n], YO[n], 0.45, 0.5, w + 0.3 + i * 0.07)); hiss("bandpass", 2800, 2, 0.06, 0.4, w + 0.3); tone("sine", 110, 45, 0.4, 0.5, w + 0.3); },
   milestone(w) { const q = vary(15, 0.08); [5, 7, 9].forEach((n, i) => tone("triangle", YO[n] * q.f, YO[n] * q.f, 0.2, 0.42 * q.g, w + i * 0.05)); },
   best(w) { [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", YO[n], YO[n], 0.3, 0.27, w + i * 0.07)); tone("sine", 146.83, 73.4, 0.5, 0.45, w + 0.42); hiss("highpass", 5000, 1, 0.4, 0.09, w + 0.4); },
-  tick(w, i) { const q = vary(20, 0.08); tone("sine", (900 + (i % 12) * 40) * q.f, 0, 0.035, 0.37 * q.g, w); hiss("lowpass", 1500, 1, 0.02, 0.3, w); },
-  stamp(w) { tone("sine", 140, 60, 0.15, 0.56, w); hiss("lowpass", 1200, 1, 0.08, 0.35, w); },
-  ui(w) { const q = vary(25, 0.08); tone("sine", 880 * q.f, 1320 * q.f, 0.09, 0.35 * q.g, w); hiss("lowpass", 1800, 1, 0.03, 0.35, w); }
+  tick(w, i) { const q = vary(20, 0.08); tone("sine", (900 + (i % 12) * 40) * q.f, 0, 0.035, 0.5 * q.g, w); hiss("lowpass", 1500, 1, 0.02, 0.4, w); },
+  stamp(w) { const q = vary(30, 0.08); tone("sine", 140 * q.f, 60, 0.15, 0.56 * q.g, w); hiss("lowpass", 1200 * q.f, 1, 0.08, 0.35 * q.g, w); },
+  ui(w) { const q = vary(25, 0.08); tone("sine", 880 * q.f, 1320 * q.f, 0.09, 0.47 * q.g, w); hiss("lowpass", 1800, 1, 0.03, 0.47, w); }
 };
 for (const k in imm) sfx[k] = (...a) => { if (audioOn()) imm[k](AU.ctx.currentTime, ...a); };
 // the result bed: a drone and a slow koto line, so a result is never silent
@@ -1113,7 +1114,8 @@ function lose(s, j, off, now) {
   const q = j === "miss" ? run.cues.slice(max(0, run.cueIdx - 2), run.cueIdx + 2).find(c => c.wait && s.t >= c.t && s.t <= c.end + 1) : null, pre = !!q; // skipped under a wait plate: too early, or waited too long
   const novice = run.first && run.cur <= 2; // the very first run: mochi 1 and 2 charge half for a forgotten beat
   let cost = j === "miss" ? ((run.cur === 1 || (pre && q.first) || novice) && run.mode === "play" ? 1 : 2) : 1; // slightly off < a missed beat <= a hand hit
-  if (j === "miss" && run.first && run.cur === 1 && run.freeMiss < 2) { run.freeMiss++; cost = 0; hint.active = true; } // two beats on the house, and the ring comes back
+  if (j === "miss" && run.first && run.cur <= 2 && run.mode === "play" && run.freeMiss < (run.cur === 1 ? 2 : 3)) { run.freeMiss++; cost = 0; hint.active = true; } // beats on the house (two in mochi 1, one in mochi 2), and the ring comes back
+  if (j !== "miss" && novice && run.mode === "play") cost = 0; // the very first run: EARLY / LATE in mochi 1 and 2 are told, not charged
   run.heat -= cost; s.loss = { t: now, cost, j, off, pre }; run.losses.push(s.loss);
   auDuck(run.mel, 0.3, 0.5);
   if (j === "miss") { if (loud()) { sfx.cool(); sfx.thud(); } fx.ghost = { t: now, miss: true }; for (let i = 0; i < 6; i++) addPart({ x: MX - 46 + rnd() * 92, y: URY - 18, vx: (rnd() - 0.5) * 70, vy: -24, life: 0.8, max: 0.8, col: "sky2", kind: "spark", s: 2.6, g: 140 }); }
@@ -1138,7 +1140,7 @@ function handHit(tc, iv, now) {
   if (run.heat - cost <= 0) { finalBonk(tc, now); return; }
   run.heat -= cost; if (run.mode === "play") run.cooldown = max(run.cooldown, 3); // room to breathe
   if (loud()) sfx.bonk();
-  holdImpact(); addTrauma(0.25); auDuck(run.mel, 0.2, 0.8); if (loud()) auDuck(run.bus, 0.2, 0.35, 0.45); // the band steps back so OUCH lands
+  holdImpact(); auDuck(run.mel, 0.2, 0.8); if (loud()) auDuck(run.bus, 0.2, 0.35, 0.45); // the band steps back so OUCH lands
   fx.hurtT = now;
   const hp = handPositions(1, tc, null);
   burst(hp.near.x, hp.near.y - 9, 5, 210, { kind: "star", col: "goldL", s: 3 });
@@ -1160,8 +1162,8 @@ function finalBonk(tc, now) {
   if (loud()) { sfx.bonk(); sfx.deflate(); }
   addTrauma(1);
   const hp = handPositions(1, tc, null);
-  // the hero shot: in play a short 1.3x push on the crying partner; the demo holds a 2x camera for its whole dying state (draw)
-  if (run.mode !== "demo") zoomPunch(56, 355, 1.3, 520, now);
+  // the hero shot: in play a short 1.08x push on the crying partner; the demo holds a 2x camera for its whole dying state (draw)
+  if (run.mode !== "demo") zoomPunch(56, 355, 1.08, 520, now);
   burst(hp.near.x, hp.near.y - 9, 8, 280, { kind: "star", col: "goldL", s: 3 });
   fx.call = null; fx.hero = now; // drawn over the zoomed frame by drawHero()
   enterDying(now);
@@ -1269,7 +1271,7 @@ function finisher(s, now) { // the peak: hitstop, camera punch, golden burst, it
   if (run.mode === "play") platform("happytime");
 }
 function holdImpact() { fx.kineT = fx.vt - 40; fx.impactT = fx.vt; }
-const BIG = ["ouch", "overBonk", "miss", "last", "fin", "bpm200"];
+const BIG = ["ouch", "overBonk", "miss", "early", "late", "last", "fin", "bpm200"];
 function call(kind, now, at) { // one judgement slot; a hero call holds 1.2 s against routine words
   const o = fx.call; if (isTitle() || (o && (o.kind === "bpm200" || o.kind === "fin") && now - o.t < 1200 && !BIG.includes(kind))) return;
   fx.call = { kind, t: now, at };
@@ -1329,14 +1331,15 @@ function update(now, dt) {
   if (!run) return;
   if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) updateRun(now);
   if (isDying()) {
+    run.dyT = (run.dyT || 0) + dt * 1000; // drawn time (frames clamped to 50 ms): a stalled recorder cannot swallow the clip's hero shot
     const bonk = run.dead.reason === "bonk", el = now - run.dead.at;
     const wait = state === "dying" ? (bonk ? 550 : 450) : (bonk ? 1400 : 1100); // play: a short readable freeze keeps death-to-retry under 1 s; demo lingers for the clip
     if (state === "dying" && el > wait) showOver(now);
-    else if (state === "demo-dying" && el > wait) { state = "demo-over"; run.result.at = now; }
+    else if (state === "demo-dying" && run.dyT > wait) { state = "demo-over"; run.result.at = now; }
     else if (state === "title-dying" && el > 1600) startAI("attract");
   }
   if (DEMO && now - demoT0 >= DEMO_LOOP) startAI("demo", DEMO_SEED); // one scripted run per 30.0 s
-  else if (state === "demo-over" && now - run.result.at > 2500) { startAI("demo", DEMO_SEED + 1, true); titleAt = now; } // then the title sign drops in and the AI pounds on
+  else if (state === "demo-over" && now - run.result.at > 1500) { startAI("demo", DEMO_SEED + 1, true); titleAt = now; } // then the title sign drops in and the AI pounds on
   if (state === "over" || state === "demo-over") resultStep(now);
   bedStep();
   juiceStep(dt);
@@ -1361,7 +1364,7 @@ function step(now, dt) {
 }
 
 // ---------- result screen: staged, skippable by tap ----------
-const RES = { drop: 220, head: 220, cause: 320, count: 420, countDur: 700, rank: 1180, rows: 1250, best: 1400, goal: 1560 };
+const RES = { drop: 220, head: 0, cause: 60, count: 420, countDur: 700, rank: 1180, rows: 1250, best: 1400, goal: 1560 };
 const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 3 : now - r.at;
 function resultStep(now) {
   const r = run.result, age = resAge(r, now);
@@ -1377,9 +1380,9 @@ function skipResult(now) { const r = run && run.result; if (r && now - r.at < RE
 // ---------- GAME-SPECIFIC: where things sit (scene coords; the screen may show more world around the scene) ----------
 const UX = 173, URY = 374, URX = 80, URR = 19, UBOT = 440, MX = UX + 2; // the usu (mortar): rim centre, radii, foot; the mochi's centre x
 const GRAN = { x: 18, y: 449 }, POUN = { x: 284, y: 461 };            // obaa-chan kneels facing right; the taishou stands facing left
-const CALL_Y = DEMO ? 156 : 150, PLATE_X = 180, PLATE_Y = 236;       // the judgement band; the cue plate (76 x 76, top centre)
+let CALL_Y = DEMO ? 156 : 150; const PLATE_X = 180, PLATE_Y = 236;   // the judgement band (lower in the wide clip); the cue plate (76 x 76, top centre)
 const LANE_Y = 564, LANE_HX = 44, LANE_K = 0.2336;                   // the beat lane: its middle, the hit ring, px per ms ahead
-const HIB = { x: 50, y: 490 }, STAND = { x: 311, y: 492 };           // the hibachi (lives) and the mochi tray (made mochi)
+const HIB = { x: 50, y: 490 }, STAND = { x: 311, y: 492 };           // the hibachi (lives) and the mochi tray (made mochi); see stageLayout()
 // kine poses: head centre, grip, the pounder's body offset. The drawing blends them by time; it never snaps.
 const KF = {
   high: { hx: 262, hy: 206, gx: 294, gy: 322, bx: 0, by: -5 }, up: { hx: 252, hy: 238, gx: 308, gy: 350, bx: 0, by: -2 },
@@ -1419,7 +1422,7 @@ function layoutUI() {
 // persimmon tree with its last fruit, a bamboo lattice fence, the packed-earth yard and a straw mat under the usu;
 // a kohaku curtain hangs from the beam. The side worlds go on: a storehouse, a gate with kadomatsu, a clay stove
 // with steaming seiro and rice bales on the left; a garden pine, a well, a bench and a kite on the right.
-// The night stage (BPM 248 on) is the same yard under the moon, the shoji and lanterns lit. Both are cached.
+// The night stage (mochi 11, BPM 224 on; BPM 248 in the demo) is the same yard under the moon, the shoji and lanterns lit. Both are cached.
 let BG = null;
 const BGM = 14, BGS = { d: null, n: null };
 const bgLayer = nt => layer(BGM, (x, X0, Y0, W, H) => paintWorld(x, X0, Y0, W, H, nt));
@@ -1672,9 +1675,9 @@ function paintWorld(x, X0, Y0, W, H, nt) {
     shape(x, pMoon(300, 136, 19, 0.36, 0.5), "goldL", 1.1);
   } else {
     for (let i = 0; i < W * 0.04; i++) { const s = 0.8 + r() * 0.8; x.fillStyle = C(r() < 0.5 ? "paper" : "sky2"); x.fillRect(X0 + r() * W, Y0 + r() * (80 - Y0), s, s); }
-    shape(x, pBlob(184, 220, 25, 25, 0.025, 5), "red", 1.3, "redD", 2.5, 2.5);
+    shape(x, pBlob(84, 214, 24, 24, 0.025, 5), "red", 1.3, "redD", 2.5, 2.5); // left of the plate: never a red halo behind it
     for (let n = Math.floor((X0 - 200) / 190); n * 190 < X1 + 60; n++) { const y = 110 + 70 * h01(n * 7 + 1); kasumi(x, n * 190 + 70 * hash1(n * 7), y, 110 + 80 * h01(n * 7 + 2), y > 150 ? "goldL" : "sky3"); }
-    kasumi(x, 112, 216, 150, "goldL");
+    kasumi(x, 34, 222, 140, "goldL");
   }
   // far snowy mountains, then the near hills
   const far = ridge(X0, X1, 238, [[-300, 70, 90], [-120, 30, 60], [96, 38, 56], [250, 16, 46], [460, 46, 70], [628, 128, 96], [880, 60, 80]], 3);
@@ -1858,7 +1861,7 @@ const mochiSpr = (fi, locked) => bake("mo" + fi + (locked ? "x" : ""), 28, 20, 1
 function openHand(x, X, Y, s, col, sh) {
   at(x, X, Y, s, 0, () => {
     const parts = [pBlob(0, 6, 11, 10, 0.06, 5)];
-    for (const [dx, h] of [[-8, 13], [-2.6, 16], [3, 15], [8.4, 11]]) parts.push(pRR(dx - 2.6, 4 - h, 5.2, h + 4, 2.6));
+    for (const [dx, h, k] of [[-8, 13, -0.6], [-2.6, 16, -0.2], [3, 15, 0.3], [8.4, 11, 0.8]]) parts.push(pSmooth([[dx - 2.8, 7], [dx - 2.9 + k * 0.4, 4 - h * 0.5], [dx - 2.1 + k, 1 - h], [dx + k, -0.6 - h], [dx + 2 + k, 0.8 - h], [dx + 2.6 + k * 0.4, 4 - h * 0.5], [dx + 2.8, 7]]));
     parts.push(pSmooth([[-10, 8], [-17, 2], [-18, -2], [-14, -1], [-8, 4]]));
     for (const p of parts) ST.fill(x, p, col); for (const p of parts) ST.shade(x, p, sh, 1.4, 1.6); for (const p of parts) ST.edge(x, p, 1.2);
   });
@@ -1948,12 +1951,13 @@ function granFrame(handP) {
 // a limb as one filled shape that tapers from w0 to w1 along a curve through three points (an inked sleeve or forearm).
 // Its shade tone is the full shape in the shade colour under a narrower copy moved toward the light: the same flat
 // two-tone look as celShade without a clip per limb per frame (bar 1.10.5)
-function taperPath(a, b, c, w0, w1, ox, oy) {
+function taperPath(a, b, c, w0, w1, ox, oy, bell) { // bell: extra width in the middle, mostly on the lower side (cloth hangs)
   const L1 = [], R1 = [];
   for (let i = 0; i <= 6; i++) {
     const t = i / 6, u = 1 - t, px = u * u * a[0] + 2 * u * t * b[0] + t * t * c[0] - (ox || 0), py = u * u * a[1] + 2 * u * t * b[1] + t * t * c[1] - (oy || 0);
     const dx = 2 * u * (b[0] - a[0]) + 2 * t * (c[0] - b[0]), dy = 2 * u * (b[1] - a[1]) + 2 * t * (c[1] - b[1]), l = Math.hypot(dx, dy) || 1, hw = lerp(w0, w1, t) / 2;
-    L1.push([px - dy / l * hw, py + dx / l * hw]); R1.push([px + dy / l * hw, py - dx / l * hw]);
+    const g = bell ? bell * Math.pow(sin(PI * min(1, t * 1.15)), 0.8) : 0, down = dx / l > 0; // the left-hand normal points down when the limb runs right
+    L1.push([px - dy / l * (hw + g * (down ? 1.5 : 0.5)), py + dx / l * (hw + g * (down ? 1.5 : 0.5))]); R1.push([px + dy / l * (hw + g * (down ? 0.5 : 1.5)), py - dx / l * (hw + g * (down ? 0.5 : 1.5))]);
   }
   return pSmooth(L1.concat(R1.reverse()));
 }
@@ -1968,21 +1972,27 @@ function cuff(x, f, e, w, col, sh) {
   const p = pSmooth([[e[0] - ux * 2.6 + nx, e[1] - uy * 2.6 + ny], [e[0] + ux * 2.4 + nx * 1.06, e[1] + uy * 2.4 + ny * 1.06], [e[0] + ux * 2.4 - nx * 1.06, e[1] + uy * 2.4 - ny * 1.06], [e[0] - ux * 2.6 - nx, e[1] - uy * 2.6 - ny]]);
   x.fillStyle = C(col); x.fill(p); ST.edge(x, p, 1);
 }
+function hand2(x, X, Y, rx, ry, col, sh, seed) { // a hand: shade under, light on top, inked; returns its outline
+  const p = pBlob(X, Y, rx, ry, 0.1, seed); x.fillStyle = C(sh); x.fill(p); x.fillStyle = C(col); x.fill(pBlob(X - 0.8, Y - 0.9, rx - 1.5, ry - 1.4, 0.1, seed)); ST.edge(x, p, 1.2); return p;
+}
 function granArm(x, gf, sh, h, look) {
   const [sx, sy] = gf.at(sh[0], sh[1]), ex = (sx + h.x) / 2 - 3, ey = (sy + h.y) / 2 + 10, wx = lerp(ex, h.x, 0.6), wy = lerp(ey, h.y, 0.6), skin = look === "hurt" || look === "hi" ? "redL" : "warm";
   taper(x, [wx, wy], [lerp(wx, h.x, 0.5) + 1, lerp(wy, h.y, 0.5) + 1], [h.x, h.y], 7, 5.4, skin, skin === "warm" ? "tag" : "red"); // the forearm, out of the gathered cuff
-  taper(x, [sx, sy], [ex, ey], [wx, wy], 13.4, 10.4, "paper", "paperD"); // the kappogi sleeve, wide at the shoulder
+  const sl = taperPath([sx, sy], [ex, ey], [wx, wy], 12.6, 9.6, 0, 0, 3.4); // the kappogi sleeve: full, draping, gathered at the cuff
+  x.fillStyle = C("paperD"); x.fill(sl); x.fillStyle = C("paper"); x.fill(taperPath([sx, sy], [ex, ey], [wx, wy], 9.4, 6.4, 0.7, 1.1, 3));
+  const fold = []; for (let i = 0; i <= 3; i++) { const t = 0.3 + i * 0.15, u = 1 - t; fold.push([u * u * sx + 2 * u * t * ex + t * t * wx + 1.2, u * u * sy + 2 * u * t * ey + t * t * wy + 3.6 - i * 0.4]); }
+  ST.line(x, pSmooth(fold, true), 0.8, "paperD"); ST.edge(x, sl, 1.2);
   cuff(x, [ex, ey], [wx, wy], 11.4, "paper", "paperD");
-  const hp = pBlob(h.x, h.y, look === "hurt" ? 8.6 : 7.4, look === "hurt" ? 6.8 : 5.8, 0.1, 7);
-  if (look === "hot" || look === "hi") cordLine(x, hp, 5, look === "hot" ? "red" : "paper", 0.7);
-  shape(x, hp, look === "hurt" || look === "hi" ? "redL" : "warm", 1.2, look === "hurt" || look === "hi" ? "red" : "tag", 1.4, 1.6);
+  const rx = look === "hurt" ? 8.6 : 7.4, ry = look === "hurt" ? 6.8 : 5.8;
+  if (look === "hot" || look === "hi") cordLine(x, pBlob(h.x, h.y, rx, ry, 0.1, 7), 5, look === "hot" ? "red" : "paper", 0.7);
+  hand2(x, h.x, h.y, rx, ry, look === "hurt" || look === "hi" ? "redL" : "warm", look === "hurt" || look === "hi" ? "red" : "tag", 7);
 }
 function pounArm(x, sx, sy, hx, hy, far) {
   const ex = (sx + hx) / 2 + 6, ey = (sy + hy) / 2 + 7;
   taper(x, [ex, ey], [lerp(ex, hx, 0.5) - 1, lerp(ey, hy, 0.5) + 1], [hx, hy], 8.6, 6.6, "warm", "tag"); // a strong forearm
   taper(x, [sx, sy], [lerp(sx, ex, 0.5), lerp(sy, ey, 0.5) - 1], [ex, ey], 13, 12, far ? "redD" : "red", far ? "plankD" : "redD"); // the happi's short sleeve
   cuff(x, [sx, sy], [ex, ey], 12.6, "paper", "paperD"); // its white edge
-  shape(x, pBlob(hx, hy, 6.4, 5.6, 0.1, 4), "warm", 1.2, "tag", 1.2, 1.4);
+  hand2(x, hx, hy, 6.4, 5.6, "warm", "tag", 4);
 }
 // the kine's pose this frame: a quick swing from wherever it was, a held impact, a springy rise to rest
 function kinePose(now, c) {
@@ -2057,7 +2067,8 @@ function drawMochi(x, now) {
   const p = pSmooth(pts), clip = P2(); clip.rect(-2e3, -2e3, 4e3, 2e3 + URY + 2); clip.addPath(pEll(UX, URY + 2, 66, 14));
   x.save(); x.clip(clip);
   if (fx.charging > 0) cordLine(x, p, 3 + 2 * fx.charging, "gold", 0.8);
-  ST.fill(x, p, base); if (!flash) ST.shade(x, p, sh, 0, 6);
+  if (flash) ST.fill(x, p, base);
+  else { ST.fill(x, p, sh); ST.fill(x, pSmooth(pts.map(([px, py]) => [px, cy - 3 + (py - cy) * (1 - 3 / max(8, ry))])), base); }
   if (prog < 0.55 && !flash) { const gp = P2(); GRAINS.forEach(([gx, gy], i) => { if (i < (0.55 - prog) * 20) gp.addPath(pEll(cx + gx * sc, cy + gy, 2.8, 1.5, 0.3 * (i % 3 - 1))); }); shape(x, gp, gold ? "goldL" : "paper", 0.6); }
   ST.edge(x, p, 1.8);
   x.restore();
@@ -2127,7 +2138,7 @@ function drawStars(x, now, head) { // a dazed ring of stars over her head after 
   for (let i = 0; i < 4; i++) { const a = t * 5 + i * PI / 2; shape(x, pStar(head[0] + cos(a) * 30, head[1] - 26 + sin(a) * 8, 6, 2.4, 5, a), "goldL", 0.9); }
 }
 function impact(x, X, Y, s, col) { // an inked starburst for a hit (never a glow)
-  shape(x, pStar(X, Y, 20 * s, 8 * s, 8, 0.2), col || "paper", 1.3, "paperD", 1, 1);
+  const p = pStar(X, Y, 20 * s, 8 * s, 8, 0.2); x.fillStyle = C("paperD"); x.fill(p); x.fillStyle = C(col || "paper"); x.fill(pStar(X - 0.8, Y - 0.8, 20 * s - 1.4, 8 * s - 0.8, 8, 0.2)); ST.edge(x, p, 1.3);
   for (let i = 0; i < 6; i++) { const a = -PI * (0.1 + i * 0.16); brush(x, [[X + cos(a) * 24 * s, Y + sin(a) * 24 * s], [X + cos(a) * 36 * s, Y + sin(a) * 36 * s]], 2.4); }
 }
 
@@ -2137,13 +2148,13 @@ const tempoSpr = () => bake("tempo", 184, 96, 92, 10, q => {
   woodTag(q, -80, 0, 160, 58, { seed: 31, cut: 5 });
   shape(q, pPoly([[-88, -4], [-80, -9.4], [80, -10], [88, -4.6], [84, 1.4], [-84, 2]]), "plankD", 1.3);
   for (let X = -78; X < 80; X += 9) ST.line(q, pLine(X, -8.6, X - 2.4, 0.6), 0.6, "plank");
+  text(q, "BPM", -46, 31, 19, "plankD", { f: ST.title, w: 900 });
 });
 function drawTempoBoard(x, now) {
-  if (!DEMO || L.wide || run.tail || isTitle()) return;
+  if (!DEMO || L.wide || isTitle()) return;
   const n = fx.note, kick = n && n.bpm ? n.t : -1e9, a = reduceMotion ? 0 : 0.05 * wob((now - kick) / 800, 14, 4), hot = run.bpm >= 200;
   at(x, 180, 520 + beatDip() * 1.5, 1, a, () => {
     put(x, tempoSpr(), 0, 0);
-    text(x, "BPM", -56, 31, 20, "plank", { f: ST.title, w: 900 });
     text(x, run.bpm, 66, 30, 44, hot ? "red" : "ink", { a: "right", f: ST.title, w: 900, deep: hot ? "redD" : "tagD" });
   });
 }
@@ -2165,14 +2176,14 @@ function drawCue(x, c, now) {
   const age = c - q.t, y = PLATE_Y - 18 * (1 - easeBack(clamp(age / 200, 0, 1))) + (wait && c >= q.at && c < q.at + 90 ? 2 : 0) - (!wait ? fx.beatPulse * 2 : 0);
   const col = pre ? "orange" : wait ? "red" : "pine";
   put(x, plateSpr(col), PLATE_X, y);
-  shape(x, pCut(PLATE_X - 30, y + 8, 60, 60, 6), wait ? "paper" : "tagL", 1.1, "paperD", 1.6, 1.6);
+  put(x, bake("plateIn" + (wait ? 1 : 0), 64, 64, 32, 2, q => shape(q, pCut(-30, 0, 60, 60, 6), wait ? "paper" : "tagL", 1.1, "paperD", 1.6, 1.6)), PLATE_X, y + 8);
   put(x, cueIcon(q.type), PLATE_X, y + 38, 0, 0.92);
   const lab = pre ? S("plateMore", owed) : wait ? S("plateWait", max(1, skips)) : S(q.type === "glance" ? "plateExact" : "platePound");
-  at(x, PLATE_X, y - 18, L.u, 0, () => {
-    const w = textW(x, lab, 18) + 22;
-    shape(x, pCut(-w / 2, -14, w, 28, 5), col, 1.3, col === "red" ? "redD" : col === "pine" ? "ink" : "redD", 0, 2.4);
-    text(x, lab, 0, 1, 18, "paper", { ol: "ink", ow: 0.22 });
-  });
+  const w = textW(x, lab, 18) + 22;
+  put(x, bake("plab" + col + lab, w + 6, 34, w / 2 + 3, 16, q => {
+    shape(q, pCut(-w / 2, -14, w, 28, 5), col, 1.3, col === "red" ? "redD" : col === "pine" ? "ink" : "redD", 0, 2.4);
+    text(q, lab, 0, 1, 18, "paper", { ol: "ink", ow: 0.22 });
+  }), PLATE_X, y - 18, 0, L.u);
 }
 function drawRing(x, c) { // first-run teaching: an approach ring and a pressing hand on the mochi, in time with the beat
   if (run.mode !== "play" || run.dead || !hint.active) return;
@@ -2238,7 +2249,7 @@ function drawMeter(x, now) { // a timing ruler after any non-perfect pound: wher
   shape(x, pPoly([[mx - 5, y - 15], [mx + 5, y - 15], [mx, y - 6]]), "red", 1); ST.line(x, pLine(mx, y - 6, mx, y + 7), 1.6, "red");
 }
 function drawCombo(x, now) {
-  if (L.wide || isTitle() || run.dead || run.combo < 5 || (fx.tip && now - fx.tip.t < 2600) || now - fx.closeT < 650) return; // the near-miss "!" has this spot for a moment
+  if (L.wide || isTitle() || endCard() || run.dead || run.combo < 5 || (fx.tip && now - fx.tip.t < 2600) || now - fx.closeT < 650) return; // the near-miss "!" has this spot for a moment
   const punch = now - fx.comboT < 240, u = L.u;
   at(x, 74, PLATE_Y + 26, u * (punch ? lerp(1.3, 1, easeOut((now - fx.comboT) / 240)) : 1), 0, () => {
     text(x, run.combo, 0, 0, 36, punch ? "goldL" : "paper", { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink" });
@@ -2261,7 +2272,7 @@ function drawCount(x, now) {
 }
 function drawFocusLines(x, now) { // the charge beats: inked speed lines from the screen edges toward the usu
   if (!(fx.charging > 0.15) || run.dead) return;
-  const n = 16, k = smooth((fx.charging - 0.15) / 0.85), R = Math.hypot(L.W, L.H), r = seeded(fl(fx.charge.t) + 1);
+  const n = 10, k = smooth((fx.charging - 0.15) / 0.85), R = Math.hypot(L.W, L.H), r = seeded(fl(fx.charge.t) + 1);
   for (let i = 0; i < n; i++) {
     const a = (i + r() * 0.6) / n * TAU, l = (0.12 + 0.2 * r()) * R * k, cx = MX, cy = URY - 30, o = R * 0.72;
     brush(x, [[cx + cos(a) * o, cy + sin(a) * o], [cx + cos(a) * (o - l * 0.5), cy + sin(a) * (o - l * 0.5)], [cx + cos(a) * (o - l), cy + sin(a) * (o - l)]], 3.5 + 3.5 * r());
@@ -2271,16 +2282,18 @@ function drawFocusLines(x, now) { // the charge beats: inked speed lines from th
 // ---------- GAME-SPECIFIC: the hanging score sign, the side boards, the title, pause and result ----------
 const endCard = () => run && run.tail; // the clip's last seconds: the title sign is back and the AI keeps pounding
 function drawSign(x, now) {
-  const wide = L.wide, w = DEMO ? 300 : wide ? 236 : 212, h = DEMO ? 100 : 84, s = wide ? min(hudS(), (L.x0 - 18) / (w + 28)) : hudS(), sy = vTop() + (wide ? 64 : 24);
+  const wide = L.wide, w = DEMO ? (wide ? 250 : 300) : wide ? 236 : 212, h = DEMO ? 100 : 84, s = wide ? min(hudS(), (L.x0 - 18) / (w + 28)) : hudS(), sy = vTop() + (wide ? 64 : 24);
   const pq = UI.pause, sx = wide ? sideX(-1) : DEMO ? 180 : min(180, pq.cx - pq.w * pq.s / 2 - 6 - (w / 2 + 12) * s); // tall screens: left of the pause plaque
   const kick = max(fx.comboT, fx.note ? fx.note.t : -1e9), a = reduceMotion ? 0 : 0.035 * wob((now - kick) / 700, 13, 5);
   cords(x, [-w / 2 + 16, w / 2 - 16].map(hx => [sx + s * (hx * cos(a) - 6 * sin(a)), sy + s * (hx * sin(a) + 6 * cos(a))]), beamY(), "red");
   at(x, sx, sy, s, a, () => {
-    put(x, signSpr(w, h), 0, 0);
+    put(x, DEMO ? bake("dsign" + w, w + 28, h + 26, w / 2 + 14, 4, q => { // the clip's sign: its two titles baked on
+      put(q, signSpr(w, h), 0, 0);
+      text(q, STR.ja.title, -w / 2 + 18, 30, 18, "ink", { a: "left", f: ST.title, w: 900, max: w / 2 - 14 });
+      text(q, STR.en.title, w / 2 - 18, 31, 15, "redD", { a: "right", w: 800, max: w / 2 - 26 });
+    }) : signSpr(w, h), 0, 0);
     const bump = 1 + 0.18 * max(0, wob((now - fx.scoreT) / 300, 9, 5)), n = fx.note;
     if (DEMO) {
-      text(x, STR.ja.title, -w / 2 + 18, 30, 18, "ink", { a: "left", f: ST.title, w: 900 });
-      text(x, STR.en.title, w / 2 - 18, 31, 15, "redD", { a: "right", w: 800 });
       at(x, 0, 70, bump, 0, () => text(x, fmt(fx.disp), 0, 0, 40, "ink", { f: ST.title, w: 900, deep: "tagD" })); // the tempo is on the yard's notice board (or the side board)
       return;
     }
@@ -2303,7 +2316,7 @@ function drawSign(x, now) {
 const n0 = now => { const n = fx.note; return n && n.key && now - n.t < 1200 && !fx.call && ((fl((now - n.t) / 120) & 1) || now - n.t > 600); };
 function drawSideBoard(x, now) { // wide screens: a dark board in the right world, the combo and the best (demo: the tempo)
   if (!L.wide) return;
-  const s = hudS(), bx = sideX(1), by = vTop() + 64, w = 190, h = 112;
+  const w = 190, h = 112, s = DEMO ? min(hudS(), 0.85, (L.x0 - 18) / (w + 6)) : hudS(), bx = sideX(1), by = vTop() + 64;
   cords(x, [[bx - 70 * s, by + 4 * s], [bx + 70 * s, by + 4 * s]], beamY(), "red");
   at(x, bx, by, s, 0, () => {
     put(x, plankSpr(w, h), 0, 0);
@@ -2335,20 +2348,21 @@ function drawTitle(x, now) {
   const u = L.u, runs = num("runs"), still = Juice.reduce;
   drawTitleSign(x, now, runs >= 2);
   const b = num("best");
-  if (b > 0) { // best and, from the second run, the rank and the flavours: a plank under the title, or a board in the right world
-    const rk = runs >= 2 ? S("ranks")[myRank()] : "", s1 = S("best") + " " + fmt(b);
-    const wide = L.wide, X = wide ? sideX(1) : 180, Y = wide ? vTop() + 70 : titleTop() + ((runs >= 2 ? 214 : 190) + 14) * u, s = wide ? hudS() : u;
+  if (b > 0) { // best and, from the second run, the rank, the flavours and the goals count: a board in the right world, or
+    // on a tall screen a low sign standing in the yard just above the start tag (the title keeps to the top 40%, the pair stays in view)
+    const rk = runs >= 2 ? S("ranks")[myRank()] : "", s1 = S("best") + " " + fmt(b), wide = L.wide, s = wide ? hudS() : u;
+    const nd = chalGet().split("1").length - 1, gt = rk ? S("chal") + " " + nd + (nd < CHAL.length ? "/" + CHAL.length : "") : "";
+    const w = round(max(220, textW(x, s1, 17) + (rk ? textW(x, rk, 15) + 64 : 36), rk ? 200 + textW(x, gt, 15) : 0) / 10) * 10, h = rk ? 66 : 40;
+    const X = wide ? sideX(1) : 180, Y = wide ? vTop() + 70 : UI.start.y - (h + 14) * s;
     if (wide) cords(x, [[X - 80 * s, Y + 4 * s], [X + 80 * s, Y + 4 * s]], beamY(), "red");
-    else cords(x, [[X - 90 * s, Y + 4 * s], [X + 90 * s, Y + 4 * s]], Y - 16 * s, "red");
     at(x, X, Y, s, 0, () => {
-      const w = max(236, textW(x, s1, 17) + (rk ? textW(x, rk, 17) + 56 : 36)), h = rk ? 82 : 40;
-      put(x, plankSpr(round(w / 10) * 10 + 10, h), 0, 0);
+      if (!wide) for (const sx of [-w / 2 + 24, w / 2 - 24]) shape(x, pPoly([[sx - 3.4, h - 6], [sx + 3.4, h - 6.4], [sx + 3, h + 9], [sx, h + 12], [sx - 3, h + 9]]), "plank", 1.1, "plankD", 1.6, 0); // two stakes in the earth
+      put(x, plankSpr(w, h), 0, 0);
       text(x, s1, -w / 2 + 18, 20, 17, "paper", { a: "left" });
       if (rk) {
         seal(x, w / 2 - textW(x, rk, 15) / 2 - 22, 20, rk, 999, 15);
-        for (let i = 0; i < FLAV.length; i++) put(x, mochiSpr(i, i > myRank()), -w / 2 + 26 + i * 25, 58);
-        const cd = chalGet(), nd = cd.split("1").length - 1;
-        text(x, S("chal") + " " + nd + (nd < CHAL.length ? "/" + CHAL.length : ""), w / 2 - 16, 58, 15, "tagL", { a: "right" });
+        for (let i = 0; i < FLAV.length; i++) put(x, mochiSpr(i, i > myRank()), -w / 2 + 24 + i * 22, 47);
+        text(x, gt, w / 2 - 16, 47, 15, "tagL", { a: "right" });
       }
     });
   }
@@ -2478,7 +2492,7 @@ function draw(now) {
   // sky life: two cranes crossing
   const span = L.W + 160, cx0 = md(now * 0.033, span) - L.x0 - 80, cy0 = max(118, vTop() + 112) + sin(now / 600) * 4;
   crane(x, cx0, cy0, (now / 900) % 1, 1); crane(x, cx0 - 46, cy0 + 20 + sin(now / 600 + 1) * 4, (now / 900 + 0.3) % 1, 0.86);
-  if (!T0) { drawHibachi(x, now); drawStand(x, now); }
+  if (!isTitle()) { drawHibachi(x, now); drawStand(x, now); }
   drawTempoBoard(x, now);
   const hs = handState(c);
   let handP = hs.p;
@@ -2566,7 +2580,7 @@ let bgTimer = 0;
 // Wide screens get a closer camera on the stage, still drawn at device resolution: the sky above the curtain and the
 // dirt below the lane (play) or below the mat (the clip) give way, so the pair and the usu fill the height while the
 // HUD boards hang in the side worlds. Only when the result is still a wide layout (else the plain 9:16 framing).
-const CROP = DEMO ? [92, 556] : [76, 612];
+const CROP = DEMO ? [96, 524] : [82, 598];
 function cropWide() {
   if (!L.wide) return;
   const keep = Object.assign({}, L), dw = cv.width, dh = cv.height, ch = CROP[1] - CROP[0], K = min(dw / CW, dh / ch);
@@ -2574,12 +2588,19 @@ function cropWide() {
   Object.assign(L, { K, kc: K / L.dpr, W: dw / K, H: dh / K });
   L.x0 = (L.W - CW) / 2; L.y0 = (L.H - ch) * 0.6 - CROP[0];
   L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1); // the kit's own rules for the UI scale and the wide layout
-  L.wide = L.x0 >= 220 * L.u;
+  L.wide = L.x0 >= (DEMO ? 190 : 220) * L.u; // the clip's side boards are smaller (no menus, no result columns)
   if (!L.wide) Object.assign(L, keep); else SPR.clear();
+}
+// the wide clip lifts the coals and the tray beside the mat (the tray clear of his feet), so its crop can end there;
+// the judgement band drops a little under the curtain there
+function stageLayout() {
+  const lift = DEMO && L.wide;
+  Object.assign(HIB, { x: 50, y: lift ? 470 : 490 }); Object.assign(STAND, { x: lift ? 368 : 311, y: lift ? 472 : 492 });
+  CALL_Y = DEMO ? (L.wide ? 164 : 156) : 150;
 }
 function resize() {
   artResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, CW, CH, 220);
-  cropWide();
+  cropWide(); stageLayout();
   BGS.d = BGS.n = null; buildBg(); layoutUI();
   clearTimeout(bgTimer); bgTimer = setTimeout(() => { if (!BGS.d) BGS.d = bgLayer(false); if (!BGS.n) BGS.n = bgLayer(true); }, 60); // the other stage, before it is needed
   if (run && manual) draw(simT);
@@ -2723,13 +2744,11 @@ window.__game = {
     // fired 0.5 s in: a fresh compressor starts attenuated
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
     const keep = Object.assign({}, AU), w = at == null ? 0.5 : at, oc = new OAC(1, 44100 * (w + 1.5), 44100);
-    const wasManual = manual; manual = true;
     gameBus(oc); AU.master.gain.value = AU.vol; AU.offline = true;
-    const fire = () => (names || ["pound", "bonk", "fin", "best", "thud", "cool", "whoosh", "stamp", "milestone", "sting200"].slice(0, n || 8)).forEach(k => sfx[k](1));
-    if (w > 0) oc.suspend(w).then(() => { try { fire(); } finally { oc.resume(); } }); else fire();
-    const buf = await oc.startRendering(), d = buf.getChannelData(0); let p = 0; window.__peakBuf = d;
+    try { (names || ["pound", "bonk", "fin", "best", "thud", "cool", "whoosh", "stamp", "milestone", "sting200"].slice(0, n || 8)).forEach(k => imm[k](w, 1)); }
+    finally { Object.assign(AU, keep); AU.offline = false; } // restored before awaiting: live play never schedules into the offline graph
+    const d = (await oc.startRendering()).getChannelData(0); let p = 0; window.__peakBuf = d;
     for (let i = 0; i < d.length; i++) p = max(p, abs(d[i]));
-    Object.assign(AU, keep); AU.offline = false; manual = wasManual;
     return p;
   }
 };
