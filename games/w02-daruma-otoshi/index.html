@@ -5,21 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>だるま落とし / Daruma Knock</title>
 <style>
-/* AI Weekly Arcade w02 "Daruma Knock", pixel house style (STYLE.md, QUALITY_BAR.md).
-   Everything the player sees is drawn into one pixel buffer on the canvas. The DOM only holds
-   transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
+/* AI Weekly Arcade w02 "Daruma Knock", house style 「墨と和紙」 (STYLE.md). Everything is drawn on one canvas; the DOM
+   holds only transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
 [hidden]{display:none!important}
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#262b52}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#5b8ccc}
 body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
 #wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
-#cv{position:absolute;left:0;top:0;display:block;touch-action:none;image-rendering:pixelated}
-#ui{position:absolute;left:0;top:0;pointer-events:none}
+#cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:absolute;inset:0;pointer-events:none}
 .ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
-/* every control is drawn in pixels on the canvas; these buttons are invisible hit areas on top of the drawings */
 #ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
 #ui button:focus{outline:none}
-#ui button:focus-visible{outline:2px dashed #f6e2a6;outline-offset:1px}
+#ui button:focus-visible{outline:2px dashed #f6eedc;outline-offset:1px}
 </style>
 </head>
 <body>
@@ -32,12 +30,12 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
   </section>
   <section id="ovPause" class="ov" hidden>
     <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
-    <button id="btnRestart" type="button" data-s="restart"></button>
-    <button id="btnQuit" type="button" data-s="toTitle"></button>
+    <button id="btnRestart" type="button" data-qa="restart" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-qa="quit" data-s="toTitle"></button>
   </section>
   <section id="ovOver" class="ov" hidden>
     <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
-    <button id="btnToTitle" type="button" data-s="toTitle"></button>
+    <button id="btnToTitle" type="button" data-qa="title" data-s="toTitle"></button>
   </section>
   <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
   <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
@@ -51,30 +49,47 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
 window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
 const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
 
-// ==== PIXEL KIT START ====
-// The pixel house style (STYLE.md) as reusable code. Nothing in this block knows about the game: the game
-// passes its core size, sprites, glyph tables, strings and sounds. Copy it unchanged into every game; the
-// only allowed edit is swapping up to ~6 palette hues for the theme. tools/qa.mjs relies on TXT and auPeak.
+// ==== ART KIT START ====
+// The house style 「墨と和紙」 (STYLE.md) as code. It knows nothing about the game: copy it unchanged (a week may retune
+// palette values, or add a name to both B and A, 40 names at most). Style A 「つやつや細工」: useStyle("A").
+// tools/qa.mjs relies on TXT, place(), auPeak().
 
-// ---------- palette: 24 colours, one letter each (a game may swap up to ~6 hues) ----------
-const PAL = {
-  k: "#2b1b17", n: "#262b52", b: "#3d5a98", s: "#8db7dc", p: "#d4e6ea", w: "#fbf6ea", m: "#e2d3b6", c: "#c7b48e",
-  r: "#d6402b", R: "#8a2232", h: "#f07a50", f: "#f1c597", F: "#c98b5e", o: "#dba268", O: "#a5653a", D: "#6a3b22",
-  y: "#ecc659", Y: "#b4832d", g: "#7d8a45", G: "#46502c", l: "#b9b46c", a: "#ef8834", e: "#87838e", q: "#f6e2a6"
+// ---------- palettes: one table per style, same names (the only hex colours in the script) ----------
+const PALS = {
+  B: { // 「墨と和紙」 (default): a bright evening printed on washi
+    ink: "#1c1a24", paper: "#f6eedc", paperD: "#dccaa5", grey: "#b3aa9c", greyD: "#6f6862",
+    tag: "#e3c088", tagL: "#f3dfb0", tagD: "#b28a55", tagG: "#cca46b", plank: "#664633", plankL: "#8a644a", plankD: "#3d281d",
+    pane: "#f4e9d0", paneL: "#dbc8a2", paneT: "#1c1a24", paneS: "#a8301f",
+    red: "#dc4128", redD: "#9a2820", redL: "#f08a6a", gold: "#e9b740", goldD: "#a6772a", goldL: "#f8df93", orange: "#e8729a", indigo: "#2c4f8f",
+    sky0: "#5b8ccc", sky1: "#73a0d6", sky2: "#93b8e0", sky3: "#bdd3e8", mist: "#f2e8d2", far: "#9fb0cf", mid: "#203c6e",
+    ground: "#b6aa90", groundL: "#d0c6ab", poolA: "#a9825d", poolB: "#c49b6f", lit: "#f9d27e", warm: "#2d6741", shadeK: "#1b1530", hlK: "#fff8e6",
+    pine: "#4b8b55"
+  },
+  A: { // 「つやつや細工」: a dusk in real materials (lacquer, brass, glaze) under one light
+    ink: "#21161d", paper: "#f7ecd4", paperD: "#d8c49e", grey: "#bdb4aa", greyD: "#6c6470",
+    tag: "#dcb47a", tagL: "#f4dcab", tagD: "#a77a46", tagG: "#c39a62", plank: "#4b3027", plankL: "#704c3b", plankD: "#2b1b1a",
+    pane: "#1c1418", paneL: "#35262c", paneT: "#f7ecd4", paneS: "#fde3a0",
+    red: "#d03a2c", redD: "#8b1e1d", redL: "#f08466", gold: "#e4ae3e", goldD: "#a0691c", goldL: "#fde3a0", orange: "#f28b2e", indigo: "#2b3b7a",
+    sky0: "#1d1c40", sky1: "#3a2c62", sky2: "#7a4470", sky3: "#e08a5a", mist: "#b4607a", far: "#4f3768", mid: "#2f2549",
+    ground: "#4a3030", groundL: "#6a4639", poolA: "#6e4a3a", poolB: "#98694a", lit: "#e8a65a", warm: "#ffb45e", shadeK: "#231a3c", hlK: "#fff8e8",
+    pine: "#3f7a4a"
+  }
 };
 
 // ---------- small helpers ----------
-const fl = Math.floor;
+const TAU = Math.PI * 2, fl = Math.floor;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
 const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
-const newCanvas = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+const easeBack = x => { x = clamp(x, 0, 1) - 1; return 1 + 2.7 * x * x * x + 1.7 * x * x; };   // overshoots about 10 %
+const wob = (k, f, d) => k < 0 || k > 1 ? 0 : Math.exp(-k * d) * Math.cos(k * f);           // damped wobble 1 -> 0
+const cnv = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
 // seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
 function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
 
-// ---------- storage: one JSON record under "<prefix>save"; never throws, keeps working in memory when blocked ----------
+// ---------- storage: one JSON record under "<prefix>save"; never throws, works in memory when blocked ----------
 function makeStore(prefix) {
   const KEY = prefix + "save"; let data = {};
   try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
@@ -84,252 +99,371 @@ function makeStore(prefix) {
   };
 }
 
-// ---------- pixel buffer: one small canvas, integer upscale, never stretched ----------
-const PX = { B: newCanvas(1, 1), K: 1, LW: 1, LH: 1, dpr: 1, TOP: 0, cx0: 0, cy0: 0 };
-let g = PX.B.getContext("2d");
-// Fit a cw x ch core scene at the largest integer scale; extra space shows more world around it.
-// Landscape screens may crop `tops` rows of sky when that buys a bigger scale and okTop(sideBay) agrees.
-function pixResize(cv, cssW, cssH, cw, ch, tops, okTop) {
-  const dpr = PX.dpr = Math.min(2, window.devicePixelRatio || 1);
-  const devW = Math.round(cssW * dpr), devH = Math.round(cssH * dpr);
-  let best = null;
-  for (const top of devW > devH * 1.15 ? tops : [0]) {
-    const k = Math.max(1, fl(Math.min(devW / cw, devH / (ch - top))));
-    if (top && okTop && !okTop(fl((Math.ceil(devW / k) - cw) / 2))) continue;
-    if (!best || k > best.k) best = { k, top };
-  }
-  PX.K = best.k; PX.TOP = best.top; PX.LW = Math.ceil(devW / PX.K); PX.LH = Math.ceil(devH / PX.K);
-  PX.B.width = PX.LW; PX.B.height = PX.LH; g = PX.B.getContext("2d"); g.imageSmoothingEnabled = false;
-  cv.width = PX.LW * PX.K; cv.height = PX.LH * PX.K;
-  PX.cx0 = fl((PX.LW - cw) / 2); PX.cy0 = fl((PX.LH - (ch - PX.TOP)) * 0.6) - PX.TOP;
-  const w = PX.LW * PX.K / dpr, h = PX.LH * PX.K / dpr;
-  return { w, h, left: fl((cssW - w) / 2), top: fl((cssH - h) / 2) };
+// ---------- styles: how ink, fills, shade and light look; ST and PAL are the active style ----------
+const SANS = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,"Noto Sans JP","Noto Sans CJK JP",system-ui,sans-serif';
+const SERIF = '"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP","Noto Serif CJK JP",IPAPMincho,serif';
+let PAL = PALS.B, ST = null, MONO = false;
+// palette name -> colour. Under MONO (bake(..., mono)) colours print as the inactive greys and the ink stays ink:
+// a locked or spent thing keeps its full outline and opacity, it never fades.
+function C(c) {
+  const v = PAL[c] || c; if (!MONO || v === PAL.ink) return v;
+  const n = parseInt(v.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255;
+  return l > 0.72 ? PAL.paperD : l > 0.55 ? PAL.grey : PAL.greyD;
 }
-// one drawImage per frame; zoom = { x, y, s } is a short camera punch toward buffer point (x, y)
-function pixBlit(ctx, zoom) {
-  const K = PX.K, W = PX.LW * K, H = PX.LH * K;
-  TXT.last = TXT.seen; TXT.seen = []; // the strings of the frame just drawn (window.__game.texts())
-  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
-  if (!zoom || zoom.s <= 1.001) { ctx.drawImage(PX.B, 0, 0, W, H); return; }
-  ctx.drawImage(PX.B, Math.round(zoom.x * K * (1 - zoom.s)), Math.round(zoom.y * K * (1 - zoom.s)), Math.round(W * zoom.s), Math.round(H * zoom.s));
-}
-// place a transparent DOM hit area over something drawn at buffer rect (x, y, w, h)
-function place(el, x, y, w, h) {
-  const u = PX.K / PX.dpr;
-  el.style.left = x * u + "px"; el.style.top = y * u + "px"; el.style.width = w * u + "px"; el.style.height = h * u + "px";
-}
-
-// ---------- primitives: integer rectangles and spans from the palette ----------
-function R(x, y, w, h, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
-function P(x, y, c) { g.fillStyle = PAL[c]; g.fillRect(fl(x), fl(y), 1, 1); }
-function line(x0, y0, x1, y1, c, t) { // Bresenham with a square brush of t px
-  t = t || 1; x0 = fl(x0); y0 = fl(y0); x1 = fl(x1); y1 = fl(y1);
-  const o = t >> 1, dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-  let e = dx + dy; g.fillStyle = PAL[c];
-  for (let i = 0; i < 400; i++) {
-    g.fillRect(x0 - o, y0 - o, t, t);
-    if (x0 === x1 && y0 === y1) break;
-    const e2 = 2 * e;
-    if (e2 >= dy) { e += dy; x0 += sx; }
-    if (e2 <= dx) { e += dx; y0 += sy; }
-  }
-}
-const hw = (rx, ry, dy) => Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / (ry + 0.5)) ** 2)));
-// filled ellipse / ring from horizontal spans; part: 0 all, -1 top half, 1 bottom half
-function ell(cx, cy, rx, ry, c, part) {
-  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
-  for (let dy = -ry; dy <= ry; dy++) { if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue; const w = hw(rx, ry, dy); g.fillRect(cx - w, cy + dy, 2 * w + 1, 1); }
-}
-function ring(cx, cy, rxo, ryo, rxi, ryi, c, part) {
-  cx = fl(cx); cy = fl(cy); g.fillStyle = PAL[c];
-  for (let dy = -ryo; dy <= ryo; dy++) {
-    if ((part < 0 && dy > 0) || (part > 0 && dy < 0)) continue;
-    const wo = hw(rxo, ryo, dy);
-    if (Math.abs(dy) > ryi) { g.fillRect(cx - wo, cy + dy, 2 * wo + 1, 1); continue; }
-    const wi = hw(rxi, ryi, dy);
-    g.fillRect(cx - wo, cy + dy, wo - wi, 1); g.fillRect(cx + wi + 1, cy + dy, wo - wi, 1);
-  }
-}
-// scanline polygon fill; c may be a function (y) -> palette letter or pattern for per-row cel shading
-function poly(pts, c) {
-  let y0 = 1e9, y1 = -1e9;
-  for (const p of pts) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
-  for (let y = fl(y0); y <= Math.ceil(y1); y++) {
-    const sy = y + 0.5, xs = [];
-    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) xs.push(a.x + (sy - a.y) / (b.y - a.y) * (b.x - a.x)); }
-    xs.sort((a, b) => a - b);
-    for (let j = 0; j + 1 < xs.length; j += 2) {
-      const xa = Math.round(xs[j]), xb = Math.round(xs[j + 1]);
-      if (xb > xa) { const v = typeof c === "function" ? c(y) : c; g.fillStyle = typeof v === "string" ? PAL[v] : v; g.fillRect(xa, y, xb - xa, 1); }
-    }
-  }
-}
-// ordered dithering: 4x4 Bayer tile of two palette colours (null = transparent), level 0..16 = share of b
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], patCache = {};
-function pat(a, b, lv) {
-  const key = a + b + lv;
-  if (!patCache[key]) {
-    const t = newCanvas(4, 4), x = t.getContext("2d");
-    for (let i = 0; i < 16; i++) { const col = BAYER[i] < lv ? b : a; if (col) { x.fillStyle = PAL[col]; x.fillRect(i % 4, i >> 2, 1, 1); } }
-    patCache[key] = g.createPattern(t, "repeat");
-  }
-  return patCache[key];
-}
-function D(x, y, w, h, a, b, lv) { g.fillStyle = pat(a, b, lv); g.fillRect(fl(x), fl(y), fl(w), fl(h)); }
-function band(x, y, w, h, a, b) { for (let i = 0; i < h; i++) D(x, y + i, w, 1, a, b, Math.round((i + 0.5) / h * 16)); }
-
-// ---------- sprites: char maps ("..kffk..", one palette letter per pixel) baked once into canvases ----------
-function mk(rows, swap) {
-  const c = newCanvas(Math.max(...rows.map(r => r.length)), rows.length), x = c.getContext("2d");
-  rows.forEach((r, y) => { for (let i = 0; i < r.length; i++) { let ch = r[i]; if (swap && swap[ch]) ch = swap[ch]; if (ch !== "." && PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, y, 1, 1); } } });
-  return c;
-}
-function spr(c, x, y, flip, sx, sy) {
-  sx = sx || 1; sy = sy || sx;
-  const w = c.width * sx, h = c.height * sy;
-  if (!flip) { g.drawImage(c, fl(x), fl(y), w, h); return; }
-  g.save(); g.translate(fl(x) + w, fl(y)); g.scale(-1, 1); g.drawImage(c, 0, 0, w, h); g.restore();
-}
-function outline(src, col) { // 1 px border (8 neighbours) in one colour
-  const c = newCanvas(src.width + 2, src.height + 2), x = c.getContext("2d"), m = newCanvas(src.width, src.height), mx = m.getContext("2d");
-  mx.drawImage(src, 0, 0); mx.globalCompositeOperation = "source-in"; mx.fillStyle = PAL[col]; mx.fillRect(0, 0, m.width, m.height);
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) x.drawImage(m, i, j);
-  x.drawImage(src, 1, 1);
-  return c;
-}
-
-// ---------- type: 3x5 bitmap font (Latin, digits) and crisp system text (Japanese, >= 12 buffer px) ----------
-// each glyph: width digit, then one base-32 digit per row (bit = pixel, MSB left); a 6th row is a descender
-const GL = {
-  "0": "375557", "1": "326227", "2": "371747", "3": "371317", "4": "355711", "5": "374717", "6": "374757", "7": "371222", "8": "375757", "9": "375717",
-  A: "325755", B: "365656", C: "334443", D: "365556", E: "374647", F: "374644", G: "334553", H: "355755", I: "372227", J: "311152",
-  K: "355655", L: "344447", M: "5hrlhh", N: "49db99", O: "325552", P: "365644", Q: "325563", R: "365655", S: "334216", T: "372222",
-  U: "355557", V: "355552", W: "5hhlla", X: "355255", Y: "355222", Z: "371247",
-  a: "303553", b: "346556", c: "303443", d: "313553", e: "303563", f: "312722", g: "3035316", h: "346555", i: "110111", j: "2101112",
-  k: "345665", l: "222221", m: "50qlll", n: "306555", o: "302552", p: "3065644", q: "3035311", r: "305644", s: "303616", t: "327221",
-  u: "305553", v: "305552", w: "50hlla", x: "305225", y: "3055316", z: "307127",
-  " ": "200000", "!": "111101", "?": "361202", ".": "100001", ",": "100011", ":": "101010", "/": "311244", "-": "300700", "+": "302720",
-  "×": "305250", "=": "307070", "'": "111000", "~": "405a00", "♩": "311176", "(": "212221", ")": "221112", ">": "342124"
+function rgba(c, a) { const n = parseInt(C(c).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
+const shade = (x, p, c, ox, oy) => celShade(x, p, C(c), ox, oy);
+const STYLES = {
+  B: { id: "B", lit: false, grain: true, lw: 1.8, ui: SERIF, title: SERIF, shade, light() {},
+    // flat colour laid a little off the key block, like a hand-registered woodblock (u: units per logical px)
+    fill(x, p, c, rule, u) { u = u || 1; x.save(); x.translate(0.6 * u, 0.45 * u); x.fillStyle = C(c); x.fill(p, rule || "nonzero"); x.restore(); },
+    // brush ink: a thin stroke, then a heavier one pressed toward the lower right
+    edge(x, p, w) { w = w || this.lw; x.save(); x.lineJoin = x.lineCap = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w * 0.58; x.stroke(p); x.translate(w * 0.3, w * 0.4); x.lineWidth = w * 0.7; x.stroke(p); x.restore(); },
+    line(x, p, w, c) { x.save(); x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w * 0.75; x.stroke(p); x.translate(w * 0.18, w * 0.24); x.lineWidth = w * 0.6; x.stroke(p); x.restore(); } },
+  A: { id: "A", lit: true, grain: false, lw: 1.3, ui: SANS, title: SERIF, shade, // one fixed light (upper left), one crisp highlight
+    fill(x, p, c, rule) { x.fillStyle = C(c); x.fill(p, rule || "nonzero"); },
+    edge(x, p, w) { x.lineJoin = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w || this.lw; x.stroke(p); },
+    line(x, p, w, c) { x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w; x.stroke(p); },
+    light(x, p, c, ox, oy, w, mx, my, mr) { glint(x, p, C(c), ox, oy, w, mx, my, mr); } }
 };
-// TXT: every string drawn this frame and the smallest text size drawn so far, in buffer px of font size
-// (a 5 px Latin cap reads like a 7 px font). tools/qa.mjs turns it into CSS px with view().K / view().dpr.
-const TXT = { min: Infinity, seen: [], last: [] };
-function noteText(str, em) { if (em < TXT.min) TXT.min = em; if (TXT.seen.length < 300) TXT.seen.push(String(str)); }
-const FONT = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",Meiryo,system-ui,sans-serif';
-const isLatin = s => [...s].every(ch => GL[ch]);
-const tcache = new Map();
-function cached(key, make) { let c = tcache.get(key); if (!c) { if (tcache.size > 600) tcache.clear(); c = make(); tcache.set(key, c); } return c; }
-function bitmapText(str, col) {
-  const gl = [...str].map(ch => GL[ch]); let w = -1;
-  gl.forEach(q => { w += +q[0] + 1; });
-  const c = newCanvas(w, 6), x = c.getContext("2d"); x.fillStyle = PAL[col];
-  let px = 0;
-  gl.forEach(q => { const gw = +q[0]; for (let r = 1; r < q.length; r++) { const bits = parseInt(q[r], 32); for (let i = 0; i < gw; i++) if (bits & (1 << (gw - 1 - i))) x.fillRect(px + i, r - 1, 1, 1); } px += gw + 1; });
-  return c;
-}
-const tcv = newCanvas(8, 8), tctx = tcv.getContext("2d", { willReadFrequently: true });
-function crispText(str, px, col) { // never below 12 buffer px: smaller kanji turn to mush
-  px = Math.max(12, px);
-  const thr = px <= 12 ? 120 : 100, font = `${px <= 12 ? 700 : 800} ${px}px ${FONT}`;
-  tctx.font = font;
-  const w = Math.ceil(tctx.measureText(str).width) + 2, h = Math.ceil(px * 1.4) + 2;
-  tcv.width = w; tcv.height = h;
-  tctx.font = font; tctx.textBaseline = "middle"; tctx.fillStyle = "#000"; tctx.fillText(str, 1, Math.round(h / 2));
-  const d = tctx.getImageData(0, 0, w, h).data;
-  let top = h, bot = -1;
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) { top = Math.min(top, j); bot = j; }
-  if (bot < 0) return newCanvas(1, 1);
-  const c = newCanvas(w, bot - top + 1), x = c.getContext("2d"); x.fillStyle = PAL[col];
-  for (let j = top; j <= bot; j++) for (let i = 0; i < w; i++) if (d[(j * w + i) * 4 + 3] >= thr) x.fillRect(i, j - top, 1, 1);
-  return c;
-}
-// o: { c colour, o outline colour, sc integer scale for Latin (baked before the 1 px outline), px size for other text, a "l"|"c"|"r" }
-function textCanvas(str, o) {
-  const col = o.c || "k", ol = o.o || "", lat = isLatin(str), sc = lat ? (o.sc || 1) : 1, px = Math.max(12, o.px || 12);
-  return cached(str + "|" + col + ol + (lat ? "x" + sc : px), () => {
-    let c = lat ? bitmapText(str, col) : crispText(str, px, col);
-    if (sc > 1) { const s = newCanvas(c.width * sc, c.height * sc), x = s.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, s.width, s.height); c = s; }
-    return ol ? outline(c, ol) : c;
-  });
-}
-function txt(str, x, y, o) {
-  o = o || {}; let maxW = 0;
-  String(str).split("\n").forEach((ln, i) => {
-    const c = textCanvas(ln, o), w = c.width, lx = o.a === "l" ? x : o.a === "r" ? x - w : x - fl(w / 2);
-    noteText(ln, isLatin(ln) ? 5 * (o.sc || 1) / 0.7 : Math.max(12, o.px || 12));
-    spr(c, lx, y + i * (o.lh || (c.height + 2))); maxW = Math.max(maxW, w);
-  });
-  return maxW;
-}
-const textW = (str, o) => textCanvas(str, o || {}).width;
-// big chunky Latin: glyphs scaled by sx/sy with a 1 px (unscaled) outline, optional second ring ol2
-function bigText(str, x, y, sc, fill, ol, sx, sy, ol2) {
-  sx = sx || sc; sy = sy || sc;
-  const f = textCanvas(str, { c: fill }), w = f.width * sx, x0 = fl(x - w / 2);
-  noteText(str, (isLatin(str) ? 5 / 0.7 : 12) * Math.min(sx, sy));
-  if (ol2) { const o = textCanvas(str, { c: ol2 }); for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const m = Math.abs(dx) + Math.abs(dy); if (m > 1 && m < 4) spr(o, x0 + dx, y + dy, false, sx, sy); } }
-  if (ol) { const o = textCanvas(str, { c: ol }); for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) spr(o, x0 + dx, y + dy, false, sx, sy); }
-  spr(f, x0, y, false, sx, sy);
-  return w;
-}
-// signature words from hand-placed glyph grids ("#" = ink). They are pictures, so call noteText(word, 12)
-// when you draw one; the tools read the demo title label from TXT.
-// kanaArt: bold 2 px strokes, ring outline(s), glyph cut points for stamping the word in letter by letter.
-function kanaArt(table, str, fill, ol, ol2) {
-  return cached("K" + str + fill + ol + (ol2 || ""), () => {
-    const gl = [...str].map(ch => table[ch]), gw = q => Math.max(...q.map(r => r.length));
-    const c = newCanvas(gl.reduce((a, q) => a + gw(q) + 1, 0), 15), x = c.getContext("2d"), cuts = [];
-    x.fillStyle = PAL[fill]; let px = 0;
-    gl.forEach((q, i) => {
-      const jy = [1, 0, 2, 0, 1, 2][i % 6]; // hand-lettered bounce: each glyph sits at its own height
-      q.forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j, y + jy, 1, 1); });
-      px += gw(q) + 1; cuts.push(px + 1);
-    });
-    const o = ol2 ? outline(outline(c, ol), ol2) : outline(c, ol); o.cuts = ol2 ? cuts.map(v => v + 1) : cuts;
-    return o;
-  });
-}
-// inkArt: 1 px strokes inked twice 1 px apart (flat brush) over a carved shadow; draw it at x2
-function inkArt(table, str, jys, ink, shade) {
-  return cached("I" + str + (ink || "k") + (shade || "D"), () => {
-    const chars = [...str], gw = ch => Math.max(...table[ch].map(r => r.length)), H = Math.max(...chars.map(ch => table[ch].length)) + 3;
-    const c = newCanvas(chars.reduce((a, ch) => a + gw(ch) + 1, 0) + 2, H), x = c.getContext("2d");
-    const pass = (col, ox, oy) => { x.fillStyle = PAL[col]; let px = 0; chars.forEach((ch, i) => { const jy = jys ? jys[i % jys.length] : 0; table[ch].forEach((row, y) => { for (let j = 0; j < row.length; j++) if (row[j] === "#") x.fillRect(px + j + ox, y + jy + oy, 1, 1); }); px += gw(ch) + 1; }); };
-    pass(shade || "D", 1, 1); pass(shade || "D", 2, 1); pass(ink || "k", 0, 0); pass(ink || "k", 1, 0);
-    return c;
-  });
-}
+function useStyle(id) { ST = STYLES[id] || STYLES.B; PAL = PALS[ST.id]; SPR.clear(); }   // call before the first resize
 
-// ---------- UI pieces: wooden tags, noren windows, small wood icons ----------
-function nr(x, y, w, h, c, n) { R(x + n, y, w - 2 * n, h, c); R(x, y + n, w, h - 2 * n, c); if (n > 1) R(x + 1, y + 1, w - 2, h - 2, c); }
-function tag(x, y, w, h, label, big) { // cut corners on the left, a string hole, an uneven right edge
-  for (let j = 0; j < h; j++) {
-    const cut = Math.max(0, 3 - Math.min(j, h - 1 - j)), rj = (j % 5 === 2) ? 1 : 0;
-    R(x + cut, y + j, w - cut - rj, 1, "k");
-    if (j > 0 && j < h - 1) R(x + cut + 1, y + j, w - cut - rj - 2, 1, j === 1 ? "q" : j >= h - 3 ? "O" : "o");
+// ---------- screen layout: a cw x ch logical scene drawn at device resolution ----------
+// K = device px per logical px (one uniform scale, devicePixelRatio capped at 2). Space around the scene shows more
+// world, never bars; (L.x0, L.y0) is the scene's (0, 0). L.wide: the side areas can take the HUD while the play area
+// keeps the full height. L.u scales UI and text up on small landscape screens (TEXT_MIN, bar 1.4.4).
+const TEXT_MIN = 14;
+const L = { K: 1, dpr: 1, kc: 1, W: 360, H: 640, x0: 0, y0: 0, u: 1, wide: false };
+function artResize(cv, cssW, cssH, cw, ch, sideMin) {
+  const dpr = L.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dw = Math.max(2, Math.round(cssW * dpr)), dh = Math.max(2, Math.round(cssH * dpr)), K = Math.min(dw / cw, dh / ch);
+  if (K !== L.K) SPR.clear();
+  cv.width = dw; cv.height = dh;
+  Object.assign(L, { K, kc: K / dpr, W: dw / K, H: dh / K });
+  L.x0 = (L.W - cw) / 2; L.y0 = (L.H - ch) * 0.6;   // extra height goes mostly to the sky
+  L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1);
+  L.wide = L.x0 >= (sideMin || 200) * L.u;
+}
+// scene coords -> device px, with a shake (sx, sy in logical px) and a camera zoom z = { x, y, s } around a scene point
+function view(x, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  x.setTransform(K * s, 0, 0, K * s, K * (fx * (1 - s) + s * (L.x0 + (sx || 0))), K * (fy * (1 - s) + s * (L.y0 + (sy || 0))));
+}
+// a cached layer: the whole screen plus a margin m for the shake; fn(x, X0, Y0, W, H) fills that rect in scene coords
+function layer(m, fn) {
+  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = c.getContext("2d");
+  x.setTransform(K, 0, 0, K, K * (m + L.x0), K * (m + L.y0));
+  c.txt = baking(() => fn(x, -L.x0 - m, -L.y0 - m, L.W + 2 * m, L.H + 2 * m));
+  c.m = m; return c;
+}
+function putLayer(x, c, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  let ox = K * (fx * (1 - s) + s * ((sx || 0) - c.m)), oy = K * (fy * (1 - s) + s * ((sy || 0) - c.m));
+  if (s === 1) { ox = Math.round(ox); oy = Math.round(oy); }   // whole device px: a plain copy without filtering
+  x.setTransform(s, 0, 0, s, ox, oy); x.drawImage(c, 0, 0); carry(x, c.txt, s);
+}
+// a transparent DOM hit area over something drawn at scene rect (x, y, w, h)
+function place(el, x, y, w, h) { const k = L.kc; el.style.left = (x + L.x0) * k + "px"; el.style.top = (y + L.y0) * k + "px"; el.style.width = w * k + "px"; el.style.height = h * k + "px"; }
+// draw fn in a frame moved to (X, Y), scaled by s and turned by a
+function at(x, X, Y, s, a, fn) { x.save(); x.translate(X, Y); if (s !== 1) x.scale(s, s); if (a) x.rotate(a); fn(); x.restore(); }
+
+// ---------- paths: shapes drawn by hand with curves, never compass-made clip art ----------
+const P2 = () => new Path2D();
+const mtx = (dx, dy) => new DOMMatrix([1, 0, 0, 1, dx, dy]);
+function pEll(cx, cy, rx, ry, rot) { const p = P2(); p.ellipse(cx, cy, rx, ry, rot || 0, 0, TAU); return p; }
+function pRR(x, y, w, h, r) {
+  const p = P2(); r = Math.min(r, w / 2, h / 2);
+  p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r); p.closePath();
+  return p;
+}
+function pPoly(pts, open) { const p = P2(); p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]); if (!open) p.closePath(); return p; }
+const pLine = (x0, y0, x1, y1) => pPoly([[x0, y0], [x1, y1]], true);
+const pCut = (x, y, w, h, c) => pPoly([[x + c, y], [x + w - c, y], [x + w, y + c], [x + w, y + h - c], [x + w - c, y + h], [x + c, y + h], [x, y + h - c], [x, y + c]]);
+// a smooth curve through the midpoints of the points: reads as drawn by hand
+function pSmooth(pts, open) {
+  const p = P2(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (open) { p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n - 1; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[i + 1])); p.lineTo(pts[n - 1][0], pts[n - 1][1]); return p; }
+  p.moveTo(...mid(pts[n - 1], pts[0]));
+  for (let i = 0; i < n; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[(i + 1) % n]));
+  p.closePath(); return p;
+}
+function pPolar(cx, cy, rx, ry, fn, n) { const pts = []; for (let i = 0; i < n; i++) { const t = i / n * TAU, f = fn(t); pts.push([cx + Math.cos(t) * rx * f, cy + Math.sin(t) * ry * f]); } return pSmooth(pts); }
+// a disc whose edge wanders a little, like something cut or turned by hand
+function pBlob(cx, cy, rx, ry, amp, seed) { const r = seeded(seed), k1 = r() * TAU, k2 = r() * TAU, k3 = r() * TAU; return pPolar(cx, cy, rx, ry, t => 1 + amp * (Math.sin(2 * t + k1) * 0.5 + Math.sin(3 * t + k2) * 0.3 + Math.sin(5 * t + k3) * 0.2), 40); }
+function pStar(cx, cy, ro, ri, n, rot) { const pts = []; for (let i = 0; i < 2 * n; i++) { const a = (rot || 0) + i * Math.PI / n, r = i % 2 ? ri : ro; pts.push([cx + Math.sin(a) * r, cy - Math.cos(a) * r]); } return pPoly(pts); }
+// crescent: half a circle back along a narrower half ellipse (k: 0 thin .. 1 half moon), turned by rot
+function pMoon(cx, cy, r, k, rot) { const p = P2(); p.ellipse(cx, cy, r, r, rot, -Math.PI / 2, Math.PI / 2); p.ellipse(cx, cy, r * k, r, rot, Math.PI / 2, -Math.PI / 2, true); p.closePath(); return p; }
+function chaikin(pts, k) {
+  for (let j = 0; j < k; j++) {
+    const o = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+    o.push(pts[pts.length - 1]); pts = o;
   }
-  R(x + 4, y + fl(h / 2) - 1, 2, 2, "D");
-  const tc = textCanvas(label, { c: "k", px: big ? 14 : 12, sc: 2 }); noteText(label, isLatin(label) ? 10 / 0.7 : big ? 14 : 12);
-  spr(tc, fl(x + 4 + (w - 4 - tc.width) / 2), fl(y + (h - tc.height) / 2));
+  return pts;
 }
-function win(x, y, w, h) { // indigo window: notched corners, ink / cream / ink border, dithered cloth
-  nr(x, y, w, h, "k", 2); nr(x + 1, y + 1, w - 2, h - 2, "q", 2); nr(x + 2, y + 2, w - 4, h - 4, "k", 1);
-  R(x + 3, y + 3, w - 6, h - 6, "n"); D(x + 3, y + 3, w - 6, h - 6, "n", "b", 1);
-}
-function icon(x, y, w, h, kind) { // low-contrast dark-wood system icon
-  nr(x, y, w, h, "k", 1); R(x + 1, y + 1, w - 2, h - 2, "D"); R(x + 1, y + h - 2, w - 2, 1, "k");
-  const cx = x + fl(w / 2), cy = y + fl(h / 2) - 1;
-  if (kind === "pause") { R(cx - 3, cy - 3, 2, 7, "o"); R(cx + 1, cy - 3, 2, 7, "o"); }
-  else if (kind === "sound" || kind === "mute") {
-    R(cx - 5, cy - 1, 2, 3, "o"); R(cx - 3, cy - 2, 1, 5, "o"); R(cx - 2, cy - 3, 1, 7, "o");
-    if (kind === "sound") { R(cx, cy - 1, 1, 3, "o"); R(cx + 2, cy - 2, 1, 5, "o"); R(cx + 4, cy - 3, 1, 7, "o"); }
-    else for (let i = 0; i < 5; i++) { P(cx + i, cy - 2 + i, "h"); P(cx + 4 - i, cy - 2 + i, "h"); }
-  } else { const t = textCanvas(kind, { c: "o", px: 12, sc: 2 }); noteText(kind, isLatin(kind) ? 10 / 0.7 : 12); spr(t, cx - fl(t.width / 2), cy - fl(t.height / 2) + 1); }
-}
-const POINTER = [".kkkk", "kwwwwkkkkkk", "kwwwwwwwwwwk", "kwwwwkkkkkk", "kwwwwwwk", "kwwwwkk", "kwwwwwwk", ".kkkkkk"];
-const FINGER = ["..kk.....", ".kwwk....", ".kwwk....", ".kwwkkk..", ".kwwkwwkk", "kkwwkwwkwk", "kwkwwwwwwk", "kwwwwwwwwk", ".kwwwwwwk.", "..kwwwwk..", "...kkkk..."];
 
-// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch, particle pool ----------
+// ---------- drawing helpers ----------
+// one inked shape: flat colour, an optional shade tone sc (the shape moved ox, oy away from the light), the light
+// lt = [colour, ox, oy, w, mx, my, mr] (style A only, see glint), brush ink of width w
+function shape(x, p, c, w, sc, ox, oy, lt) { ST.fill(x, p, c); if (sc) ST.shade(x, p, sc, ox, oy); if (lt) ST.light(x, p, ...lt); ST.edge(x, p, w); return p; }
+// one flat shade tone: the part of a shape not covered by itself moved toward the light
+function celShade(x, path, col, ox, oy) {
+  x.save(); x.clip(path);
+  const p = P2(); p.rect(-4e3, -4e3, 8e3, 8e3); p.addPath(path, mtx(-ox, -oy));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// one crisp highlight (style A): a band just inside the lit edge, kept near the lit corner by a mask circle
+function glint(x, path, col, ox, oy, w, mx, my, mr) {
+  x.save(); x.clip(path); x.beginPath(); x.arc(mx, my, mr, 0, TAU); x.clip();
+  const p = P2(); p.addPath(path, mtx(ox, oy)); p.addPath(path, mtx(ox + w, oy + w * 1.2));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// material sheen (style A only): the one gradient in the kit, only while baking a sprite (metal, lacquer, glaze)
+function sheen(x, p, kind, x0, y0, x1, y1) {
+  if (!ST.lit) return;
+  const s = kind === "metal" ? [0, rgba("hlK", 0.42), 0.3, rgba("hlK", 0), 0.5, rgba("goldD", 0.22), 0.6, rgba("goldL", 0.24), 0.74, rgba("goldD", 0), 1, rgba("plankD", 0.3)]
+    : kind === "lacquer" ? [0, rgba("hlK", 0.16), 0.36, rgba("hlK", 0), 0.7, rgba("shadeK", 0.16), 1, rgba("shadeK", 0.26)]
+    : [0, rgba("hlK", 0.2), 0.45, rgba("hlK", 0), 1, rgba("shadeK", 0.16)];
+  const g = x.createLinearGradient(x0, y0, x1, y1);
+  for (let i = 0; i < s.length; i += 2) g.addColorStop(s[i], s[i + 1]);
+  x.save(); if (p) x.clip(p); x.fillStyle = g; x.fillRect(Math.min(x0, x1) - 99, Math.min(y0, y1) - 99, Math.abs(x1 - x0) + 198, Math.abs(y1 - y0) + 198); x.restore();
+}
+// tapered brush stroke along points: thin at both ends, full in the middle
+function brush(x, pts, w, col) {
+  const s = chaikin(pts, 3), n = s.length, A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = s[Math.max(0, i - 1)], b = s[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const k = w * 0.5 * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * i / (n - 1))), 0.6) / d, dx = (b[0] - a[0]) * k, dy = (b[1] - a[1]) * k;
+    A.push([s[i][0] - dy, s[i][1] + dx]); B.push([s[i][0] + dy, s[i][1] - dx]);
+  }
+  x.fillStyle = C(col || "ink"); x.fill(pPoly(A.concat(B.reverse())));
+}
+// inked cord: a dark line with a coloured core (cords, stems, rope ends)
+function cordLine(x, path, w, col, iw) {
+  x.lineCap = x.lineJoin = "round";
+  x.strokeStyle = C("ink"); x.lineWidth = w + 2 * (iw == null ? 0.5 : iw); x.stroke(path);
+  x.strokeStyle = C(col); x.lineWidth = w; x.stroke(path);
+}
+// cords from points straight up to a beam at y = top: how boards, tags and lanterns hang in the world
+function cords(x, pts, top, col) { for (const [px, py] of pts) cordLine(x, pLine(px, top, px, py), 1.5, col || "red"); }
+// twisted rope along a polyline: base strand, ink edge, slanted strands of the second colour
+function rope(x, pts, w, c1, c2, iw) {
+  cordLine(x, pSmooth(pts, true), w, c1, iw);
+  const s = chaikin(pts, 3), h = w * 0.42; let acc = 0;
+  x.strokeStyle = C(c2); x.lineWidth = h; x.lineCap = "butt";
+  for (let i = 1; i < s.length; i++) {
+    const a = s[i - 1], b = s[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]); acc += d;
+    if (acc < w * 1.15 || !d) continue;
+    acc = 0; const dx = (b[0] - a[0]) / d * h, dy = (b[1] - a[1]) / d * h;
+    x.beginPath(); x.moveTo(b[0] - dy - dx * 0.7, b[1] + dx - dy * 0.7); x.lineTo(b[0] + dy + dx * 0.7, b[1] - dx + dy * 0.7); x.stroke();
+  }
+}
+// flat light pool: hard-edged ellipses stepping from the ground colour to warm lit ground, all opaque palette
+// colours (an alpha wash over the ground mixes to an off-palette grey that reads as a puddle, never as light)
+function pool(x, cx, cy, rx, ry, cols) {
+  cols = cols || ["ground", "poolA", "poolB"];
+  cols.forEach((c, i) => { x.fillStyle = C(c); x.fill(pEll(cx, cy, rx * (1 - i * 0.27), ry * (1 - i * 0.27))); });
+}
+// grain lines of wood inside a clip path (vert: along a post instead of along a board)
+function grain(x, clip, X, Y, w, h, gap, col, seed, vert) {
+  const r = seeded(seed); x.save(); x.clip(clip); x.strokeStyle = C(col); x.lineWidth = 0.6;
+  if (vert) { x.translate(X + w, Y); x.rotate(Math.PI / 2); [w, h] = [h, w]; X = Y = 0; }
+  for (let i = 0; i < h / gap; i++) {
+    const y = Y + 2 + i * gap + r() * 1.4, k = r() * 6;
+    x.beginPath(); x.moveTo(X, y); x.bezierCurveTo(X + w * 0.3, y + Math.sin(k) * 1.6, X + w * 0.6, y - Math.cos(k) * 1.6, X + w, y + Math.sin(k * 2) * 1.2); x.stroke();
+  }
+  x.restore();
+}
+// wooden tag: a plank with cut corners, grain, cord holes, one shade tone (A: a lit edge) and the style's ink
+function woodTag(x, X, Y, w, h, o) {
+  o = o || {};
+  const d = o.dark, c = o.cut || 5, p = pPoly([[X + c, Y], [X + w - c * 0.7, Y + 0.5], [X + w, Y + c * 0.9], [X + w - 0.6, Y + h], [X + 1.5, Y + h - 0.6], [X, Y + c]]);
+  ST.fill(x, p, d ? "plank" : "tag"); grain(x, p, X, Y, w, h, 3.2, d ? "plankL" : "tagG", o.seed || 5);
+  ST.shade(x, p, d ? "plankD" : "tagD", 2.2, 2.6); ST.light(x, p, d ? "plankL" : "tagL", 0.9, 0.9, 1.1, X, Y, Math.max(w, h) * 0.7); ST.edge(x, p);
+  x.fillStyle = C("ink"); for (const hx of o.holes || []) x.fill(pEll(hx, Y + 5, 1.6, 1.6));
+  return p;
+}
+// bamboo pole between two points: base, flat shade side, (A) a light stripe, nodes, ink
+function bamboo(x, x0, y0, x1, y1, w, node) {
+  const len = Math.hypot(x1 - x0, y1 - y0), p = pRR(0, -w / 2, len, w, w * 0.42), bar = (c, X, Y, W, H) => { x.fillStyle = C(c); x.fillRect(X, Y, W, H); };
+  x.save(); x.translate(x0, y0); x.rotate(Math.atan2(y1 - y0, x1 - x0));
+  ST.fill(x, p, "tag"); x.save(); x.clip(p);
+  bar("tagD", 0, w * 0.16, len, w * 0.34); if (ST.lit) bar("tagL", 0, -w * 0.32, len, w * 0.14);
+  for (let s = node * 0.6; s < len - 4; s += node) { bar("tagD", s, -w / 2, 1.1, w); bar("tagL", s + 1.1, -w / 2, 0.8, w); }
+  x.restore(); ST.edge(x, p); x.restore();
+}
+// rim light on a baked canvas: the band of its silhouette facing (dx, dy) device px, in one flat colour
+function rimLight(c, col, dx, dy, a) {
+  const t = cnv(c.width, c.height), tx = t.getContext("2d"), x = c.getContext("2d");
+  tx.drawImage(c, 0, 0); tx.globalCompositeOperation = "destination-out"; tx.drawImage(c, -dx, -dy);
+  tx.globalCompositeOperation = "source-in"; tx.fillStyle = C(col); tx.fillRect(0, 0, t.width, t.height);
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = a; x.globalCompositeOperation = "source-atop"; x.drawImage(t, 0, 0); x.restore();
+}
+// washi grain (style B): laid lines, fibres and specks, laid over the finished frame in screen space (grainOver last
+// in every frame), so it stays put while things roll or shake, like the paper a picture is printed on
+function washiTex(w, h, S, seed) {
+  const c = cnv(w * S, h * S), x = c.getContext("2d"), r = seeded(seed);
+  x.scale(S, S);
+  // laid lines with uneven spacing and strength, broken into short runs, so they never read as a screen pattern
+  for (let i = r() * 3; i < w; i += 2.4 + r() * 3) { x.fillStyle = rgba("paper", 0.01 + r() * 0.025); for (let y = -r() * 30; y < h; y += 12 + r() * 36) x.fillRect(i, y, 0.6, 6 + r() * 28); }
+  x.lineCap = "round";
+  for (let i = 0; i < w * h / 260; i++) {
+    const fx = r() * w, fy = r() * h, a = r() * TAU, l = 4 + r() * 16;
+    x.strokeStyle = r() < 0.7 ? rgba("paper", 0.1) : rgba("ink", 0.09); x.lineWidth = 0.3 + r() * 0.5;
+    x.beginPath(); x.moveTo(fx, fy); x.quadraticCurveTo(fx + Math.cos(a) * l * 0.5 + (r() - 0.5) * 5, fy + Math.sin(a) * l * 0.5 + (r() - 0.5) * 5, fx + Math.cos(a) * l, fy + Math.sin(a) * l); x.stroke();
+  }
+  for (let i = 0; i < w * h / 80; i++) { const s = 0.3 + r() * 0.8; x.fillStyle = r() < 0.5 ? rgba("paper", 0.1) : rgba("ink", 0.12); x.fillRect(r() * w, r() * h, s, s); }
+  return c;
+}
+const GRAIN = {};
+function grainOver(x) {
+  if (!ST.grain) return;
+  const k = L.K.toFixed(3);
+  if (!GRAIN[k]) GRAIN[k] = x.createPattern(washiTex(256, 256, L.K, 3), "repeat");   // 256: never lines up with the 360 scene
+  x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = GRAIN[k]; x.fillRect(0, 0, x.canvas.width, x.canvas.height);
+}
+
+// ---------- sprite cache: a drawing is made once per size at device resolution, then drawn turned and scaled ----------
+const SPR = new Map();
+// Text drawn while baking (bake, lit, layer) is kept with the picture and recorded again, at its on-screen size,
+// each time the picture is drawn (carry), so QA measures a baked sign the way the player sees it.
+let BAKED = null;
+function baking(fn) { const keep = BAKED, t = BAKED = []; try { fn(); } finally { BAKED = keep; } return t.length ? t : null; }
+function carry(x, txt, k) { if (!txt) return; k = k || Math.hypot(x.getTransform().c, x.getTransform().d) / L.K; for (const t of txt) noteText(t.str, t.px * k); }
+// bake: fn draws in logical px with (0, 0) at (ox, oy) in a w x h box; mono prints it locked (greys, full ink)
+function bake(key, w, h, ox, oy, fn, mono) {
+  let b = SPR.get(key);
+  if (!b) {
+    const K = L.K, c = cnv(w * K + 2, h * K + 2), x = c.getContext("2d");
+    x.setTransform(K, 0, 0, K, 1 + ox * K, 1 + oy * K);
+    const txt = baking(() => { MONO = !!mono; try { fn(x); } finally { MONO = false; } });
+    b = { c, w: c.width / K, h: c.height / K, ox: ox + 1 / K, oy: oy + 1 / K, txt }; SPR.set(key, b);
+  }
+  return b;
+}
+function put(x, b, X, Y, a, sx, sy) {
+  if (!a && !sx) { x.drawImage(b.c, X - b.ox, Y - b.oy, b.w, b.h); carry(x, b.txt); return; }
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); if (a) x.rotate(a); x.drawImage(b.c, -b.ox, -b.oy, b.w, b.h); carry(x, b.txt); x.restore();
+}
+// Lit sprites: round things that turn while the light stays put (upper left). art(x, u) draws in a unit circle
+// (u = units per logical px). Each rotation step gets its own frame: the flat shade tone, then B a heavier ink rim
+// lower right, A the sheen, a crisp highlight and a warm bounce. MAT: [shade share, highlight share, sheen kind].
+const LIT_STEPS = 32, MAT = { wood: [0.34, 0.4, 0], paper: [0.2, 0.3, 0], lacquer: [0.4, 0.75, "lacquer"], metal: [0.42, 0.9, "metal"], glaze: [0.3, 0.75, "glaze"] };
+function lit(key, r, mat, art, mono) {
+  let s = SPR.get(key);
+  if (!s) {
+    const k = r * L.K, N = Math.ceil(2.3 * k) + 4, c = cnv(N, N), x = c.getContext("2d");
+    x.translate(N / 2, N / 2); x.scale(k, k);
+    const txt = baking(() => { MONO = !!mono; try { art(x, 1 / r); } finally { MONO = false; } });
+    s = { c, N, k, m: MAT[mat] || mat, f: [], txt }; SPR.set(key, s);
+  }
+  return s;
+}
+let TMP = null;
+function litFrame(s, ang) {
+  const N = s.N, k = s.k, m = s.m, c = cnv(N, N), x = c.getContext("2d"), H = N / 2;
+  x.translate(H, H); x.rotate(ang); x.drawImage(s.c, -H, -H); x.setTransform(1, 0, 0, 1, 0, 0);
+  if (!TMP || TMP.width < N) TMP = cnv(Math.max(N, 256), Math.max(N, 256));
+  const t = TMP.getContext("2d"), op = o => { t.globalCompositeOperation = o; };
+  const band = (ax, ay, bx, by) => { op("copy"); t.drawImage(c, ax, ay); op("destination-out"); t.drawImage(c, bx, by); op("destination-in"); t.drawImage(c, 0, 0); };
+  const paint = (col, a) => { op("source-in"); t.fillStyle = C(col); t.fillRect(0, 0, N, N); x.globalAlpha = a; x.drawImage(TMP, 0, 0, N, N, 0, 0, N, N); };
+  op("copy"); t.drawImage(c, 0, 0); op("destination-out"); t.fill(pEll(H - 0.3 * k, H - 0.36 * k, 1.06 * k, 1.06 * k));
+  x.globalCompositeOperation = "source-atop"; paint("shadeK", m[0]);
+  if (ST.lit) {
+    x.globalAlpha = 1; if (m[2]) sheen(x, null, m[2], 0, 0, N, N);
+    band(0.07 * k, 0.085 * k, 0.15 * k, 0.18 * k); op("destination-in"); t.fill(pEll(H - 0.42 * k, H - 0.5 * k, 0.64 * k, 0.64 * k)); paint("hlK", m[1]);
+    band(0, 0, -0.07 * k, -0.02 * k); op("destination-in"); t.fillRect(H + 0.1 * k, 0, N, N); paint("warm", 0.42);
+  } else { band(0, 0, -0.045 * k, -0.06 * k); paint("ink", 1); }
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; op("source-over"); t.clearRect(0, 0, TMP.width, TMP.height);
+  return c;
+}
+// draw a lit sprite at (X, Y) turned by a; sx, sy squash it in screen space (the light does not turn)
+function drawLit(x, s, X, Y, a, sx, sy) {
+  const st = TAU / LIT_STEPS, i0 = Math.round(a / st), i = ((i0 % LIT_STEPS) + LIT_STEPS) % LIT_STEPS, img = s.f[i] || (s.f[i] = litFrame(s, i * st)), D = s.N / L.K;
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); x.rotate(a - i0 * st); x.drawImage(img, -D / 2, -D / 2, D, D); carry(x, s.txt); x.restore();
+}
+
+// ---------- text: system fonts, an optional ink outline; TXT records each string and the smallest size (logical px) ----------
+const TXT = { min: Infinity, seen: [], last: [] };
+function textEnd() { TXT.last = TXT.seen; TXT.seen = []; }   // call once at the end of every drawn frame
+function noteText(str, px) { if (BAKED) BAKED.push({ str, px }); else { if (px < TXT.min) TXT.min = px; if (TXT.seen.length < 300) TXT.seen.push(str); } }
+// o: { a align, f font, w weight, ol outline colour, ow its share of size, deep: a second print down right, max: fit width }
+function text(x, str, X, Y, size, col, o) {
+  o = o || {}; str = String(str);
+  const font = s => (o.w || 800) + " " + s + "px " + (o.f || ST.ui);
+  x.font = font(size);
+  if (o.max) { const w = x.measureText(str).width; if (w > o.max) x.font = font(size *= o.max / w); }
+  const m = x.getTransform(), px = size * Math.hypot(m.c, m.d) / L.K;
+  noteText(str, px);
+  x.textAlign = o.a || "center"; x.textBaseline = "middle";
+  if (o.deep) { x.fillStyle = C(o.deep); x.fillText(str, X + size * 0.035, Y + size * 0.06); }
+  if (o.ol) { x.lineJoin = "round"; x.miterLimit = 2; x.lineWidth = size * (o.ow || 0.2); x.strokeStyle = C(o.ol); x.strokeText(str, X, Y); }
+  x.fillStyle = C(col); x.fillText(str, X, Y);
+}
+function textW(x, str, size, o) { x.font = ((o && o.w) || 800) + " " + size + "px " + ((o && o.f) || ST.ui); return x.measureText(String(str)).width; }
+
+// ---------- in-world UI (cx, y = top centre): wooden tag buttons, boards, plaques, a seal, a pointing hand ----------
+function tagBtn(x, cx, y, w, h, label, size, dark) {
+  put(x, bake("tag" + w + "x" + h + (dark ? "d" : ""), w + 4, h + 16, w / 2 + 2, 13, q => {
+    for (const hx of [-w * 0.3, w * 0.3]) cordLine(q, pLine(hx, -12, hx, 5), 1.4, "red");
+    woodTag(q, -w / 2, 0, w, h, { holes: [-w * 0.3, w * 0.3], dark, seed: w + h });
+  }), cx, y);
+  text(x, label, cx, y + h / 2 + 2, size || 20, dark ? "paper" : "ink", { deep: dark ? "plankD" : "tagD" });
+}
+// board: a dark wood frame round the style's pane (B washi, A lacquer); text on it uses paneT and paneS
+function board(x, cx, y, w, h) {
+  put(x, bake("board" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 3, q => {
+    const pn = pCut(-w / 2 + 9, 9, w - 18, h - 18, 5);
+    woodTag(q, -w / 2, 0, w, h, { dark: 1, cut: 8, seed: 21 });
+    ST.fill(q, pn, "pane"); sheen(q, pn, "lacquer", -w / 2, 0, w / 2, h);
+    if (!ST.lit) ST.line(q, pCut(-w / 2 + 15, 15, w - 30, h - 30, 3), 0.9, "paneL");
+    ST.shade(q, pn, "paneL", -2, -2.4); ST.edge(q, pn, 1.1); ST.edge(q, pCut(-w / 2, 0, w, h, 8), 1.5);
+    for (const [ax, ay, sx, sy] of [[-w / 2 + 9, 9, 1, 1], [w / 2 - 9, 9, -1, 1], [-w / 2 + 9, h - 9, 1, -1], [w / 2 - 9, h - 9, -1, -1]]) {
+      const f = pPoly([[ax, ay], [ax + 22 * sx, ay], [ax + 22 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 22 * sy], [ax, ay + 22 * sy]]);
+      ST.fill(q, f, "gold"); sheen(q, f, "metal", ax, ay, ax + 22 * sx, ay + 22 * sy); ST.shade(q, f, "goldD", 1.2, 1.4); ST.edge(q, f, 0.9);
+    }
+  }), cx, y);
+}
+// plaque: a small dark wood board for a system control (pause, sound, mute) or a short label
+function plaque(x, cx, y, w, kind, label) {
+  put(x, bake("pq" + kind + w, w + 4, 50, w / 2 + 2, 2, q => {
+    cordLine(q, pLine(0, 0, 0, 9), 1.3, "red", 0.45);
+    woodTag(q, -w / 2, 6, w, 34, { dark: 1, cut: 6, holes: [0], seed: 3 });
+    q.fillStyle = q.strokeStyle = C("tagL"); q.lineCap = "round"; q.lineWidth = 1.8;
+    if (kind === "pause") { q.fill(pRR(-6, 15, 4.4, 16, 1)); q.fill(pRR(1.6, 15, 4.4, 16, 1)); }
+    if (kind === "sound" || kind === "mute") q.fill(pPoly([[-10, 20], [-6, 20], [-1, 15], [-1, 31], [-6, 26], [-10, 26]]));
+    if (kind === "sound") for (const r of [5, 9]) { q.beginPath(); q.arc(-1, 23, r, -0.8, 0.8); q.stroke(); }
+    if (kind === "mute") { q.stroke(pLine(3, 19, 10, 27)); q.stroke(pLine(10, 19, 3, 27)); }
+  }), cx, y);
+  if (label) text(x, label, cx, y + 25, 16, "tagL", {});
+}
+// a red seal; it lands from 1.5x with a thump (age = ms since it was pressed)
+function seal(x, X, Y, label, age, size) {
+  size = size || 17;
+  const s = 1 + 0.5 * (1 - easeOut(age / 140)), w = textW(x, label, size) + size * 1.2, h = size * 1.75;
+  at(x, X, Y, s, -0.08, () => {
+    shape(x, pCut(-w / 2, -h / 2, w, h, 4), "red", 1.2, "redD", 1.5, 2);
+    x.lineWidth = 1.2; x.strokeStyle = C("paper"); x.stroke(pCut(-w / 2 + 3.5, -h / 2 + 3.5, w - 7, h - 7, 3));
+    text(x, label, 0, 1, size, "paper", {});
+  });
+}
+// a pointing hand drawn like a print (fingertip at X, Y; a = 0 points up): a tapered index finger with a nail and a
+// knuckle crease, the other fingers folded as separate lobes, the thumb, and a kimono sleeve with a stitched hem
+function hand(x, X, Y, a, s) {
+  put(x, bake("hand", 46, 62, 23, 2, q => {
+    const skin = (p, ox, oy) => shape(q, p, "paper", 1.2, "paperD", ox, oy);
+    skin(pSmooth([[-10, 35], [-18.5, 28], [-17, 21.5], [-12.5, 22], [-7, 28]]), 1.5, 1.8);                    // thumb
+    skin(pSmooth([[-11, 21], [-4, 18.5], [7, 19.5], [13, 25], [12.5, 40], [5, 46], [-8, 45.5], [-12.5, 36]]), 2.4, 2.4);
+    for (const [y, w] of [[24, 5], [30.4, 5.6], [36.8, 4.6]]) skin(pSmooth([[2, y - 3.1], [5 + w, y - 3.4], [8.4 + w, y + 0.1], [5 + w, y + 3.4], [2, y + 3.1]]), 1.2, 1.4);
+    skin(pSmooth([[-3.6, 24], [-3.4, 9], [-2.6, 1.2], [0, -0.2], [2.6, 1], [3.6, 9], [4.4, 24]]), 1.6, 0);        // index finger
+    shape(q, pSmooth([[-1.7, 2.4], [0, 1.4], [1.8, 2.4], [1.5, 6.4], [-1.4, 6.4]]), "paperD", 0.6);           // nail
+    ST.line(q, pSmooth([[-2.6, 13.5], [0, 12.4], [2.8, 13.6]], true), 0.8);                                         // knuckle crease
+    const sleeve = pSmooth([[-17, 43.5], [-2, 41.5], [15, 42.5], [19.5, 58], [6, 60.5], [-8, 59], [-20.5, 59.5]]);
+    shape(q, sleeve, "indigo", 1.3, "ink", 2, 2);
+    q.setLineDash([2.2, 2]); ST.line(q, pSmooth([[-16, 46.5], [-2, 44.8], [14.5, 45.6]], true), 0.9, "paper"); q.setLineDash([]);
+  }), X, Y, a, s);
+}
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch ----------
 const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
 function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
 function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
@@ -337,51 +471,52 @@ function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s
 function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
 const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
 function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
-function shakeOffset(maxPx) {
-  const a = Juice.trauma * Juice.trauma * maxPx * (Juice.reduce ? 0.3 : 1);
-  return a < 0.5 ? { x: 0, y: 0 } : { x: Math.round(vnoise(Juice.t * 24) * a), y: Math.round(vnoise(Juice.t * 24 + 57.3) * a) };
+function shakeOffset(max) { // logical px
+  const a = Juice.trauma * Juice.trauma * max * (Juice.reduce ? 0.3 : 1);
+  return a < 0.05 ? { x: 0, y: 0 } : { x: vnoise(Juice.t * 24) * a, y: vnoise(Juice.t * 24 + 57.3) * a };
 }
 function zoomNow(now) {
   const z = Juice.zoom; if (!z) return null;
   const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
   return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
 }
-const PARTS = [], PART_MAX = 300;
-function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "w", kind: "dot", s: 1 }, o)); }
-function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random() * 0.8), life = 0.45 + Math.random() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 300, life, max: life }, o)); } }
+
+// ---------- particles: a capped pool of small turning shapes (dot, chip, spark, star) ----------
+const PARTS = [], PART_MAX = 300, rnd = () => Math.random(); // looked up on each call, so tools can seed it
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "paper", kind: "dot", s: 2, rot: 0, vr: 0 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.4 + rnd() * 0.8), life = 0.45 + rnd() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 600, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 14 }, o)); } }
 function partsStep(dt) {
   for (let i = PARTS.length - 1; i >= 0; i--) {
     const p = PARTS[i]; p.life -= dt;
     if (p.life <= 0) { PARTS.splice(i, 1); continue; }
-    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    if (p.kind === "steam") p.vx += Math.sin(p.life * 4 + p.y) * 6 * dt;
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
   }
 }
-function partsDraw(now) {
+function partsDraw(x) {
+  const m = x.getTransform(); x.lineWidth = 0.6; x.strokeStyle = C("ink");
   for (const p of PARTS) {
-    const a = p.life / p.max, x = fl(p.x), y = fl(p.y);
-    if (p.kind === "steam") { const s = a > 0.6 ? 3 : a > 0.3 ? 2 : 1; if (a > 0.45) R(x, y, s, s, p.col); else D(x, y, s, s, null, p.col, 8); }
-    else if (p.kind === "spr") { if (a > 0.3 || (fl(now / 50) & 1)) spr(p.spr, x - (p.spr.width >> 1), y - (p.spr.height >> 1)); }
-    else if (p.kind === "drop") R(x, y, 1, 2, p.col);
-    else R(x, y, p.s, p.s, p.col);
+    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind;
+    const q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
+      : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+    x.setTransform(m); x.translate(p.x, p.y); x.rotate(p.rot); x.fillStyle = C(p.col); x.fill(q);
+    if (k !== "dot" && s > 2) x.stroke(q);
   }
+  x.setTransform(m);
 }
 
 // ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
 const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
 function auBuild(ctx) {
-  const comp = ctx.createDynamicsCompressor();
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; }, comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
-  const master = ctx.createGain(); master.gain.value = AU.muted ? 0 : AU.vol;
+  const master = g(AU.muted ? 0 : AU.vol), sfx = g(0.8), music = g(0.75);
   master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
-  const sfx = ctx.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
-  const music = ctx.createGain(); music.gain.value = 0.75; music.connect(master);
-  // one shared echo send, so dry voices sit in a small room: music fully, sfx at a lower level
-  const echo = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain(), sendS = ctx.createGain();
-  echo.delayTime.value = 0.15; fb.gain.value = 0.3; wet.gain.value = 0.16; sendS.gain.value = 0.45;
-  echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(sendS); sendS.connect(echo);
+  sfx.connect(master); music.connect(master);
+  // one shared echo, so dry voices sit in a small room: music fully, sfx through a lower send
+  const echo = ctx.createDelay(1), fb = g(0.3), wet = g(0.16), send = g(0.45);
+  echo.delayTime.value = 0.15; echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(send); send.connect(echo);
   const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
   Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
 }
 function auInit() {
@@ -400,16 +535,16 @@ function auUnlock() {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
 }
 function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
-function auDuck(node, depth, back) { if (!node || !AU.ctx) return; const t = AU.ctx.currentTime, gn = node.gain; gn.cancelScheduledValues(t); gn.setTargetAtTime(depth, t, 0.02); gn.setTargetAtTime(1, t + 0.2, back || 0.4); }
 const cents = c => Math.pow(2, c / 1200);
-function vary(c, gv) { return { f: cents((Math.random() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (Math.random() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
-// one oscillator voice: starts and ends at silence, always has stop() scheduled; square/saw go through a lowpass
+function vary(c, gv) { return { f: cents((rnd() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (rnd() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// envelope from silence to peak and back to silence (the default gain of 1 would leak a click)
+function env(gn, peak, when, att, dur) { gn.gain.value = 0; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + att); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur); }
+// one oscillator voice with stop() always scheduled; square and saw go through a lowpass
 function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
   const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
-  gn.gain.value = 0; // silent until its envelope starts (the default gain of 1 would leak a click)
   o.type = type; o.frequency.setValueAtTime(f0, when);
   if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
-  gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + (att || 0.004)); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  env(gn, peak, when, att || 0.004, dur);
   let head = o;
   if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
   head.connect(gn); gn.connect(dest || AU.sfx);
@@ -417,15 +552,14 @@ function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
 }
 function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
   const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
-  gn.gain.value = 0;
-  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when);
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when); f.Q.value = q;
   if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
-  f.Q.value = q; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + 0.002); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  env(gn, peak, when, 0.002, dur);
   s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
-  s.start(when, Math.random() * 0.5); s.stop(when + dur + 0.05);
+  s.start(when, rnd() * 0.5); s.stop(when + dur + 0.05);
 }
-// Fire some voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak
-// sample (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+// Fire voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak sample
+// (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
 async function auPeak(fire, sec) {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
   const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
@@ -436,8 +570,7 @@ async function auPeak(fire, sec) {
   return p;
 }
 
-// ---------- tap hint: an animated finger at the input target, per player (not per run) ----------
-// shown until the first success; comes back after two quick deaths (< 5 s); works when storage is blocked
+// ---------- tap hint per player: shown until the first success, back after two quick deaths (< 5 s) ----------
 function makeHint(store, key) {
   let quick = 0;
   return {
@@ -447,28 +580,27 @@ function makeHint(store, key) {
     runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
   };
 }
-let FINGER_C = null;
-function drawTapHint(x, y, k) { // (x, y) = fingertip; k = 0 when a tap would succeed now .. 1 far from it
-  if (!FINGER_C) FINGER_C = mk(FINGER);
-  const lift = Math.round(clamp(k, 0, 1) * 6);
-  if (k < 0.3) { const r = 4 + fl((0.3 - k) * 40); ring(x, y + 1, r + 1, fl(r / 2) + 1, r, fl(r / 2), "w"); }
-  spr(FINGER_C, x - 3, y - FINGER_C.height - lift + 1);
+function drawTapHint(x, X, Y, k) { // (X, Y) = where to press; k = 0 when a press would succeed now .. 1 far from it
+  if (k < 0.3) { const r = 10 + (0.3 - k) * 70; cordLine(x, pEll(X, Y, r, r * 0.4), 2, "paper", 0.7); }   // an inked paper ring
+  hand(x, X, Y + 10 + clamp(k, 0, 1) * 14, 0);
 }
-// ==== PIXEL KIT END ====
+// ==== ART KIT END ====
 
-// =====================================================================================================
+// ======================================================================================================
 // w02 "Daruma Knock" (だるま落とし). Hold to swing the mallet back, let go inside the band to knock the
 // bottom disc out. Every strike nudges the tower toward the way the mallet travels, so the side you strike
 // from steers the lean. A leaning tower pays x2 / x3, and at the edge it teeters: one last strike from the
-// leaning side saves it. Sections marked KEEP follow the template's required systems.
-// =====================================================================================================
+// leaning side saves it. Drawn in the house style 「墨と和紙」: a daruma maker's veranda on a clear winter
+// afternoon. GAME-SPECIFIC sections are this game's own; KEEP sections follow the template's required systems.
+// ======================================================================================================
 
 // ---------- GAME-SPECIFIC: identity, scene size, tuning ----------
 const SLUG = "daruma-otoshi", WEEK = 2;
-const CW = 180, CH = 320;          // the core 9:16 scene in buffer px (STYLE.md 2)
+const CW = 360, CH = 640;          // the core 9:16 scene in logical px (STYLE.md 2)
+useStyle("B");                     // the house style 「墨と和紙」
 const DEMO = /[?&]demo=1(&|$)/.test(location.search);
-const reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-const finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
+const reduceMotion = mq("(prefers-reduced-motion: reduce)"), finePointer = mq("(hover: hover) and (pointer: fine)");
 Juice.reduce = reduceMotion;
 const store = makeStore(SLUG + "-");
 if (!DEMO) { // the first version saved under "daruma-otoshi.*": carry the best score over once, then drop the old keys
@@ -479,11 +611,17 @@ if (!DEMO) { // the first version saved under "daruma-otoshi.*": carry the best 
   } catch (e) { /* storage blocked */ }
 }
 
-const MID = 90;                    // tower axis
-const STAND_Y = 232;               // the bottom disc rests on the stand here
-const DW = 50, DH = 11, NSTACK = 7;
-const HEAD_W = 38, HEAD_H = 30;    // head sprite, hachimaki knot included
-const METER_X = 24, METER_W = 132, METER_Y = 263, METER_H = 9;
+// Where things sit, in scene coords. The rules never read them (lean and power are unitless numbers).
+const MID = 180;                   // tower axis
+const STAND_Y = 464;               // the bottom disc rests on the work stand here
+const DW = 104, DH = 24, NSTACK = 7;
+const HEAD_R = 42;                 // the daruma's lit-sprite radius; its body is about 72 x 68
+const HEAD_UP = 34;                // from the top of the stack to the daruma's centre
+const EDGE_Y = 430;                // the veranda's outer edge; the garden lies beyond it
+const FLOOR_Y = 516;               // the veranda boards where knocked and fallen pieces land
+const METER_X = 48, METER_W = 264, METER_Y = 526, METER_H = 20;
+const CUSH_Y = 566, CUSH_W = 88, CUSH_H = 32, CUSH_X = [56, 304];
+// tuning (unchanged)
 const STEP_MS = 4;                 // fixed simulation step: a run replays the same at any frame rate (bar 1.10.2)
 const BUSY_MS = 240;               // mallet recovery and stack drop after each strike
 const TEETER_MS = 1100;            // game ms on the edge; time runs at TEETER_SCALE there, so about 2.2 s of real time
@@ -565,124 +703,8 @@ const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.j
 
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
-const wrap = $("wrap"), cv = $("cv"), uiEl = $("ui"), ctx = cv.getContext("2d");
+const wrap = $("wrap"), cv = $("cv"), ctx = cv.getContext("2d", { alpha: false });
 const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
-
-// ---------- GAME-SPECIFIC: sprites (char maps, one palette letter per pixel) ----------
-// title calligraphy, inked twice 1 px apart and drawn at x2 (STYLE.md 6)
-const TG = {
-  "だ": ["...#....#.#", "...#.....#.", "#######....", "...#.......", "..#..#####.", "..#........", "..#........", ".#.........", ".#...#.....", "#....#.....", "#.....#####"],
-  "る": [".#######...", ".....##....", "....#......", "...#.......", "..#####....", ".#.....#...", "#.......#..", "........#..", ".....###...", "....#..##..", ".....##..#."],
-  "ま": [".....#.....", "##########.", ".....#.....", ".#######...", ".....#.....", ".....#.....", "...####....", "..#..#.#...", "..#..#..##.", "...##......"],
-  "落": ["..#....#...", "###########", "..#....#...", "#....#.....", ".#..######.", "....#....#.", "#..#.#..#..", ".#....##...", ".#..##..##.", "#..######..", "#..#....#..", "#..######.."],
-  "と": ["..#........", "..#........", "..#.....##.", "..#...##...", "..#.##.....", "..##.......", ".#.........", "#..........", "#..........", ".#.........", "..#######.."],
-  "し": [".#.........", ".#.........", ".#.........", ".#.........", ".#.........", ".#.........", ".#.........", ".#.......#.", "..#.....#..", "...#...#...", "....###...."]
-};
-const HEAD_HW = [5, 8, 10, 11, 12, 13, 13, 14, 14, 15, 15, 15, 16, 16, 16, 16, 16, 16, 16, 16, 15, 15, 15, 14, 14, 13, 12, 11, 9, 6];
-const FACE_HW = [4, 6, 7, 8, 8, 9, 9, 9, 9, 9, 9, 8, 7, 6, 4]; // face rows 8..22
-const KNOT = [".kkk....", "kwwwk...", "kwcwwk..", "kwwcwkk.", ".kwwkwwk", "..kk.kwk", "....kwk.", "....kwk.", ".....kk."];
-const KNOT2 = [".kkk....", "kwwwk...", "kwcwwk..", "kwwcwkkk", ".kwwkwwwk", "..kk..kkk", ".....kwk.", "......kwk", "......kk."];
-const BELLY = ["..yy....yy..", ".y..y..y..y.", ".y...yy...y.", "..yYY..YYy.."];
-const EYE = {
-  blank: [".kkk.", "kwwwk", "kwwwk", "kwwwk", ".kkk."],
-  dot: [".kkk.", "kkkwk", "kkkkk", "kkkkk", ".kkk."],
-  wide: [".kkk.", "kwwwk", "kwkwk", "kwwwk", ".kkk."],
-  happy: [".....", ".kkk.", "k...k", ".....", "....."],
-  shut: [".....", ".....", "kkkkk", ".....", "....."],
-  swirl: [".kkk.", "k...k", "k.k.k", "k..kk", ".kk.."],
-  squint: ["k....", ".kk..", "...kk", ".kk..", "k...."]
-};
-const BROW = { n: [".kkkk..", "kkkkkkk", "k......"], up: ["....kkk", "..kkkk.", "kkk...."], hi: [".kkkkk.", "kk...kk", "......."], dn: ["kkk....", ".kkkk..", "...kkkk"] };
-const MUST = ["..kkk....kkk..", ".kk.kkkkkk.kk.", "kk..........kk"];
-const MOUTH = { n: ["......", ".kkkk.", "......"], smile: ["k....k", ".kkkk.", "......"], open: [".kkkk.", "krrrrk", ".kkkk."], o: ["..kk..", ".krrk.", "..kk.."], wavy: ["......", "k.kk.k", ".k..k."] };
-const SWEAT = [".k.", "ksk", "kpk", ".k."];
-const STAR = ["..k..", ".kyk.", "kyqyk", ".kyk.", "..k.."];
-const BIGSTAR = ["....k....", "...kyk...", "...kqk...", ".kkkqkkk.", "kyqqwqqyk", ".kkkqkkk.", "...kqk...", "...kyk...", "....k...."];
-const SP = { disc: {}, edge: {} };
-function grid(w, h) { return Array.from({ length: h }, () => Array(w).fill(".")); }
-function stampMap(gr, x, y, map) { map.forEach((row, j) => { for (let i = 0; i < row.length; i++) if (row[i] !== "." && gr[y + j] && x + i >= 0 && x + i < gr[0].length) gr[y + j][x + i] = row[i]; }); }
-function headRows(body, knot) { // body: [highlight, base, shade]; built from hand-set span tables plus hand-drawn parts
-  const gr = grid(HEAD_W, HEAD_H), cx = 16, span = y => y < 0 || y >= HEAD_H ? null : [cx - HEAD_HW[y], cx + HEAD_HW[y] - 1];
-  for (let y = 0; y < HEAD_H; y++) {
-    const [x0, x1] = span(y), up = span(y - 1), dn = span(y + 1);
-    for (let x = x0; x <= x1; x++) {
-      const edge = x === x0 || x === x1 || !up || !dn || x < up[0] || x > up[1] || x < dn[0] || x > dn[1];
-      let ch = body[1];
-      if (y >= 1 && y <= 12 && x >= x0 + 2 && x <= x0 + 3 + (y > 2 && y < 10 ? 1 : 0)) ch = body[0];
-      if (x >= x1 - 2 || y >= 26) ch = body[2];
-      if (y >= 3 && y <= 6) ch = y === 3 || y === 6 ? "k" : y === 5 ? "c" : "w";        // hachimaki
-      if ((y === 4 || y === 5) && x >= cx - 2 && x <= cx + 1) ch = "r";                   // its red sun
-      gr[y][x] = edge ? "k" : ch;
-    }
-  }
-  FACE_HW.forEach((hw, j) => {
-    const y = 8 + j, x0 = cx - hw, x1 = cx + hw - 1, pu = FACE_HW[j - 1], pd = FACE_HW[j + 1];
-    for (let x = x0; x <= x1; x++) {
-      const e = j === 0 || j === FACE_HW.length - 1 || x === x0 || x === x1 || x < cx - pu || x > cx + pu - 1 || x < cx - pd || x > cx + pd - 1;
-      gr[y][x] = e ? "Y" : (x >= x1 - 1 || j >= FACE_HW.length - 2) ? "m" : "w";
-    }
-  });
-  stampMap(gr, 10, 23, BELLY); stampMap(gr, 27, 2, knot);
-  return gr.map(r => r.join(""));
-}
-// a disc seen from the side: chamfered ends, light top row, two shade rows, a pattern that tells its kind by shape
-function discRows(kind, v, pat, notch) {
-  const C = kind === "W" ? ["q", "o", "O", "D"] : kind === "I" ? ["o", "O", "D", "e"] : kind === "G" ? ["q", "y", "Y", "w"] : [["h", "r", "R", "y"], ["s", "b", "n", "y"], ["l", "g", "G", "y"]][v];
-  const rows = [];
-  for (let y = 0; y < DH; y++) {
-    let row = "";
-    for (let x = 0; x < DW; x++) {
-      const ex = Math.min(x, DW - 1 - x), ey = Math.min(y, DH - 1 - y);
-      let ch;
-      if (ex + ey < 2) ch = ".";
-      else if (ex + ey === 2 || x === 0 || x === DW - 1 || y === 0 || y === DH - 1) ch = "k";
-      else if (y === 1) ch = C[0];
-      else if (y >= DH - 3) ch = C[2];
-      else ch = x <= 2 ? C[0] : x >= DW - 4 ? C[2] : C[1];
-      if (ch !== "." && ch !== "k" && y > 1 && y < DH - 3 && x > 3 && x < DW - 5) {
-        if (kind === "L" || kind === "N") {
-          if (y === 5) ch = "y";
-          else if (pat === 0 && (y === 3 || y === 7) && (x + (y === 7 ? 4 : 0)) % 8 === 2) ch = "w";
-          else if (pat === 1 && y < 5 && (((x >> 1) + (y >> 1)) & 1)) ch = C[0];
-          else if (pat === 2 && y === 3 + ((x >> 1) % 3 === 1 ? 0 : 1) && x % 6 < 4) ch = C[0];
-        } else if (kind === "W") { if ((y === 3 || y === 6) && (x * 7 + y * 5) % 13 < 9) ch = "O"; if (x === 31 && (y === 4 || y === 5)) ch = "D"; }
-        else if (kind === "G") { if (y === 3 && x % 9 === 4) ch = "w"; if (y === 5 && x % 9 === 0) ch = "q"; if (y === 7 && x % 5 === 2) ch = "Y"; }
-      }
-      if (kind === "I" && ch !== "." && ch !== "k" && ((x >= 4 && x <= 7) || (x >= DW - 8 && x <= DW - 5))) ch = y === 1 ? "p" : y === 5 && (x === 5 || x === DW - 6) ? "q" : y >= DH - 3 ? "k" : "e";
-      row += ch;
-    }
-    rows.push(row);
-  }
-  if (notch) { // a V cut on the side the mallet must come from, with cream chevrons pointing at it
-    const gr = rows.map(r => r.split(""));
-    for (let y = 2; y <= 8; y++) {
-      const dep = 5 - Math.abs(y - 5);
-      for (let i = 0; i <= dep; i++) { const x = notch < 0 ? i : DW - 1 - i; gr[y][x] = i === dep ? "k" : "."; }
-      if (Math.abs(y - 5) <= 2) { const cx = 9 + Math.abs(y - 5); gr[y][notch < 0 ? cx : DW - 1 - cx] = "q"; gr[y][notch < 0 ? cx + 4 : DW - 5 - cx] = "q"; }
-    }
-    return gr.map(r => r.join(""));
-  }
-  return rows;
-}
-function discSpr(d) {
-  const key = d.kind + d.v + d.pat + (d.kind === "N" ? d.side : 0);
-  if (!SP.disc[key]) {
-    const rows = discRows(d.kind, d.v, d.pat, d.kind === "N" ? d.side : 0);
-    SP.disc[key] = mk(rows);
-    const sh = dir => rows.map((r, y) => { const o = Math.round((dir > 0 ? DH - 1 - y : y) / 2); return ".".repeat(o) + r + ".".repeat(5 - o); });
-    SP.edge[key] = [mk(sh(1)), mk(sh(-1))]; // the same disc sheared one way and the other: a tumble in clean pixels
-  }
-  return SP.disc[key];
-}
-function buildSprites() {
-  SP.head = mk(headRows(["h", "r", "R"], KNOT)); SP.head2 = mk(headRows(["h", "r", "R"], KNOT2));
-  SP.headG = mk(headRows(["q", "y", "Y"], KNOT)); SP.headG2 = mk(headRows(["q", "y", "Y"], KNOT2));
-  for (const k in EYE) SP["eye_" + k] = mk(EYE[k]);
-  for (const k in BROW) SP["brow_" + k] = mk(BROW[k]);
-  for (const k in MOUTH) SP["mouth_" + k] = mk(MOUTH[k]);
-  SP.must = mk(MUST); SP.sweat = mk(SWEAT); SP.star = mk(STAR); SP.bigstar = mk(BIGSTAR); SP.pointer = mk(POINTER);
-  SP.goldGlow = outline(mk(discRows("G", 0, 0, 0)), "q");
-}
 
 // ---------- state ----------
 // title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
@@ -696,16 +718,16 @@ const isOver = () => state === "over" || state === "demo-over";
 function pfStart() { if (!pfPlaying) { pfPlaying = true; platform("gameplayStart"); } }
 function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop"); } }
 const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its one-shot sounds to itself
-const vTop = () => Math.max(0, -PX.cy0);          // first visible core row (landscape crops the top)
-const wide = () => PX.cx0 >= 70;                   // landscape: the HUD moves into the side bays
-const tiltNow = () => run.L + run.wob;
+const bestOf = () => Number(store.get("best", 0)) || 0, runsOf = () => Number(store.get("runs", 0)) || 0;
 
+// fx: visual state only (never read by the rules); springs move with the visual clock in update()
 function newFx() {
   return { vt: 0, hitT: -1e9, hitSide: 1, hitTier: "", hitP: 0, band: null, call: null, note: null, scoreT: -1e9, disp: 0,
-    dropT: -1e9, slideFrom: 1, flyers: [], bodies: null, bonkT: -1e9, stuckT: -1e9, saveT: -1e9, bigT: -1e9, bigX: 0, bigY: 0, rollT: -1e9, pressT: -1e9, pauseT: 0 };
+    dropT: -1e9, slideFrom: 1, flyers: [], bodies: null, clacks: 0, bonkT: -1e9, stuckT: -1e9, saveT: -1e9, bigT: -1e9, bigX: 0, bigY: 0,
+    rollT: -1e9, pressT: -1e9, pauseT: 0, swapT: -1e9, teeterT: -1e9, sa: 0, sv: 0, petal: 0, twinkle: 0, push: 0, pose: null };
 }
 function newRun(mode, seed) {
-  const play = mode === "play", best = Number(store.get("best", 0)) || 0;
+  const play = mode === "play", best = bestOf();
   run = {
     mode, ai: !play, seed, rnd: seeded(seed), rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
     c: mode === "demo" ? DEMO_SKIP : play && runCount > 1 ? 3000 : 0, acc: 0, startAt: T(), // a retry skips part of the warm-up (bar 1.5.4)
@@ -725,6 +747,7 @@ function newRun(mode, seed) {
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
   input.want = false; input.latched = false; input.id = null; input.key = null;
   if (play) { hint.begin(); fx.rollT = T(); }
+  trimSprites();
   musicLevel(mode === "attract" ? "title" : "play");
 }
 function makeDisc() {
@@ -759,7 +782,7 @@ function simStep() {
   if (ph.i > r.phase) { if (r.phase >= 0 && ph.note && !r.dead) notice(ph.note); r.phase = ph.i; }
   if (r.dead) return;
   if (r.mode === "demo") demoScript();
-  // the draft turns now and then; gusts come with a 1 s warning (the shoji rattles, the snow turns)
+  // the draft turns now and then; gusts come with a 1 s warning (the paper sheet lifts, petals stream)
   if (r.c >= r.windNext) { r.windDir = -r.windDir; r.windNext = r.c + 6000 + r.rnd() * 3000; }
   if (ph.gust && !r.gust && r.c >= r.gustNext) { const dir = r.rnd() < 0.5 ? -1 : 1; r.gust = { dir, warn: r.c, start: r.c + 1000, end: r.c + 2200, blown: false }; notice(dir < 0 ? "gustL" : "gustR"); }
   if (r.gust && !r.gust.blown && r.c >= r.gust.start) { r.gust.blown = true; if (loud()) sfx.wind(); }
@@ -808,7 +831,7 @@ function startTeeter(side) {
     r.side = side; input.side = side; fx.swapT = fx.vt;     // a press made just before the tip never dooms the run
     if (r.charging) { r.pw = 0; r.pdir = 1; r.inBandC = -1e9; }
   }
-  fx.teeterT = now; call("teeter", "q", now);
+  fx.teeterT = now; call("teeter", "goldL", now);
   if (loud()) sfx.teeter();
   musicLevel("teeter");
 }
@@ -828,7 +851,7 @@ function strike(p, s, late) {
   if (tier === "strong") r.nStrong++; else if (tier === "weak") r.nWeak++;
   r.busy = BUSY_MS; r.lastSide = s; r.lastHitC = r.c;
   Object.assign(fx, { hitT: fx.vt, hitSide: s, hitTier: tier, hitP: p, band: b });
-  const hx = MID - s * (DW / 2 + 1), hy = STAND_Y - 6;
+  const hx = MID - s * (DW / 2 + 2), hy = STAND_Y - DH / 2;
   if (r.teeter) { // the last chance: a clean knock from the leaning side saves it, anything else brings it down
     if ((tier === "perfect" || tier === "good") && s === r.teeter.side) { knock(d, tier, s, 0, now, hx, hy); save(tier, now, hx, hy); }
     else { strikeFx(tier, s, now, hx, hy, miss, d, near); collapse(tier === "perfect" || tier === "good" ? "wrong" : tier); }
@@ -844,12 +867,13 @@ function strike(p, s, late) {
   else strikeFx(tier, s, now, hx, hy, miss, d);
 }
 const overBy = () => Math.max(1, Math.ceil(fx.hitP - fx.band.hi - lateUnits())); // too hard by, counted from the forgiving edge
-const chipCol = d => d.kind === "W" ? "o" : d.kind === "I" ? "e" : d.kind === "G" ? "y" : ["r", "b", "g"][d.v];
+const chipCol = d => d.kind === "W" ? "tagL" : d.kind === "I" ? "plank" : d.kind === "G" ? "gold" : ["red", "indigo", "pine"][d.v];
 function knock(d, tier, s, zone, now, hx, hy, near) {
   const r = run, perfect = tier === "perfect", clean = perfect || tier === "good", gold = d.kind === "G";
   r.stack.shift(); r.stack.push(makeDisc()); r.knocked++;
   fx.dropT = fx.vt; fx.slideFrom = (r.knocked & 1) ? 1 : -1;
-  fx.flyers.push({ d, x: MID - fl(DW / 2) + d.shift, y: STAND_Y - DH, vx: -s * (perfect ? 330 : clean ? 250 : 210), vy: perfect ? -70 : -40, t: 0, trail: perfect });
+  // the disc shoots out flat on a crisp arc (faster for a clean hit), lands on the boards and skids away
+  fx.flyers.push({ d, x: MID + d.shift, y: STAND_Y - DH / 2, vx: -s * (perfect ? 900 : clean ? 760 : 640), vy: perfect ? -330 : clean ? -270 : -200, a: 0, t: 0, hit: 0, fast: perfect });
   let pts = 0;
   if (clean) {
     pts = (perfect ? 3 : 1) * (gold ? 3 : 1) * (zone + 1);
@@ -858,30 +882,30 @@ function knock(d, tier, s, zone, now, hx, hy, near) {
     if (zone === 2) r.risk3++;
     if (r.mode === "play") hint.success();
   } else r.streak = 0;
-  r.score += pts; if (pts) fx.scoreT = now;
-  const nb = r.stack[0]; // the first time a new kind of disc reaches the bottom, the scroll says what it wants
+  r.score += pts; if (pts) { fx.scoreT = now; fx.sv += perfect ? 2.2 : 1.2; }
+  const nb = r.stack[0]; // the first time a new kind of disc reaches the bottom, the sheet says what it wants
   if (nb && !r.seen[nb.kind]) { r.seen[nb.kind] = true; const k = { W: "nKinds", I: "nKinds", G: "nGold", N: "nNotch" }[nb.kind]; if (k && !(k === "nKinds" && r.seenKinds)) { if (k === "nKinds") r.seenKinds = true; notice(k); } }
   const sub = pts ? "+" + pts + (zone ? "  x" + (zone + 1) : "") : "";
   const top = clean && ((gold && perfect) || (perfect && r.streak % 5 === 0));
-  if (top) { // the top tier only: shake and the 2x impact star; the camera punch is kept for 10 in a row and saves (bar 1.2.7)
-    if (gold) call("gold", "y", now, sub); else call("streak5", "y", now, sub);
+  if (top) { // the top tier only: shake and the big impact star; the camera punch is kept for 10 in a row and saves (bar 1.2.7)
+    if (gold) call("gold", "gold", now, sub); else call("streak5", "gold", now, sub);
     addTrauma(0.6);
-    if (!gold && r.streak % 10 === 0) { hitstop(0.09); punch(260, now); }
-    fx.bigT = fx.vt; fx.bigX = hx; fx.bigY = hy;
-    burst(hx, hy, 18, 120, { col: "y", s: 2 }); burst(hx, hy, 6, 140, { kind: "spr", spr: SP.star });
+    if (!gold && r.streak % 10 === 0) { hitstop(0.09); zoomPunch(MID, STAND_Y - 110, 1.05, 260, now); }
+    fx.bigT = fx.vt; fx.bigX = 2 * MID - hx; fx.bigY = hy; // the big star sits where the mallet met the disc
+    burst(hx, hy, 18, 260, { col: "gold", kind: "chip", s: 3.2 }); burst(hx, hy, 6, 300, { kind: "star", col: "goldL", s: 3.2 });
     if (loud()) { if (gold) sfx.gold(); else sfx.milestone(r.streak); sfx.knock(true, r.streak); }
     if (r.mode === "play") platform("happytime");
   } else if (perfect) {
-    call("perfect", "y", now, sub); burst(hx, hy, 10, 100, { col: "q", s: 2 }); burst(hx, hy - 2, 3, 110, { kind: "spr", spr: SP.star });
+    call("perfect", "goldL", now, sub); burst(hx, hy, 10, 220, { col: "goldL", kind: "spark", s: 2.8 }); burst(hx, hy - 4, 3, 240, { kind: "star", col: "paper", s: 2.8 });
     if (loud()) sfx.knock(true, r.streak);
   } else if (clean) {
-    call(gold ? "goldGood" : "good", "w", now, sub); burst(hx, hy, 6, 70, { col: chipCol(d) });
+    call(gold ? "goldGood" : "good", "paper", now, sub); burst(hx, hy, 6, 150, { col: chipCol(d), kind: "chip", s: 2.6 });
     if (loud()) sfx.knock(false, 0);
   } else if (near) { // only just too hard: an honest near miss, no points, a GOOD-sized jolt
-    const n = overBy(); call("close", "h", now, S("cOver", n)); burst(hx, hy, 6, 90, { col: chipCol(d) });
+    const n = overBy(); call("close", "redL", now, S("cOver", n)); burst(hx, hy, 6, 190, { col: chipCol(d), kind: "chip", s: 2.6 });
     if (loud()) sfx.close(n);
   } else { // too hard: the disc still goes, but nothing scores and the tower takes the jolt
-    call("strong", "h", now, S("cOver", overBy())); burst(hx, hy, 12, 130, { col: chipCol(d), s: 2 }); burst(hx, hy, 4, 90, { col: "k" });
+    call("strong", "redL", now, S("cOver", overBy())); burst(hx, hy, 12, 270, { col: chipCol(d), kind: "chip", s: 3 }); burst(hx, hy, 4, 190, { col: "ink", kind: "chip", s: 2.2 });
     if (loud()) sfx.strong();
   }
   if (loud()) sfx.whoosh(perfect);
@@ -889,22 +913,22 @@ function knock(d, tier, s, zone, now, hx, hy, near) {
 function strikeFx(tier, s, now, hx, hy, miss, d, near) {
   const r = run; r.streak = 0;
   if (tier === "weak") {
-    d.shift = clamp(d.shift - s * 4, -9, 9);
-    call(miss <= 5 ? "close" : "weak", miss <= 5 ? "h" : "e", now, S("cMore", miss));
-    burst(hx, hy + 3, 6, 40, { kind: "steam", col: "c", g: -20 }); if (loud()) { if (miss <= 5) sfx.close(miss); else sfx.weak(); }
+    d.shift = clamp(d.shift - s * 8, -18, 18);
+    call(miss <= 5 ? "close" : "weak", miss <= 5 ? "redL" : "grey", now, S("cMore", miss));
+    burst(hx, hy + 6, 6, 80, { kind: "dot", col: "paperD", g: -40, s: 2.6 }); if (loud()) { if (miss <= 5) sfx.close(miss); else sfx.weak(); }
   } else if (tier === "stuck") {
-    fx.stuckT = fx.vt; call("stuck", "h", now, S(d.side < 0 ? "cNotchL" : "cNotchR")); burst(hx, hy, 4, 50, { col: "q" }); if (loud()) sfx.stuck();
+    fx.stuckT = fx.vt; call("stuck", "redL", now, S(d.side < 0 ? "cNotchL" : "cNotchR")); burst(hx, hy, 4, 110, { col: "goldL", kind: "spark", s: 2.6 }); if (loud()) sfx.stuck();
   } else if (tier === "strong") {
-    call(near ? "close" : "strong", "h", now, S("cOver", overBy())); burst(hx, hy, 10, 120, { col: chipCol(d), s: 2 }); if (loud()) { if (near) sfx.close(overBy()); else sfx.strong(); }
-  } else { call(tier, "e", now); if (loud()) sfx.knock(false, 0); }
+    call(near ? "close" : "strong", "redL", now, S("cOver", overBy())); burst(hx, hy, 10, 250, { col: chipCol(d), kind: "chip", s: 3 }); if (loud()) { if (near) sfx.close(overBy()); else sfx.strong(); }
+  } else { call(tier, "grey", now); if (loud()) sfx.knock(false, 0); }
 }
 function save(tier, now, hx, hy) {
   const r = run, side = r.teeter.side, pts = SAVE_PTS * (tier === "perfect" ? 2 : 1);
   r.teeter = null; r.L = side * 0.62; r.wob = 0; r.wobV = -side * 1.4; r.saves++;
-  r.score += pts; fx.scoreT = now; fx.saveT = fx.vt; fx.bigT = fx.vt; fx.bigX = hx; fx.bigY = hy;
-  call("save", "y", now, "+" + pts);
-  addTrauma(0.75); hitstop(0.12); punch(380, now);
-  burst(MID, STAND_Y - 100, 22, 130, { col: "y", s: 2 }); burst(MID, STAND_Y - 100, 7, 150, { kind: "spr", spr: SP.star });
+  r.score += pts; fx.scoreT = now; fx.sv += 3; fx.saveT = fx.vt; fx.bigT = fx.vt; fx.bigX = 2 * MID - hx; fx.bigY = hy;
+  call("save", "gold", now, "+" + pts);
+  addTrauma(0.75); hitstop(0.12); zoomPunch(MID, STAND_Y - 130, 1.06, 380, now);
+  burst(MID, STAND_Y - 210, 22, 280, { col: "gold", kind: "chip", s: 3.2 }); burst(MID, STAND_Y - 210, 7, 320, { kind: "star", col: "goldL", s: 3.2 });
   if (loud()) sfx.save();
   musicLevel("play");
   if (r.mode === "play") platform("happytime");
@@ -953,16 +977,16 @@ function collapse(reason) {
   r.dead = { reason, side, at: now, c: r.c, band: fx.band, p: fx.hitP, struck: fx.vt - fx.hitT < 400 };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (r.mode === "play") { pfStop(); hint.runEnded((now - r.startAt) / 1000); }
-  call(FAIL_CALL[reason] || "fLate", "h", now, S(side < 0 ? "tipL" : "tipR")); // the cause, with the lean under it
+  call(FAIL_CALL[reason] || "fLate", "redL", now, S(side < 0 ? "tipL" : "tipR")); // the cause, with the lean under it
   if (loud()) sfx.tip();
   musicLevel("duck");
 }
-function crumble() { // the frozen tower comes apart: discs tumble toward the lean, the head bonks on the tatami
-  const r = run, side = r.dead.side, n = r.stack.length, t = side * 1.08;
-  fx.bodies = r.stack.map((d, i) => ({ spr: discSpr(d), edge: SP.edge[d.kind + d.v + d.pat + (d.kind === "N" ? d.side : 0)], head: false,
-    x: MID - fl(DW / 2) + shearX(i, t) + d.shift, y: STAND_Y - (i + 1) * DH, vx: side * (12 + i * 9) + (i % 2 ? 6 : -5), vy: -15 - i * 6, spin: i % 3, rest: false, hit: 0 }));
-  // the head drops fast and lands near the stand, so the bonk comes before the result window and stays in frame
-  fx.bodies.push({ head: true, x: MID - 16 + shearX(n, t), y: STAND_Y - n * DH - HEAD_H, vx: side * 24, vy: -50, rest: false, hit: 0 });
+function crumble() { // the frozen tower comes apart: discs tumble toward the lean, the daruma bonks on the boards
+  const r = run, side = r.dead.side, P = towerPose(T()), ca = Math.cos(P.rock), sa = Math.sin(P.rock);
+  const turn = p => ({ x: P.px + (p.x - P.px) * ca - (p.y - P.py) * sa, y: P.py + (p.x - P.px) * sa + (p.y - P.py) * ca, a: p.a + P.rock });
+  fx.bodies = r.stack.map((d, i) => Object.assign(turn(P.d[i]), { d, vx: side * (30 + i * 20) + (i % 2 ? 14 : -12), vy: -40 - i * 14, vr: side * (1.6 + i * 0.5) * (i % 2 ? 1 : -0.7), rest: false, hit: 0 }));
+  // the daruma drops fast and lands near the stand, so the bonk comes before the result window and stays in frame
+  fx.bodies.push(Object.assign(turn(P.h), { head: true, vx: side * 60, vy: -120, vr: side * 2.4, rest: false, hit: 0 }));
   fx.clacks = 0;
   if (loud()) sfx.crash();
   addTrauma(0.8);
@@ -970,33 +994,26 @@ function crumble() { // the frozen tower comes apart: discs tumble toward the le
 function bodiesStep(dt) {
   if (!fx.bodies) return;
   for (const b of fx.bodies) {
-    if (b.rest) continue;
-    b.vy += (b.head ? 1100 : 560) * dt; b.x += b.vx * dt; b.y += b.vy * dt;
-    const w = b.head ? 32 : DW, h = b.head ? HEAD_H : DH;
-    if (b.x < 14) { b.x = 14; b.vx = Math.abs(b.vx) * 0.5; } else if (b.x + w > 166) { b.x = 166 - w; b.vx = -Math.abs(b.vx) * 0.5; } // the room's pillars keep it in frame
-    const cx = b.x + w / 2;
-    const floor = (Math.abs(cx - MID) < 38 ? STAND_Y : 258) - h;
+    if (b.rest) { const k = Math.min(1, dt * 14), to = b.head ? 0 : Math.round(b.a / Math.PI) * Math.PI; b.a += (to - b.a) * k; continue; } // settle flat
+    b.vy += (b.head ? 2200 : 1120) * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.vr * dt;
+    const hw = b.head ? 34 : DW / 2 - 6, hh = b.head ? 32 : DH / 2;
+    if (b.x - hw < 24) { b.x = 24 + hw; b.vx = Math.abs(b.vx) * 0.5; } else if (b.x + hw > 336) { b.x = 336 - hw; b.vx = -Math.abs(b.vx) * 0.5; } // the veranda posts keep it in frame
+    const floor = (Math.abs(b.x - MID) < 76 ? STAND_Y : FLOOR_Y) - hh;
     if (b.y >= floor && b.vy > 0) {
       b.y = floor; b.hit++;
-      if (b.head && b.hit === 1) { // the payoff: a hitstop, a 2x impact star and the bonk
-        fx.bonkT = fx.vt; if (loud()) sfx.bonk(); burst(cx, floor + h, 8, 70, { kind: "steam", col: "c", g: -10 });
-        hitstop(0.06); addTrauma(0.35); fx.bigT = fx.vt; fx.bigX = fl(cx); fx.bigY = fl(floor + 4);
+      if (b.head && b.hit === 1) { // the payoff: a hitstop, the big impact star and the bonk
+        fx.bonkT = fx.vt; if (loud()) sfx.bonk(); burst(b.x, floor + hh, 8, 140, { kind: "dot", col: "paperD", g: -30, s: 2.8 });
+        hitstop(0.06); addTrauma(0.35); fx.bigT = fx.vt; fx.bigX = b.x; fx.bigY = floor + hh - 8;
       }
       if (!b.head && b.hit === 1 && fx.clacks < 6) { fx.clacks++; if (loud()) sfx.clack(fx.clacks, b.y); } // every landing disc clacks
-      if (b.hit >= 3 || Math.abs(b.vy) < 60) { b.rest = true; b.vy = 0; } else { b.vy = -b.vy * 0.35; b.vx = b.vx * 0.55; }
+      if (b.hit >= 3 || Math.abs(b.vy) < 120) { b.rest = true; b.vy = 0; b.vx = 0; b.vr = 0; } else { b.vy = -b.vy * 0.35; b.vx = b.vx * 0.55; b.vr = b.vr * 0.5; }
     }
-    if (b.rest) b.vx = 0;
   }
 }
-
-// a grid-safe camera beat for saves and 10 in a row: whole-dot letterbox bars and a 1-dot lift, never a scaled buffer
-function punch(ms, now) { if (!reduceMotion) fx.punch = { t: now, ms }; }
-function punchK(now) { const p = fx.punch; if (!p) return 1; const k = (now - p.t) / p.ms; if (k >= 1 || k < 0) { fx.punch = null; return 1; } return k; }
 
 // ---------- KEEP: one judgement slot and one notice line (never stacked popups) ----------
 function call(key, col, now, sub) { fx.call = { key, col, t: now, sub: sub || "" }; }
 function notice(key) { fx.note = { key, t: T() }; if (loud()) sfx.notice(); }
-
 // ---------- KEEP: audio. SFX are data-like functions; every voice goes through the kit bus ----------
 const YO = [293.66, 329.63, 392.0, 440.0, 493.88]; // yo scale (D E G A B), an original loop below
 const pz = d => YO[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5));
@@ -1118,9 +1135,9 @@ function musicStep() {
 }
 
 // ---------- KEEP: result screen. Steps in order (count-up, rank seal, rows, NEW BEST, goal), skippable by tap ----------
-const RES = { drop: 220, head: 200, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
+const RES = { drop: 260, head: 220, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
 function makeResult(now) {
-  const play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0, d = run.dead;
+  const play = run.mode === "play", best = bestOf(), runs = runsOf(), d = run.dead;
   const cause = S(d.reason === "late" ? "rsLate" : d.reason === "wrong" ? "rsWrong" : d.reason === "weak" ? "rsWeak" : d.reason === "strong" ? "rsStrong" : d.reason === "stuck" ? "rsStuck" : "rsLate");
   const newBest = play && run.score > best && run.score > 0, nb = newBest ? run.score : best;
   const r = { at: now, score: run.score, best, newBest, rank: rankOf(run.score), showRank: !play || runs >= 1,
@@ -1152,126 +1169,560 @@ function resultStep(now) {
   if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
   if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
-    const by = overY() + 124 + (r.tip ? 13 : 0); burst(140, by, 16, 110, { col: "y", s: 2 }); burst(140, by, 5, 120, { kind: "spr", spr: SP.star });
+    const u = L.u, bx = 180 + 70 * u, by = overY() + BOARD.best * u;
+    burst(bx, by, 16, 220, { col: "gold", kind: "chip", s: 3 }); burst(bx, by, 5, 240, { kind: "star", col: "goldL", s: 3 });
   }
 }
 const resAge = (r, now) => { const a = now - r.at; return state === "demo-over" && a > RES.drop ? RES.drop + (a - RES.drop) * 2.5 : a; }; // the demo window still drops in, then runs fast
 function skipResult(now) { const r = run && run.result; if (r && now - r.at < RES.goal) { r.at = now - RES.goal; r.ticks = 99; r.rankDone = true; return true; } return false; }
 
-// ---------- GAME-SPECIFIC: drawing. Everything goes into the pixel buffer ----------
-let bgC = null;
-const BGM = 6; // background margin for the shake
-const WIN = { x: 150, y: 152, r: 21 }; // the round window (marumado)
-function buildBg() {
-  const { LW, LH, cx0, cy0 } = PX;
-  bgC = newCanvas(LW + 2 * BGM, LH + 2 * BGM);
-  const keep = g; g = bgC.getContext("2d"); g.imageSmoothingEnabled = false;
-  g.translate(cx0 + BGM, cy0 + BGM);
-  const X0 = -cx0 - BGM, X1 = LW - cx0 + BGM, Y0 = -cy0 - BGM, Y1 = LH - cy0 + BGM, WW = X1 - X0;
-  // ceiling boards and the nageshi beam
-  if (Y0 < 4) { // above the beam: a carved ranma transom (lattice over warm paper), the ceiling boards at the very top
-    R(X0, Y0, WW, 4 - Y0, "D"); for (let x = X0 - (((X0 % 9) + 9) % 9); x < X1; x += 9) R(x, Y0, 1, 4 - Y0, "k");
-    const top = Math.max(Y0, -30);
-    if (top < 0) {
-      R(X0, top, WW, 4 - top, "k"); R(X0, top + 2, WW, 1 - top, "q"); D(X0, top + 2, WW, 1 - top, null, "o", 3);
-      for (let x = X0 - (((X0 % 12) + 12) % 12); x < X1; x += 12) { R(x, top + 2, 1, 1 - top, "D"); line(x, top + 2, x + 6, 3, "D"); line(x + 12, top + 2, x + 6, 3, "D"); }
-      R(X0, top, WW, 2, "O"); R(X0, top, WW, 1, "k");
-    }
-  }
-  R(X0, 4, WW, 8, "k"); R(X0, 5, WW, 6, "O"); R(X0, 5, WW, 1, "o"); R(X0, 10, WW, 1, "D");
-  // clay wall with a few fibres, a soft shadow under the beam
-  R(X0, 12, WW, 202, "m"); D(X0, 12, WW, 3, null, "c", 6);
-  for (let y = 15; y < 214; y++) for (let x = X0; x < X1; x++) { // straw flecks in uneven patches, never a lattice
-    const h = (hash1(x * 7919 + y * 104729) + 1) / 2, patch = vnoise(x / 11 + fl(y / 9) * 5.3) + vnoise(y / 13 + 40);
-    if (h < 0.012 + Math.max(0, patch) * 0.05) g.fillStyle = PAL.c, g.fillRect(x, y, 1 + (h < 0.006 ? 1 : 0), 1);
-  }
-  for (let i = 0; i < 70; i++) { const x = X0 + ((i * 89 + 11) % WW), y = 16 + ((i * 47) % 186); R(x, y, 2 + (i % 3), 1, "c"); }
-  // pillars and a shoji panel beyond the core on wide screens
-  const pillar = x => { R(x, 12, 6, 202, "k"); R(x + 1, 12, 4, 202, "O"); R(x + 1, 12, 1, 202, "o"); R(x + 4, 12, 1, 202, "D"); };
-  const shoji = (x0, x1) => {
-    R(x0, 12, x1 - x0, 194, "w"); D(x0, 12, x1 - x0, 194, null, "m", 1);
-    for (let x = x0 + 2; x < x1; x += 11) R(x, 12, 1, 194, "O");
-    for (let y = 26; y < 186; y += 15) R(x0, y, x1 - x0, 1, "O");
-    R(x0, 186, x1 - x0, 20, "O"); R(x0, 186, x1 - x0, 1, "k"); R(x0, 187, x1 - x0, 1, "o");
-  };
-  pillar(-2); pillar(176);
-  if (X0 < -10) { shoji(X0, -2); pillar(-40 > X0 ? -40 : X0 - 6); }
-  if (X1 > 190) { shoji(182, X1); }
-  // the round window: night snow over a garden, a pine bough, the moon
-  const { x: wx, y: wy, r: wr } = WIN;
-  ell(wx, wy, wr + 4, wr + 4, "k"); ell(wx, wy, wr + 3, wr + 3, "O"); ring(wx, wy, wr + 3, wr + 3, wr + 2, wr + 2, "o", -1); ell(wx, wy, wr + 1, wr + 1, "k");
-  for (let dy = -wr; dy <= wr; dy++) {
-    const w = hw(wr, wr, dy), y = wy + dy;
-    for (let x = wx - w; x <= wx + w; x++) {
-      const hill = wy + 9 + Math.round(3 * Math.sin((x - wx) / 6)) + (x > wx + 6 ? -3 : 0);
-      g.fillStyle = y > hill ? (y === hill + 1 ? PAL.w : ((x + y) & 3) ? PAL.p : PAL.s) : y > wy + 2 ? pat("n", "b", 6) : PAL.n;
-      g.fillRect(x, y, 1, 1);
-    }
-  }
-  ell(wx + 8, wy - 9, 4, 4, "q"); ell(wx + 10, wy - 10, 3, 3, "n"); // crescent
-  for (const [bx, by] of [[wx - 16, wy - 8], [wx - 11, wy - 12], [wx - 6, wy - 14], [wx - 13, wy - 3]]) { ell(bx, by, 4, 2, "G"); R(bx - 2, by - 1, 4, 1, "g"); P(bx + 1, by - 2, "w"); }
-  line(wx - 22, wy - 4, wx - 4, wy - 14, "D", 1);
-  // tatami: weave lines, a dark heri border, the andon's warm pool
-  R(X0, 214, WW, Y1 - 214, "g");
-  for (let y = 216; y < Y1; y += 3) for (let x = X0; x < X1; x += 7) R(x + ((y * 5) % 7), y, 5, 1, (y % 6) ? "l" : "G");
-  R(X0, 214, WW, 1, "k"); R(X0, 215, WW, 1, "G");
-  R(X0, 276, WW, 4, "n"); for (let x = X0; x < X1; x += 4) P(x, 277, "b"); R(X0, 276, WW, 1, "k"); R(X0, 279, WW, 1, "k");
-  // the andon (paper floor lamp) on the left and its light
-  for (let i = 3; i >= 1; i--) { const rr = 10 + i * 9; for (let dy = -rr; dy <= rr; dy++) { const w = hw(rr + 6, rr, dy), y = 196 + dy; if (y < 12) continue; const x0 = y >= 214 ? 16 - w : Math.max(4, 16 - w); D(x0, y, 16 + w + 1 - x0, 1, null, y >= 214 ? "l" : "q", 4 - i); } } // the glow stays on the wall, off the pillar
-  R(9, 180, 15, 33, "k"); R(10, 181, 13, 31, "w"); D(10, 181, 13, 31, null, "q", 4); R(10, 181, 13, 2, "D"); R(16, 181, 1, 31, "O"); R(10, 196, 13, 1, "O");
-  R(8, 212, 17, 3, "k"); R(9, 212, 15, 1, "D"); R(10, 178, 13, 2, "k");
-  // the stand: lacquer top, an apron with the lean gauge inlaid, two legs
-  R(50, 232, 80, 5, "k"); R(51, 233, 78, 1, "o"); R(51, 234, 78, 2, "D"); R(53, 237, 74, 11, "k"); R(54, 237, 72, 10, "R"); R(54, 246, 72, 1, "k");
-  R(54, 237, 72, 1, "h");
-  for (let x = 63; x <= 117; x++) {
-    const v = Math.abs(x - 90) / 26, z = v >= 0.7 ? 2 : v >= 0.35 ? 1 : 0;
-    R(x, 240, 1, 5, "k"); if (x > 63 && x < 117) R(x, 241, 1, 3, z === 2 ? (((x + 241) % 3) ? "r" : "R") : z === 1 ? "y" : "l");
-    if (z === 1 && x % 3 === 0) P(x, 242, "Y"); if (z === 2) P(x, 241 + (x % 3), "R");
-  }
-  R(90, 240, 1, 5, "k");
-  for (const lx of [57, 119]) { R(lx, 247, 5, 10, "k"); R(lx + 1, 247, 3, 9, "D"); R(lx + 1, 247, 1, 9, "O"); }
-  D(48, 257, 84, 2, null, "G", 8);
-  g = keep;
+// ---------- GAME-SPECIFIC: where things sit on screen (scene coords; the screen may show more world around the scene) ----------
+const vTop = () => -L.y0, vBot = () => L.H - L.y0, vLeft = () => -L.x0, vRight = () => CW + L.x0;
+const beamY = () => vTop() + 16;                               // the eave beam across the top of the screen
+const sideX = s => s < 0 ? -L.x0 / 2 : CW + L.x0 / 2;         // the middle of the left (-1) or right (1) side area
+const hudS = () => L.wide ? clamp(L.x0 / 230, L.u, 1.6) : L.u; // HUD scale: bigger in the side areas
+const pauseY = () => vTop() + 132, overY = () => vTop() + (L.wide ? 30 : 58);
+const BOARD = { w: 316, title: 40, cause: 72, tip: 98, score: 142, rows: 190, gap: 30, best: 316, goal: 352, play: 384, demo: 316 };
+const UI = {};
+function layoutUI() {
+  const u = L.u, ty = Math.min(548, vBot() - 66 * u), py = pauseY(), lw = Math.max(46, textW(ctx, S("lang"), 16) + 22), ui = (cx, y, w, h) => ({ cx, y, w, h, s: u });
+  UI.start = ui(180, ty, 176, 54);
+  UI.retry = ui(180, ty - 10 * u, 176, 54);
+  UI.toTitle = L.wide ? ui(180 + 162 * u, ty - 2 * u, 128, 40) : ui(180, ty + 52 * u, 128, 36);
+  UI.resume = ui(180, py + 70 * u, 196, 54);
+  UI.restart = ui(180 - 72 * u, py + 144 * u, 132, 42);
+  UI.quit = ui(180 + 72 * u, py + 144 * u, 132, 42);
+  UI.mute = ui(vRight() - 10 - 20 * u, vTop() + 9, 40, 46);
+  UI.pause = ui(UI.mute.cx - 48 * u, vTop() + 9, 40, 46);
+  UI.lang = ui(vLeft() + 10 + lw * u / 2, vTop() + 9, lw, 46);
+  const hit = (el, e, p) => place(el, e.cx - e.w * u / 2 - p, e.y - p, e.w * u + 2 * p, e.h * u + 2 * p);
+  hit($("btnStart"), UI.start, 6); hit($("btnRetry"), UI.retry, 4); hit($("btnToTitle"), UI.toTitle, 2);
+  hit($("btnResume"), UI.resume, 2); hit($("btnRestart"), UI.restart, 2); hit($("btnQuit"), UI.quit, 2);
+  hit(btnMute, UI.mute, 4); hit(btnPause, UI.pause, 4); hit($("btnLang"), UI.lang, 4);
 }
-const shearX = (i, t) => Math.round(t * (2.6 * i + 0.24 * i * i));
+
+// ---------- GAME-SPECIFIC: sprites (made once per size by the kit's sprite cache) ----------
+// Things that turn (the discs, the mallet) are baked once per rotation step, with the shade tone kept toward the
+// lower right of the screen, the way lit() does it for round things (STYLE.md 4). Steps other than "upright" are
+// kept in a short list and dropped at the start of each run, so a long session never piles up pictures.
+const ROT_N = 32, ROT = [];
+const turnOff = (a, ox, oy) => [ox * Math.cos(a) + oy * Math.sin(a), -ox * Math.sin(a) + oy * Math.cos(a)]; // a screen offset seen from a frame turned by a
+function rotSpr(key, w, h, a, art) {
+  const st = TAU / ROT_N, i0 = Math.round(a / st), i = ((i0 % ROT_N) + ROT_N) % ROT_N, k = key + "@" + i;
+  let b = SPR.get(k);
+  if (!b) {
+    const ang = i * st, c = Math.abs(Math.cos(ang)), s = Math.abs(Math.sin(ang)), bw = c * w + s * h + 10, bh = s * w + c * h + 10;
+    b = bake(k, bw, bh, bw / 2, bh / 2, q => { q.rotate(ang); art(q, ang); });
+    if (i) { ROT.push(k); if (ROT.length > 150) SPR.delete(ROT.shift()); }
+  }
+  return [b, a - i0 * st];
+}
+function putRot(x, key, w, h, art, X, Y, a, sx, sy) { const [b, rest] = rotSpr(key, w, h, a || 0, art); put(x, b, X, Y, rest, sx, sy); }
+function trimSprites() { for (const k of ROT) SPR.delete(k); ROT.length = 0; }
+const hh = (i, k) => (hash1(i * 7919 + k * 104729) + 1) / 2; // 0..1, the same for the same (i, k): stable scenery
+
+// a disc seen from the side: a turned slab with soft corners; a notched disc has a V cut on its notch end
+function slab(w, h, r, notch) {
+  const p = P2();
+  p.moveTo(-w + r, -h); p.quadraticCurveTo(0, -h - 0.9, w - r, -h); p.quadraticCurveTo(w, -h, w, -h + r);
+  if (notch > 0) { p.lineTo(w, -6.5); p.lineTo(w - 9, 0); p.lineTo(w, 6.5); }
+  p.lineTo(w, h - r); p.quadraticCurveTo(w, h, w - r, h); p.quadraticCurveTo(0, h + 0.9, -w + r, h); p.quadraticCurveTo(-w, h, -w, h - r);
+  if (notch < 0) { p.lineTo(-w, 6.5); p.lineTo(-w + 9, 0); p.lineTo(-w, -6.5); }
+  p.closePath(); return p;
+}
+const LACQ = [["red", "redD", "gold"], ["indigo", "mid", "paper"], ["pine", "warm", "goldL"]];
+const discKey = d => "d" + d.kind + (d.kind === "L" || d.kind === "N" ? d.v + "" + d.pat : "") + (d.kind === "N" ? d.side : "");
+function discArt(d) { // the kind shows by shape and pattern, never by colour alone
+  return (x, ang) => {
+    const k = d.kind, w = DW / 2, p = slab(w, DH / 2, 6, k === "N" ? d.side : 0);
+    const [c, sc, pc] = k === "W" ? ["tagL", "tagG"] : k === "I" ? ["plank", "plankD"] : k === "G" ? ["gold", "goldD"] : LACQ[d.v];
+    ST.fill(x, p, c); x.save(); x.clip(p);
+    if (k === "W") { grain(x, p, -w, -12, DW, DH, 3.4, "tagG", 3); shape(x, pEll(17, 1, 4.6, 2.6), "tag", 0.8); }          // white wood, a knot
+    else if (k === "I") {                                                                                                     // dark wood, two iron bands
+      grain(x, p, -w, -12, DW, DH, 3.6, "plankL", 9);
+      for (const bx of [-33, 33]) { shape(x, pPoly([[bx - 5, -14], [bx + 5, -14], [bx + 5.4, 14], [bx - 4.6, 14]]), "greyD", 1.1); for (const ry of [-5.5, 5.5]) shape(x, pEll(bx, ry, 1.7, 1.7), "grey", 0.7); }
+    } else if (k === "G") {                                                                                                   // gold, a red band of diamonds
+      shape(x, pPoly([[-w - 2, -4], [w + 2, -4.4], [w + 2, 4], [-w - 2, 4.4]]), "red", 0.9);
+      x.fillStyle = C("paper"); for (let i = -2; i <= 2; i++) x.fill(pPoly([[i * 20 - 4.5, 0], [i * 20, -3], [i * 20 + 4.5, 0], [i * 20, 3]]));
+      ST.line(x, pLine(-w, -8, w, -8), 1, "goldD"); ST.line(x, pLine(-w, 8, w, 8), 1, "goldD");
+    } else if (k === "N") {                                                                                                   // chevrons from the notch inward
+      for (const cx of [w - 24, w - 36, w - 48]) ST.line(x, pPoly([[d.side * (cx + 4), -6], [d.side * (cx - 3), 0], [d.side * (cx + 4), 6]], true), 2.6, "paper");
+    } else if (d.pat === 0) { x.fillStyle = C(pc); x.fillRect(-w, -7.5, DW, 2.6); x.fillRect(-w, 4.4, DW, 2.6); }            // two painted bands
+    else if (d.pat === 1) { for (let i = -3; i <= 3; i++) shape(x, pEll(i * 13.5, -0.5, 2.8, 2.8), pc, 0.7); }               // a row of dots
+    else ST.line(x, pSmooth([-56, -48, -40, -32, -24, -16, -8, 0, 8, 16, 24, 32, 40, 48, 56].map((px, i) => [px, i % 2 ? -4 : 3]), true), 2.2, pc); // a wave
+    x.restore();
+    const [ox, oy] = turnOff(ang, 2.2, 5.5); ST.shade(x, p, sc, ox, oy); ST.edge(x, p, 1.8);
+  };
+}
+function putDisc(x, d, X, Y, a, sx, sy) { putRot(x, discKey(d), DW + 6, DH + 8, discArt(d), X, Y, a, sx, sy); }
+
+// the mallet (origin = head centre): a zelkova head with brass rings and a pale striking face toward the tower,
+// a handle leaning away from it with a red cord grip
+const MAL_S = 1.3;
+const malletArt = s => (x, ang) => {
+  x.scale(MAL_S, MAL_S);
+  const hp = pPoly([[s * 1.5 - 3.4, -11], [s * 1.5 + 3.4, -11], [s * 16 + 2.4, -70], [s * 16 - 2.4, -70]]);
+  ST.fill(x, hp, "tagD"); const [hx, hy] = turnOff(ang, 1.4, 0.6); ST.shade(x, hp, "plank", hx, hy); ST.edge(x, hp, 1.3);
+  for (let i = 0; i < 5; i++) { const y = -48 - i * 4.2, cx = s * (1.5 + 14.5 * (-y - 11) / 59); shape(x, pPoly([[cx - 3.6, y + 1.2], [cx + 3.6, y - 1], [cx + 3.6, y + 1.6], [cx - 3.6, y + 3.6]]), "red", 0.7); }
+  const hd = pPoly([[-20, -12.5], [19.5, -12], [21.5, -9], [21.8, 9.5], [19.6, 12.6], [-19.8, 12.8], [-21.6, 9.6], [-21.4, -9.4]]);
+  ST.fill(x, hd, "plankL"); grain(x, hd, -22, -13, 44, 26, 4, "plank", 4);
+  const [ox, oy] = turnOff(ang, 0.8, 4.6); ST.shade(x, hd, "plank", ox, oy); ST.edge(x, hd, 1.6);
+  const fx0 = -s * 21.4; shape(x, pPoly([[fx0, -9.6], [fx0 + s * 4.4, -11.6], [fx0 + s * 4.4, 11.6], [fx0, 9.6]]), "tag", 1);
+  for (const rx of [-9, 9]) { const r = pPoly([[rx - 2.6, -13.4], [rx + 2.6, -13.1], [rx + 2.8, 13.5], [rx - 2.4, 13.8]]); ST.fill(x, r, "gold"); const [gx, gy] = turnOff(ang, 1, 2); ST.shade(x, r, "goldD", gx, gy); ST.edge(x, r, 1); }
+};
+const MAL_W = 60 * MAL_S, MAL_H = 150 * MAL_S;
+
+// the daruma: a lit sprite (round, so it re-shades as it tumbles) with the face drawn on top every frame.
+// Red papier-mache, a white face, a headband with a red sun and a knot whose tails fly in the wind, a gold swirl on
+// the belly. The top rank gets a gold body.
+function headSpr(gold, flap) {
+  return lit("hd" + (gold ? "g" : "r") + flap, HEAD_R, "wood", (x, u) => {
+    x.scale(u, u); // draw in logical px
+    const body = pSmooth([[0, -35], [21, -30.5], [33, -15], [36.5, 4], [31, 22], [16, 33.5], [0, 34.5], [-16, 33.5], [-31, 22], [-36.5, 4], [-33, -15], [-21, -30.5]]);
+    const tails = flap ? [[[33, -22], [40, -24.5], [47, -23]], [[33, -19], [39.5, -16], [45.5, -12.5]]] : [[[33, -21], [36.5, -13], [38, -4]], [[34, -20], [40, -15], [44.5, -9]]];
+    for (const t of tails) { brush(x, t, 6.4, "ink"); brush(x, t, 3.8, "paper"); }
+    ST.fill(x, body, gold ? "gold" : "red"); x.save(); x.clip(body);
+    const face = pSmooth([[0, -15], [13, -13.5], [19, -5], [18.5, 6], [11, 15], [0, 17], [-11, 15], [-18.5, 6], [-19, -5], [-13, -13.5]]);
+    ST.fill(x, face, "paper"); ST.edge(x, face, 1.3);
+    const band = P2(); band.moveTo(-40, -27); band.quadraticCurveTo(0, -17, 40, -27); band.lineTo(40, -19); band.quadraticCurveTo(0, -9, -40, -19); band.closePath();
+    ST.fill(x, band, "paper"); ST.edge(x, band, 1.2);
+    shape(x, pEll(0, -17.5, 4.4, 3.6), "red", 1);
+    const bc = gold ? "red" : "gold"; // the belly swirl
+    const sp = []; for (let t = 0; t <= 2.4 * Math.PI; t += 0.3) sp.push([Math.cos(t + 2) * (1 + t * 1.15) * 1.25, 25 + Math.sin(t + 2) * (1 + t * 1.15) * 0.75]);
+    ST.line(x, pSmooth(sp, true), 2, bc);
+    for (const s of [-1, 1]) ST.line(x, pSmooth([[s * 7, 29], [s * 12, 24], [s * 17, 22.5]], true), 2, bc);
+    x.restore();
+    for (const [lx, ly, a] of [[33.5, -24.5, -0.5], [33.5, -18, 0.5]]) shape(x, pEll(lx, ly, 4.2, 2.9, a), "paper", 1);
+    ST.edge(x, body, 2);
+  });
+}
+// the face: eyes, brows, whiskers, mouth, drawn in the head's frame (origin = head centre, logical px)
+function faceArt(x, face, eyes, now) {
+  const eye = s => face === "happy" ? "happy" : face === "blink" ? "shut" : face === "oops" ? "squint" : face === "bonk" ? "swirl" : face === "scared" ? (eyes > (s < 0 ? 0 : 1) ? "wide" : "blank") : eyes > (s < 0 ? 0 : 1) ? "dot" : "blank";
+  const brow = face === "worried" || face === "worried2" || face === "oops" || face === "bonk" ? "up" : face === "scared" ? "hi" : face === "focus" ? "dn" : "n";
+  const mouth = face === "happy" ? "open" : face === "scared" ? "o" : face === "worried2" || face === "oops" || face === "bonk" ? "wavy" : face === "worried" || face === "focus" ? "n" : "smile";
+  const BROW = { n: [[-6, 0.5], [0, -1.6], [6, 0]], up: [[-6, 1.8], [0, 0], [6, -3]], hi: [[-6, -1.6], [0, -4.8], [6, -2.4]], dn: [[-6, -2.6], [0, -0.6], [6, 2.2]] }[brow];
+  x.lineCap = x.lineJoin = "round"; x.strokeStyle = C("ink");
+  for (const s of [-1, 1]) {
+    const ex = s * 8.5, ey = -4, e = eye(s);
+    if (e === "blank" || e === "wide") { x.fillStyle = C("paper"); x.fill(pEll(ex, ey, 4.9, 5.1)); x.lineWidth = 1.3; x.stroke(pEll(ex, ey, 4.9, 5.1)); if (e === "wide") { x.fillStyle = C("ink"); x.fill(pEll(ex, ey + 0.4, 1.9, 2)); } }
+    else if (e === "dot") { x.fillStyle = C("ink"); x.fill(pEll(ex, ey, 4.8, 5.2)); }
+    else {
+      const p = P2(); x.lineWidth = 2.2;
+      if (e === "happy") { p.moveTo(ex - 4.6, ey + 1.6); p.quadraticCurveTo(ex, ey - 5.4, ex + 4.6, ey + 1.6); }
+      else if (e === "shut") { p.moveTo(ex - 4.6, ey + 0.4); p.quadraticCurveTo(ex, ey + 2.8, ex + 4.6, ey + 0.4); }
+      else if (e === "squint") { p.moveTo(ex - s * 4, ey - 3.6); p.lineTo(ex + s * 3, ey); p.lineTo(ex - s * 4, ey + 3.6); }
+      else { x.lineWidth = 1.4; for (let t = 0; t < 3 * Math.PI; t += 0.35) { const r = 0.5 + t * 0.48, px = ex + Math.cos(t * s) * r, py = ey + Math.sin(t * s) * r; if (t) p.lineTo(px, py); else p.moveTo(px, py); } }
+      x.stroke(p);
+    }
+    brush(x, BROW.map(([o, y]) => [ex - s * o, -12.6 + y]), 3.4);
+    brush(x, [[s * 1.5, 4.6], [s * 6, 3.4], [s * 10.5, 6], [s * 12.8, 3.6]], 2.8);
+  }
+  x.lineWidth = 1.8;
+  if (mouth === "open") shape(x, pEll(0, 10.6, 4.2, 3.2), "red", 1);
+  else if (mouth === "o") shape(x, pEll(0, 10.6, 2.4, 2.8), "red", 1);
+  else if (mouth === "smile") { const p = P2(); p.moveTo(-4, 9); p.quadraticCurveTo(0, 12.8, 4, 9); x.stroke(p); }
+  else if (mouth === "n") x.stroke(pLine(-3.6, 10.6, 3.6, 10.6));
+  else { x.lineWidth = 1.5; x.stroke(pPoly([[-5, 10.8], [-2.5, 9], [0, 10.8], [2.5, 9], [5, 10.8]], true)); }
+  if (face === "happy") { x.fillStyle = C("redL"); for (const s of [-1, 1]) x.fill(pEll(s * 13.6, 4.4, 3, 1.8)); }
+  if (face === "worried2" || face === "scared") for (const [dx, dy, k] of face === "scared" ? [[22, -14, 160], [-23, -8, 190]] : [[22, -14, 160]]) {
+    const y = dy + (fl(now / k) & 1), p = P2(); p.moveTo(dx, y - 5); p.quadraticCurveTo(dx + 4, y + 1, dx, y + 3.6); p.quadraticCurveTo(dx - 4, y + 1, dx, y - 5);
+    shape(x, p, "sky2", 0.9);
+  }
+}
+
+// the bamboo ruler on the floor (the power meter) and its ink ticks, laid over the band
+const rulerPath = () => pPoly([[0, 0.6], [METER_W, 0], [METER_W + 0.4, METER_H], [0.2, METER_H + 0.4]]);
+const rulerSpr = () => bake("ruler", METER_W + 14, METER_H + 14, 7, 7, x => {
+  shape(x, rulerPath(), "tag", 1.6, "tagD", 0, 3.4);
+  for (const nx of [72, 196]) { ST.line(x, pLine(nx, 1, nx, METER_H - 1), 1.4, "tagD"); }
+});
+const ticksSpr = () => bake("ticks", METER_W + 14, METER_H + 14, 7, 7, x => {
+  x.fillStyle = C("ink");
+  for (let v = 5; v < 100; v += 5) { const xx = v * METER_W / 100; x.fillRect(xx - 0.6, 0.5, 1.2, v % 50 === 0 ? 9 : v % 10 ? 4 : 6.5); }
+  ST.edge(x, rulerPath(), 1.6);
+});
+// a floor cushion (zabuton): indigo cloth, a stitched edge, gold tassels and tuft, a small mallet pointing at the
+// tower (hold this side to strike from this side). The side not to use is printed in the inactive greys (mono).
+const cushPath = () => { const w = CUSH_W / 2, h = CUSH_H; return pSmooth([[-w, 1.5], [0, -0.8], [w, 1.5], [w + 1.4, h * 0.5], [w, h - 1.5], [0, h + 0.8], [-w, h - 1.5], [-w - 1.4, h * 0.5]]); };
+function cushSpr(s, mono) {
+  return bake("cu" + s + (mono ? "m" : ""), CUSH_W + 18, CUSH_H + 16, CUSH_W / 2 + 9, 7, x => {
+    const w = CUSH_W / 2, h = CUSH_H, p = cushPath();
+    shape(x, p, "indigo", 1.6, "mid", 2, 3.6);
+    x.setLineDash([3, 2.6]); ST.line(x, pSmooth([[-w + 7, 6], [0, 4.4], [w - 7, 6], [w - 5.6, h / 2], [w - 7, h - 6], [0, h - 4.4], [-w + 7, h - 6], [-w + 5.6, h / 2], [-w + 7, 6]], true), 0.9, "paper"); x.setLineDash([]);
+    for (const [cx, cy] of [[-w, 2], [w, 2], [-w, h - 2], [w, h - 2]]) shape(x, pEll(cx, cy, 2.8, 2.4), "gold", 0.8);
+    const mx = -s * 10, hd = pPoly([[mx - 11, h / 2 - 6], [mx + 11, h / 2 - 6.4], [mx + 11.4, h / 2 + 6], [mx - 11, h / 2 + 6.4]]);
+    shape(x, pPoly([[mx + s * 9, h / 2 - 2], [mx + s * 26, h / 2 - 8], [mx + s * 27, h / 2 - 5], [mx + s * 10, h / 2 + 2]]), "tagD", 1);
+    shape(x, hd, "plankL", 1.2, "plank", 0, 2.4); shape(x, pPoly([[mx - s * 11, h / 2 - 5.4], [mx - s * 14, h / 2 - 4.6], [mx - s * 14, h / 2 + 4.6], [mx - s * 11, h / 2 + 5.4]]), "tag", 0.9);
+  }, mono);
+}
+// the score sheet: a hanshi paper clipped to a short bamboo pole (origin = the pole's centre)
+const SHEET_W = 124;
+const sheetSpr = () => bake("sheet", SHEET_W + 40, 116, SHEET_W / 2 + 20, 10, x => {
+  const w = SHEET_W / 2, p = pPoly([[-w, 3], [w, 3.6], [w - 0.6, 100], [w * 0.4, 101.4], [-w * 0.2, 100.4], [-w + 0.4, 101]]);
+  shape(x, p, "paper", 1.3, "paperD", 2.2, 2.8);
+  bamboo(x, -w - 14, 0, w + 14, 0, 8, 44);
+  for (const s of [-1, 1]) shape(x, pRR(s * (w - 16) - 5, -6, 10, 18, 2.4), "tagD", 1, "plank", 1, 1.6);
+});
+// the title curtain (noren): unbleached cloth in three panels with slits at the hem, an indigo sleeve over a
+// bamboo rod, a red daruma crest (origin = top centre; nw = the curtain's width)
+const NOREN_H = 196;
+function norenSpr(nw) {
+  return bake("noren" + nw, nw + 40, NOREN_H + 16, nw / 2 + 20, 4, x => {
+    const w = nw / 2, top = 12, hem = NOREN_H, slit = hem - 32, a = w / 3, cl = P2();
+    cl.moveTo(-w, top); cl.lineTo(w, top); cl.lineTo(w + 0.6, hem - 1);
+    for (const [x0, x1] of [[w, a + 1.6], [a - 1.6, -a + 1.6], [-a - 1.6, -w]]) { cl.quadraticCurveTo((x0 + x1) / 2, hem + 2.4, x1, hem); if (x1 > -w) { cl.lineTo(x1, slit); cl.lineTo(x1 - 3.2, slit); cl.lineTo(x1 - 3.2, hem); } }
+    cl.closePath();
+    bamboo(x, -w - 14, top + 7, w + 14, top + 7, 8, 56);
+    shape(x, cl, "paper", 1.5, "paperD", 1.8, 2.4);
+    const sl = pPoly([[-w - 1, top - 1], [w + 1, top - 1.4], [w + 1, top + 20], [-w - 1, top + 20.6]]);
+    shape(x, sl, "indigo", 1.4, "mid", 0, 3);
+    x.setLineDash([3, 3]); ST.line(x, pLine(-w + 4, top + 16, w - 4, top + 16), 0.9, "paper"); x.setLineDash([]);
+    const cx = 2 * a, cy = hem - 15;
+    shape(x, pEll(cx, cy, 12, 12), "red", 1.3, "redD", 1.2, 1.6);
+    const db = pSmooth([[cx, cy - 8.5], [cx + 6, cy - 6], [cx + 7.4, cy + 1], [cx + 5, cy + 7], [cx, cy + 8], [cx - 5, cy + 7], [cx - 7.4, cy + 1], [cx - 6, cy - 6]]);
+    x.fillStyle = C("paper"); x.fill(db); x.fillStyle = C("red"); x.fill(pEll(cx, cy - 1.6, 3.6, 3));
+  });
+}
+const plankSpr = (w, h = 34) => bake("plank" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 2, x => woodTag(x, -w / 2, 0, w, h, { dark: 1, cut: 5, seed: w }));
+const shelfSpr = () => bake("shelf", 116, 30, 58, 4, x => {
+  for (const s of [-1, 1]) shape(x, pPoly([[s * 38, 8], [s * 44, 8], [s * 44, 22], [s * 38, 13]]), "plank", 1, "plankD", 1, 1);
+  shape(x, pCut(-52, 0, 104, 9, 2.6), "plankL", 1.4, "plank", 0, 2.6);
+});
+// a small static daruma for the background (bottom centre at X, Y): raw papier-mache, white primer, red with a blank
+// face, finished, or gold; each one a little different
+function smallDaruma(x, X, Y, r, st, tilt) {
+  const pts = [[0, -2], [0.62, -1.84], [1, -1.12], [1.04, -0.42], [0.82, -0.02], [0, 0.03], [-0.82, -0.02], [-1.04, -0.42], [-1, -1.12], [-0.62, -1.84]];
+  at(x, X, Y, 1, tilt || 0, () => {
+    const body = pSmooth(pts.map(([a, b]) => [a * r, b * r]));
+    const [c, sc] = st === "raw" ? ["tag", "tagD"] : st === "white" ? ["paper", "paperD"] : st === "gold" ? ["gold", "goldD"] : ["red", "redD"];
+    shape(x, body, c, r > 14 ? 1.3 : 1.1, sc, r * 0.13, r * 0.15);
+    if (st === "raw") { x.save(); x.clip(body); x.strokeStyle = C("tagD"); x.lineWidth = 0.6; for (let i = 1; i < 4; i++) x.stroke(pLine(-r, -r * 0.5 * i, r, -r * 0.5 * i + r * 0.3)); x.restore(); return; }
+    const face = pEll(0, -r * 1.14, r * 0.52, r * 0.45);
+    if (st === "white") { ST.line(x, face, 0.8, "greyD"); return; }
+    shape(x, face, "paper", 0.9);
+    if (st === "done" || st === "gold") {
+      x.fillStyle = C("ink"); for (const s of [-1, 1]) { x.fill(pEll(s * r * 0.22, -r * 1.2, r * 0.11, r * 0.12)); x.fillRect(s * r * 0.22 - r * 0.15, -r * 1.48, r * 0.3, r * 0.07); }
+      x.fillRect(-r * 0.2, -r * 0.95, r * 0.4, r * 0.06);
+    }
+    ST.line(x, pSmooth([[-r * 0.3, -r * 0.3], [0, -r * 0.42], [r * 0.3, -r * 0.3]], true), 1, st === "gold" ? "red" : "gold");
+  });
+}
+function star(x, X, Y, r, col, rot, inner) {
+  shape(x, pStar(X, Y, r, r * 0.42, 8, rot), col, 1.4);
+  if (inner) { x.fillStyle = C(inner); x.fill(pStar(X, Y, r * 0.5, r * 0.2, 8, rot)); }
+}
+
+// ---------- GAME-SPECIFIC: the stage, drawn once per screen size into a cached layer ----------
+// A clear winter afternoon at a daruma maker's veranda, printed in flat colour: a stepped winter sky, snowy peaks,
+// a garden with a bamboo fence, a stone lantern and a red plum in bloom, the eave above, the veranda boards in the
+// sun, the work stand with the lean gauge. On a wide screen the workshop opens on the left (shoji, drying racks of
+// daruma in every stage) and the garden goes on to the right (a stone basin, a pine, daruma drying on a mat, a cat).
+// Every repeat is varied by a stable hash, so no object is stamped twice (STYLE.md 10).
+let BG = null;
+const BGM = 14, GAUGE_Y = 478, POST_X = [12, 348];
+function buildBg() { BG = layer(BGM, (x, X0, Y0, W, H) => world(x, X0, X0 + W, Y0, Y0 + H)); }
+function world(x, X0, X1, Y0, Y1) {
+  skyBands(x, X0, X1, Y0);
+  clouds(x, X0, X1);
+  mountains(x, X0, X1);
+  garden(x, X0, X1);
+  plum(x);
+  if (X1 > 380) gardenRight(x, X1);
+  if (X0 < 4) workshop(x, X0, Y0);
+  veranda(x, X0, X1, Y1);
+  posts(x, X0, X1);
+  eave(x, X0, X1, Y0);
+  floorProps(x, X0, X1);
+  stand(x);
+}
+function skyBands(x, X0, X1, Y0) {
+  [["sky0", 0], ["sky1", 118], ["sky2", 184], ["sky3", 238], ["mist", 280]].forEach(([c, y], i) => {
+    const pts = [];
+    for (let xx = X0 - 40; xx <= X1 + 40; xx += 40) pts.push([xx, i ? y + 3 * Math.sin(xx / 83 + i * 1.7) + 2 * Math.sin(xx / 31 + i) : Y0 - 10]);
+    pts.push([X1 + 40, 470], [X0 - 40, 470]);
+    x.fillStyle = C(c); x.fill(pPoly(pts));
+  });
+}
+function cloud(x, cx, cy, w, k) {
+  const r = seeded(k), h = w * 0.13, pts = [[-w / 2, h * 0.5]];
+  for (let i = 1; i < 6; i++) pts.push([-w / 2 + w * i / 6 + (r() - 0.5) * w * 0.06, -h * (0.7 + r() * 0.9)]);
+  pts.push([w / 2, h * 0.4], [w * 0.2, h * 0.9], [-w * 0.25, h * 0.85]);
+  shape(x, pSmooth(pts.map(([a, b]) => [cx + a, cy + b])), "paper", 1.1, "sky3", 0, h * 0.4);
+}
+function clouds(x, X0, X1) {
+  cloud(x, 58, 100, 96, 4); cloud(x, 314, 206, 64, 9);
+  for (let k = fl(X0 / 230) - 1; k <= fl(X1 / 230) + 1; k++) {
+    const cx = k * 230 + hh(k, 1) * 120; if (cx > -60 && cx < 420) continue;
+    cloud(x, cx, 70 + hh(k, 2) * 150, 60 + hh(k, 3) * 70, k + 20);
+  }
+}
+function mountains(x, X0, X1) {
+  for (const [base, step, col, lo, hi, seed] of [[318, 190, "sky2", 54, 96, 40], [332, 140, "far", 26, 62, 3]]) {
+    for (let k = fl(X0 / step) - 2; k <= fl(X1 / step) + 2; k++) {
+      const px = k * step + (hh(k, seed) - 0.5) * step * 0.5, ph = lo + hh(k, seed + 1) * (hi - lo), w = ph * (1.6 + hh(k, seed + 2) * 0.7), j = hh(k, seed + 3);
+      const m = pPoly([[px - w, base + 6], [px - w * 0.56, base - ph * (0.42 + j * 0.12)], [px - w * 0.14, base - ph * 0.93], [px, base - ph], [px + w * 0.18, base - ph * 0.88], [px + w * 0.6, base - ph * (0.36 + j * 0.1)], [px + w, base + 6]]);
+      ST.fill(x, m, col); x.save(); x.clip(m);
+      const sn = [[px - w, base - ph - 20], [px + w, base - ph - 20]];
+      for (let i = 8; i >= 0; i--) sn.push([px - w * 0.5 + w * i / 8, base - ph * (0.62 + ((i * 7 + k) % 3) * 0.07) + (i % 2 ? 4 : -2)]);
+      ST.fill(x, pPoly(sn), "paper"); ST.shade(x, m, col === "far" ? "sky1" : "sky3", 3, 0); x.restore();
+      ST.edge(x, m, 1);
+    }
+  }
+}
+function fenceRun(x, a, b, seed) { // a low bamboo lattice fence (yotsume-gaki) between x = a and b
+  if (b - a < 8) return;
+  for (const y of [350, 366]) bamboo(x, a - 2, y, b + 2, y + 0.6, 3.6, 46 + seed % 7);
+  for (let xx = a + 4, i = 0; xx < b - 2; i++) {
+    const tall = i % 3 === 0, w = tall ? 4.4 : 3.6;
+    bamboo(x, xx, tall ? 336 : 342, xx + 0.4, 380, w, 18 + hh(i, seed) * 6);
+    x.fillStyle = C("ink"); for (const y of [350, 366]) x.fill(pRR(xx - 2.4, y - 1.6, 4.8, 3.2, 1));
+    xx += 22 + hh(i, seed + 1) * 9;
+  }
+}
+function pineTree(x, X, Y, s, seed) { // a garden pine: a leaning trunk and flat pads of needles with snow on top
+  const r = seeded(seed);
+  const tr = pSmooth([[X - 6 * s, Y], [X - 3 * s, Y - 40 * s], [X - 12 * s, Y - 90 * s], [X - 2 * s, Y - 130 * s], [X + 4 * s, Y - 128 * s], [X - 4 * s, Y - 90 * s], [X + 6 * s, Y - 40 * s], [X + 6 * s, Y]]);
+  shape(x, tr, "plank", 1.3, "plankD", 2 * s, 0);
+  for (const [dx, dy, w] of [[-26, -92, 54], [24, -78, 46], [-4, -128, 46], [30, -116, 34], [-38, -60, 34]]) {
+    const cx = X + dx * s, cy = Y + dy * s, ww = w * s * (0.9 + r() * 0.2), pts = [];
+    for (let i = 0; i <= 8; i++) pts.push([cx - ww / 2 + ww * i / 8, cy - (i % 2 ? 10 : 7) * s - Math.sin(Math.PI * i / 8) * 8 * s]);
+    pts.push([cx + ww / 2 + 2 * s, cy + 3 * s], [cx, cy + 6 * s], [cx - ww / 2 - 2 * s, cy + 3 * s]);
+    const pad = pSmooth(pts); shape(x, pad, "pine", 1.2, "warm", 0, 4 * s);
+    x.save(); x.clip(pad); x.fillStyle = C("paper"); x.fill(pEll(cx - 2 * s, cy - 14 * s, ww * 0.42, 7 * s)); x.restore();
+  }
+}
+function lantern(x, X, B) { // a stone lantern with snow on its roof (X = centre, B = base)
+  const st = (p, sc) => shape(x, p, "grey", 1.3, sc ? "greyD" : null, 2, 2);
+  st(pCut(X - 16, B - 14, 32, 14, 3), 1); st(pPoly([[X - 6, B - 14], [X + 6, B - 14], [X + 7, B - 56], [X - 7, B - 56]]), 1);
+  st(pCut(X - 18, B - 66, 36, 10, 2), 1); st(pRR(X - 13, B - 92, 26, 26, 2), 1);
+  shape(x, pRR(X - 7, B - 86, 14, 13, 1), "greyD", 0.9);
+  const roof = pPoly([[X - 30, B - 92], [X - 22, B - 100], [X, B - 116], [X + 22, B - 100], [X + 30, B - 92], [X + 16, B - 94], [X - 16, B - 94]]);
+  st(roof, 1); x.save(); x.clip(roof); x.fillStyle = C("paper"); x.fill(pPoly([[X - 34, B - 99], [X - 20, B - 101], [X, B - 112], [X + 22, B - 101], [X + 34, B - 97], [X + 34, B - 130], [X - 34, B - 130]])); x.restore(); ST.edge(x, roof, 1.3);
+  shape(x, pEll(X, B - 119, 4.6, 4), "grey", 1.1); shape(x, pEll(X - 0.6, B - 121.4, 3.6, 2), "paper", 0.8);
+}
+function stone(x, X, Y, rx, ry, snow) { shape(x, pBlob(X, Y, rx, ry, 0.08, X | 0), "grey", 1.2, "greyD", 1.6, 2); if (snow) shape(x, pBlob(X - rx * 0.12, Y - ry * 0.45, rx * 0.7, ry * 0.4, 0.1, (X | 0) + 3), "paper", 0.8); }
+function garden(x, X0, X1) {
+  const g = []; for (let xx = X0 - 30; xx <= X1 + 30; xx += 30) g.push([xx, 330 + 2.2 * Math.sin(xx / 47)]);
+  g.push([X1 + 30, 446], [X0 - 30, 446]);
+  const gp = pPoly(g); shape(x, gp, "groundL", 1.1);
+  x.save(); x.clip(gp);
+  for (let k = fl(X0 / 70) - 1; k <= fl(X1 / 70) + 1; k++) { // snow lying in soft drifts, bare earth here and there
+    const cx = k * 70 + hh(k, 7) * 40, cy = 344 + hh(k, 8) * 76;
+    x.fillStyle = C(hh(k, 9) < 0.25 ? "ground" : "paper"); x.fill(pBlob(cx, cy, 26 + hh(k, 10) * 30, 6 + hh(k, 11) * 5, 0.2, k + 50));
+  }
+  x.restore();
+  fenceRun(x, Math.max(X0, -10), 136, 3); fenceRun(x, 226, Math.min(X1, 2000), 8);
+  for (const s of [-1, 1]) { const gx = s < 0 ? 136 : 226; shape(x, pRR(gx - 4, 328, 8, 54, 2), "plank", 1.2, "plankD", 1.6, 0); }
+  pineTree(x, 84, 346, 0.62, 5);
+  for (const [sx, sy, rx, ry] of [[198, 352, 9, 2.6], [182, 366, 12, 3.2], [200, 384, 15, 4], [178, 405, 19, 5], [196, 424, 23, 5.6]]) stone(x, sx, sy, rx, ry, true);
+  lantern(x, 56, 428);
+}
+function limb(pts, w0, w1) { // a tapered branch as one closed path along a polyline
+  const s = chaikin(pts, 2), n = s.length, A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = s[Math.max(0, i - 1)], b = s[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, w = lerp(w0, w1, i / (n - 1)) / 2;
+    A.push([s[i][0] - (b[1] - a[1]) / d * w, s[i][1] + (b[0] - a[0]) / d * w]); B.push([s[i][0] + (b[1] - a[1]) / d * w, s[i][1] - (b[0] - a[0]) / d * w]);
+  }
+  return pPoly(A.concat(B.reverse()));
+}
+function blossom(x, X, Y, r, open, rot) {
+  if (!open) { shape(x, pEll(X, Y, r * 0.5, r * 0.56), "redL", 0.7); return; }
+  shape(x, pPolar(X, Y, r, r, t => 0.6 + 0.4 * Math.pow(Math.abs(Math.cos(2.5 * (t + rot))), 0.6), 40), "orange", 0.8);
+  x.fillStyle = C("goldL"); x.fill(pEll(X, Y, r * 0.28, r * 0.28));
+}
+const PLUM = [ // the red plum by the right post: trunk, then branches (one reaches over the tower, one into the right side)
+  [[322, 436], [314, 392], [328, 344], [306, 292], [320, 244], [312, 210]],
+  [[318, 352], [290, 324], [268, 294], [244, 268], [228, 262]],
+  [[308, 298], [286, 258], [292, 222], [276, 196]],
+  [[320, 250], [346, 226], [366, 214], [392, 196], [420, 194]],
+  [[314, 214], [328, 186], [322, 160]],
+  [[266, 290], [258, 316], [246, 330]]
+];
+function plum(x) {
+  PLUM.forEach((b, i) => { const p = limb(b, i ? 6.5 - i * 0.4 : 15, i ? 1.6 : 5); shape(x, p, "plank", 1.2, i ? null : "plankD", 2, 0); });
+  const r = seeded(77);
+  PLUM.forEach((b, i) => {
+    const s = chaikin(b, 2);
+    for (let j = i ? 1 : 3; j < s.length; j++) {
+      if (r() < (i ? 0.25 : 0.55)) continue;
+      const [px, py] = s[j], side = r() < 0.5 ? -1 : 1;
+      blossom(x, px + side * (2 + r() * 4), py + (r() - 0.5) * 6, 3.6 + r() * 2.8, r() > 0.22, r() * 3);
+    }
+  });
+}
+function gardenRight(x, X1) { // past the core on the right: a stone water basin, a garden pine, shrubs and rocks
+  stone(x, 404, 420, 30, 11, true);
+  shape(x, pEll(404, 410, 22, 5), "sky1", 1, "sky0", 0, 1.6);
+  bamboo(x, 446, 384, 418, 404, 4.4, 30); shape(x, pRR(440, 384, 8, 44, 2), "plank", 1.1, "plankD", 1.4, 0);
+  stone(x, 446, 428, 12, 5, true); stone(x, 366, 428, 10, 4.4, true);
+  pineTree(x, 556, 424, 1.05, 12);
+  for (let k = 0; 400 + k * 160 < X1 + 60; k++) { const sx = 470 + k * 160 + hh(k, 31) * 50, sr = 18 + hh(k, 32) * 12; if (k % 2) stone(x, sx, 424, sr, sr * 0.36, true); else { const b = pBlob(sx, 410, sr * 1.3, sr * 0.8, 0.12, k + 9); shape(x, b, "pine", 1.2, "warm", 0, 4); x.save(); x.clip(b); x.fillStyle = C("paper"); x.fill(pEll(sx, 398, sr, 6)); x.restore(); } }
+  if (X1 > 640) pineTree(x, 760 + hh(2, 9) * 60, 428, 0.8, 21);
+}
+function workshop(x, X0, Y0) { // the open workshop on the left: shoji slid aside, racks of daruma at every stage
+  const a = X0 - 4, b = 4, t = vTop();
+  x.fillStyle = C("paper"); x.fillRect(a, Y0 - 4, b - a, 446 - Y0);
+  shape(x, pPoly([[a, 152], [b, 152], [b, 436], [a, 436]]), "paperD", 0);
+  x.fillStyle = C("plankL"); x.fillRect(a, 404, b - a, 32);
+  x.strokeStyle = C("plank"); x.lineWidth = 0.8; for (const y of [414, 426]) x.stroke(pLine(a, y, b, y));
+  const xs = vLeft(), rackA = xs + 134, rackB = -26;
+  if (rackB - rackA > 50) { // the drying racks: three boards on two uprights
+    for (const ux of [rackA - 6, rackB + 6]) shape(x, pRR(ux - 4, 196, 8, 210, 1.5), "plank", 1.1, "plankD", 1.4, 0);
+    [236, 316, 396].forEach((y, row) => {
+      let xx = rackA + 8 + hh(row, 4) * 10, i = 0;
+      while (true) {
+        const r = 9 + hh(row * 31 + i, 5) * 8; if (xx + 2 * r > rackB - 4) break;
+        const st = ["raw", "white", "red", "done", "white", "red", "gold", "raw", "done"][fl(hh(row * 17 + i, 6) * 9)];
+        smallDaruma(x, xx + r, y, r, st, (hh(row + i * 5, 7) - 0.5) * 0.12);
+        xx += 2 * r + 5 + hh(row * 7 + i, 8) * 12; i++;
+      }
+      shape(x, pPoly([[rackA - 10, y], [rackB + 10, y - 0.6], [rackB + 10, y + 7], [rackA - 10, y + 7.4]]), "plankL", 1.2, "plank", 0, 2.4);
+    });
+  }
+  const sw = Math.min(118, b - a - 8); // two shoji panels slid to the far left
+  if (sw > 54) for (const [ox, k] of [[0, 0], [34, 1]]) {
+    const sx = xs + 6 + ox, fr = pRR(sx, 156, sw - 34, 276, 1.5);
+    shape(x, fr, "pane", 1.2);
+    x.strokeStyle = C("plankL"); x.lineWidth = 1;
+    for (let gx = sx + 14 + k * 3; gx < sx + sw - 34; gx += 17) x.stroke(pLine(gx, 158, gx, 430));
+    for (let gy = 186; gy < 430; gy += 30) x.stroke(pLine(sx, gy, sx + sw - 34, gy));
+    x.lineWidth = 4; x.strokeStyle = C("plank"); x.stroke(fr); ST.edge(x, fr, 1);
+  }
+  if (xs + 136 < -40) shape(x, pRR(xs + 126, 150, 14, 290, 2), "plank", 1.4, "plankD", 3, 0);
+  shape(x, pPoly([[a, 144], [b, 144], [b, 156], [a, 156]]), "plank", 1.3, "plankD", 0, 3); // the lintel
+  if (t + 40 < 144) { x.strokeStyle = C("paperD"); x.lineWidth = 1; for (let y = 120; y > t + 40; y -= 34) x.stroke(pLine(a, y, b, y)); }
+}
+function veranda(x, X0, X1, Y1) {
+  const a = X0 - 4, b = X1 + 4;
+  x.fillStyle = C("poolB"); x.fillRect(a, 440, b - a, Y1 - 436);
+  // post shadows fall to the lower right across the boards; the boards widen toward the viewer
+  x.fillStyle = C("poolA");
+  for (const px of allPosts(X0, X1)) x.fill(pPoly([[px - 9, 441], [px + 9, 441], [px + 9 + 0.7 * (Y1 - 441), Y1], [px - 9 + 0.7 * (Y1 - 441), Y1]]));
+  x.strokeStyle = C("poolA"); x.lineWidth = 1.2;
+  let y = 441; for (let i = 0; y < Y1; i++) {
+    const gap = 12 + i * 3.2; y += gap; x.stroke(pLine(a, y, b, y));
+    for (let xx = a + hh(i, 2) * 200; xx < b; xx += 180 + hh(i, fl(xx)) * 160) x.stroke(pLine(xx, y - gap + 1, xx, y - 1));
+  }
+  shape(x, pPoly([[a, 430], [b, 430], [b, 441], [a, 441]]), "plank", 1.4, "plankD", 0, 3);
+}
+function allPosts(X0, X1) { const p = POST_X.slice(); for (let k = 1; 348 + k * 300 < X1 + 20; k++) p.push(348 + k * 300); return p; }
+function posts(x, X0, X1) {
+  const t = vTop();
+  for (const px of allPosts(X0, X1)) {
+    const p = pRR(px - 8, t + 18, 16, 431 - t - 18, 1.5);
+    ST.fill(x, p, "plank"); grain(x, p, px - 8, t + 18, 16, 431 - t, 4, "plankL", px | 0, true); ST.shade(x, p, "plankD", 3.4, 0); ST.edge(x, p, 1.4);
+  }
+}
+function eave(x, X0, X1, Y0) {
+  const t = vTop(), a = X0 - 4, b = X1 + 4;
+  x.fillStyle = C("plankD"); x.fillRect(a, Y0 - 4, b - a, t + 8 - Y0 + 4);
+  for (let k = fl(a / 34); k * 34 < b; k++) shape(x, pRR(k * 34 + 8, t - 8, 14, 14, 3), "plank", 1, null);
+  const beam = pPoly([[a, t + 6], [b, t + 6], [b, t + 22], [a, t + 22]]);
+  ST.fill(x, beam, "plank"); grain(x, beam, a, t + 6, b - a, 16, 4.2, "plankL", 12); ST.shade(x, beam, "plankD", 0, 3); ST.edge(x, beam, 1.4);
+  const roll = pRR(a, t + 21, b - a, 11, 5); // a rolled-up blind under the beam, tied with red cords
+  ST.fill(x, roll, "tag"); x.save(); x.clip(roll); x.strokeStyle = C("tagG"); x.lineWidth = 0.7;
+  for (let xx = a; xx < b; xx += 3.2) x.stroke(pLine(xx, t + 21, xx + 1, t + 32)); x.restore();
+  ST.shade(x, roll, "tagD", 0, 3); ST.edge(x, roll, 1.2);
+  for (let k = fl(a / 120); k * 120 < b; k++) {
+    const tx = k * 120 + 30 + hh(k, 41) * 50, l = 6 + hh(k, 42) * 6;
+    cordLine(x, pPoly([[tx - 3, t + 20], [tx - 3, t + 33], [tx + 3, t + 33], [tx + 3, t + 20]], true), 1.6, "red");
+    cordLine(x, pLine(tx, t + 33, tx - 1, t + 33 + l), 1.4, "red"); shape(x, pRR(tx - 3, t + 32 + l, 4, 6, 1.5), "red", 0.8);
+  }
+}
+function pot(x, X, B, w, h, body, paint) { // a paint pot with its paint showing at the rim
+  const p = pSmooth([[X - w * 0.42, B - h], [X + w * 0.42, B - h], [X + w * 0.52, B - h * 0.5], [X + w * 0.42, B], [X - w * 0.42, B], [X - w * 0.52, B - h * 0.5]]);
+  shape(x, p, body, 1.3, body === "paper" ? "paperD" : body === "indigo" ? "mid" : "greyD", 2, 2);
+  shape(x, pEll(X, B - h + 1, w * 0.36, 2.6), paint, 0.9);
+}
+function brushStick(x, X0, Y0, X1, Y1) { ST.line(x, pLine(X0, Y0, X1, Y1), 2.6, "tagD"); brush(x, [[X1, Y1], [X1 + (X1 - X0) * 0.08, Y1 + (Y1 - Y0) * 0.08], [X1 + (X1 - X0) * 0.16, Y1 + (Y1 - Y0) * 0.16]], 4); }
+function floorProps(x, X0, X1) {
+  // left of the stand: paint pots (vermilion, gold, ink) and brushes; right: a brush holder and a primed daruma
+  for (const [px, w] of [[36, 30], [68, 22], [92, 16]]) { x.fillStyle = C("poolA"); x.fill(pEll(px + 5, 517, w * 0.6, 3)); }
+  brushStick(x, 42, 470, 32, 492);
+  pot(x, 36, 516, 30, 22, "indigo", "red"); pot(x, 68, 516, 22, 16, "paper", "gold"); pot(x, 92, 516, 16, 11, "greyD", "ink");
+  brushStick(x, 66, 486, 78, 506);
+  x.fillStyle = C("poolA"); x.fill(pEll(290, 517, 22, 3)); x.fill(pEll(324, 517, 20, 3));
+  for (const [x0, x1, y1] of [[268, 262, 470], [274, 276, 466], [280, 288, 472]]) brushStick(x, x0, 500, x1, y1);
+  const holder = pRR(264, 492, 22, 26, 3); shape(x, holder, "tag", 1.2, "tagD", 2, 0); ST.line(x, pLine(264, 503, 286, 503), 1, "tagD");
+  smallDaruma(x, 322, 517, 17, "white", 0.04);
+  if (X1 > 372) { // the right side: a straw mat with daruma drying in the sun, a cat asleep at its end
+    const mat = pPoly([[380, 476], [566, 474], [574, 516], [372, 518]]);
+    shape(x, mat, "tagL", 1.3, "tagG", 0, 3); x.save(); x.clip(mat); x.strokeStyle = C("tagG"); x.lineWidth = 0.7; for (let xx = 372; xx < 576; xx += 4) x.stroke(pLine(xx, 474, xx - 2, 518)); x.restore();
+    for (const s of [0, 1]) ST.line(x, s ? pLine(372, 515, 574, 513) : pLine(380, 478, 566, 476), 2.6, "indigo");
+    [[402, 13, "red", -0.05], [432, 16, "done", 0.03], [466, 11, "white", 0], [494, 15, "red", 0.06], [528, 12, "gold", -0.04], [552, 10, "done", 0]].forEach(([dx, r, st, a]) => smallDaruma(x, dx, 503 - (dx % 7), r, st, a));
+    cat(x, 622, 508);
+  }
+  if (X0 < -60) { // the left side: a low work table with a daruma half painted
+    const tx = -150;
+    x.fillStyle = C("poolA"); x.fill(pEll(tx + 6, 520, 66, 4));
+    for (const lx of [tx - 52, tx + 46]) shape(x, pRR(lx, 488, 8, 30, 1.5), "plank", 1.1, "plankD", 1.4, 0);
+    shape(x, pCut(tx - 64, 480, 128, 10, 3), "plankL", 1.4, "plank", 0, 3);
+    smallDaruma(x, tx - 20, 480, 18, "red", 0); smallDaruma(x, tx + 22, 480, 13, "raw", 0.05);
+    pot(x, tx + 48, 480, 16, 12, "paper", "red"); brushStick(x, tx + 40, 452, tx + 50, 470);
+  }
+}
+function cat(x, X, Y) { // a sleeping cat, curled up in the sun
+  const body = pSmooth([[X - 26, Y], [X - 20, Y - 15], [X, Y - 19], [X + 18, Y - 14], [X + 24, Y - 2], [X + 10, Y + 3], [X - 14, Y + 3]]);
+  shape(x, body, "paper", 1.3, "paperD", 0, 3);
+  x.save(); x.clip(body); x.fillStyle = C("tag"); x.fill(pBlob(X + 6, Y - 13, 12, 7, 0.2, 5)); x.fillStyle = C("plank"); x.fill(pBlob(X - 12, Y - 6, 7, 5, 0.2, 8)); x.restore(); ST.edge(x, body, 1.3);
+  const head = pSmooth([[X - 30, Y + 1], [X - 31, Y - 9], [X - 28, Y - 14], [X - 20, Y - 12], [X - 14, Y - 7], [X - 16, Y + 2]]);
+  shape(x, head, "paper", 1.2, "paperD", 0, 2);
+  for (const [ex, ey] of [[X - 29, Y - 12], [X - 21, Y - 12]]) shape(x, pPoly([[ex - 3, ey + 1], [ex, ey - 6], [ex + 3, ey + 1]]), "paper", 1);
+  x.lineWidth = 1; x.strokeStyle = C("ink"); for (const ex of [X - 27, X - 21]) { const p = P2(); p.moveTo(ex - 2, Y - 6); p.quadraticCurveTo(ex, Y - 4.6, ex + 2, Y - 6); x.stroke(p); }
+  ST.line(x, pSmooth([[X + 20, Y + 1], [X + 4, Y + 6], [X - 16, Y + 4]], true), 3.4, "tag");
+}
+function stand(x) { // the work stand: a dark top, an apron with the lean gauge inlaid, two legs
+  x.fillStyle = C("plankL"); x.fill(pEll(186, 516, 90, 6));
+  for (const lx of [110, 238]) shape(x, pPoly([[lx, 494], [lx + 12, 494], [lx + 11, 516], [lx + 1, 516]]), "plank", 1.3, "plankD", 2.4, 0);
+  const ap = pCut(105, 472, 150, 26, 3); ST.fill(x, ap, "plank"); grain(x, ap, 105, 472, 150, 26, 4, "plankL", 31); ST.shade(x, ap, "plankD", 0, 3); ST.edge(x, ap, 1.5);
+  const tp = pCut(97, 462, 166, 12, 3.4); ST.fill(x, tp, "plankL"); grain(x, tp, 97, 462, 166, 12, 3.6, "plank", 32); ST.shade(x, tp, "plank", 0, 3.4); ST.edge(x, tp, 1.6);
+  // the lean gauge: calm (washi), x2 (gold with dots), x3 (vermilion with hatching), a mark at the centre
+  const g = pRR(MID - 58, GAUGE_Y, 116, 13, 2);
+  ST.fill(x, g, "paper"); x.save(); x.clip(g);
+  for (const s of [-1, 1]) {
+    const z1 = MID + s * 56 * ZONE[0], z2 = MID + s * 56 * ZONE[1], z3 = MID + s * 60;
+    x.fillStyle = C("gold"); x.fillRect(Math.min(z1, z2), GAUGE_Y, Math.abs(z2 - z1), 13);
+    x.fillStyle = C("goldD"); for (let xx = Math.min(z1, z2) + 3; xx < Math.max(z1, z2) - 1; xx += 5) x.fill(pEll(xx, GAUGE_Y + 6.5, 0.9, 0.9));
+    x.fillStyle = C("red"); x.fillRect(Math.min(z2, z3), GAUGE_Y, Math.abs(z3 - z2), 13);
+    x.strokeStyle = C("redD"); x.lineWidth = 1.1; for (let xx = Math.min(z2, z3) - 12; xx < Math.max(z2, z3); xx += 4) x.stroke(pLine(xx, GAUGE_Y + 13, xx + 12, GAUGE_Y));
+    ST.line(x, pLine(z1, GAUGE_Y, z1, GAUGE_Y + 13), 0.9); ST.line(x, pLine(z2, GAUGE_Y, z2, GAUGE_Y + 13), 0.9);
+  }
+  x.restore(); ST.line(x, pLine(MID, GAUGE_Y - 1, MID, GAUGE_Y + 14), 1.4); ST.edge(x, g, 1.3);
+}
+
+// ---------- GAME-SPECIFIC: drawing ----------
+const shearX = (i, t) => t * (5.2 * i + 0.48 * i * i);
 function vtilt(now) { // what the eye sees: the teeter rocks on the edge, the frozen pose holds past it
   const r = run;
   if (r.dead) return r.dead.side * 1.08;
-  if (r.teeter) return r.teeter.side * (1.02 + 0.05 * (fl(now / 95) & 1));
+  if (r.teeter) return r.teeter.side * (1.02 + (Juice.reduce ? 0.02 : 0.04 * (0.5 + 0.5 * Math.sin(now / 95))));
   return r.L + r.wob;
 }
-function drawWindowLife(now, c) { // snow inside the round window drifts with the draft; gusts blow it flat
-  const r = run, { x: wx, y: wy, r: wr } = WIN, gust = r.gust && r.c >= r.gust.start ? r.gust.dir : 0, warn = r.gust && !gust ? r.gust.dir : 0;
-  const drift = (gust ? gust * 3 : r.windDir * (phaseNow().wind ? 0.6 : 0.15)), t = now / 1000;
-  for (let i = 0; i < 26; i++) {
-    const sp = 9 + (i % 5) * 3, y0 = (i * 37 + t * sp) % 44, x0 = (i * 53 + t * sp * drift * 4 + Math.sin(t * 1.3 + i) * 2) % 44;
-    const x = wx - 22 + fl(((x0 % 44) + 44) % 44), y = wy - 22 + fl(y0);
-    const dx = x - wx, dy = y - wy; if (dx * dx + dy * dy < (wr - 1) * (wr - 1)) P(x, y, i % 4 ? "w" : "p");
-  }
-  if (warn && (fl(now / 70) & 1)) { R(wx - wr - 4, wy - 2, 1, 5, "k"); R(wx + wr + 4, wy - 2, 1, 5, "k"); } // the frame rattles before a gust
-}
-function drawStack(now) {
-  const r = run, t = vtilt(now), n = r.stack.length, dropAge = fx.vt - fx.dropT;
-  const drop = r.dead ? 0 : dropAge < 70 ? Math.round(DH * (1 - dropAge / 70)) : dropAge < 110 ? -1 : 0; // the stack falls one disc and lands with a bump
-  const slide = dropAge < 170 ? Math.round(fx.slideFrom * 70 * (1 - easeOut(dropAge / 170))) : 0;
-  const lift = r.teeter && (fl(now / 95) & 1) ? 1 : 0;
+// where every disc and the daruma are this frame, before the whole tower turns by rock about (px, py), the stand's
+// corner on the leaning side. The stack drops one disc and lands with a squash, a new disc slides in on top.
+function towerPose(now) {
+  const r = run, t = vtilt(now), n = r.stack.length, age = fx.vt - fx.dropT, dead = !!r.dead, still = Juice.reduce;
+  const fall = dead ? 0 : age < 70 ? DH * (1 - (age / 70) ** 2) : 0;
+  const sq = dead || still ? 0 : 0.14 * wob((age - 70) / 300, 11, 4.5), f = 1 - sq * 0.35;
+  const P = { d: [], h: null, rock: 0, px: MID, py: STAND_Y, sq };
   for (let i = 0; i < n; i++) {
-    const d = r.stack[i];
-    let x = MID - fl(DW / 2) + shearX(i, t) + d.shift, y = STAND_Y - (i + 1) * DH - (i > 0 ? drop : 0) - lift;
-    if (i === n - 1) x += slide;
-    if (i === 0 && fx.vt - fx.stuckT < 200) x += (fl(fx.vt / 30) & 1) ? 1 : -1;
-    if (d.kind === "G" && (fl(now / 220) & 1)) spr(SP.goldGlow, x - 1, y - 1);
-    spr(discSpr(d), x, y);
+    const d = r.stack[i], s0 = shearX(i, t), s1 = shearX(i + 1, t);
+    let x = MID + s0 + d.shift;
+    if (i === n - 1 && !dead && age < 200) x += fx.slideFrom * 150 * (1 - easeOut(age / 200));
+    if (i === 0 && fx.vt - fx.stuckT < 200 && !still) x += (fl(fx.vt / 30) & 1) ? 2.4 : -2.4;
+    P.d.push({ x, y: STAND_Y - (i + 0.5) * DH * f - fall, a: Math.atan((s1 - s0) / DH) * 0.4 });
   }
-  // the head rides on top: hops while a new disc slides in, squints on a bump, trembles on the edge
-  const hop = dropAge < 170 ? Math.round(Math.sin(Math.PI * dropAge / 170) * 9) : 0;
-  const hx = MID - 16 + shearX(n, t) + (r.teeter && !reduceMotion ? (fl(now / 45) & 1) : 0), hy = STAND_Y - n * DH - HEAD_H - drop - hop - lift;
-  drawHead(hx, hy, faceOf(now), now);
+  const hop = !dead && age < 200 ? 20 * Math.sin(Math.PI * age / 200) : 0, top = n ? P.d[n - 1].a : 0;
+  const jit = r.teeter && !still ? vnoise(now / 40) * 1.6 : 0;
+  P.h = { x: MID + shearX(n, t) + jit, y: STAND_Y - n * DH * f - fall - HEAD_UP - hop, a: top * 1.3 + (dead ? r.dead.side * 0.12 : 0) };
+  const side = r.dead ? r.dead.side : r.teeter ? r.teeter.side : 0;
+  if (side) { P.px = MID + side * DW / 2; P.rock = r.dead ? side * 0.07 : side * (still ? 0.045 : 0.035 + 0.025 * (0.5 + 0.5 * Math.sin(now / 75))); }
+  return P;
 }
 function faceOf(now) {
   const r = run, age = fx.vt - fx.hitT, t = Math.abs(r.L + r.wob);
-  if (r.dead) return "scared";
-  if (r.teeter) return "scared";
+  if (r.dead || r.teeter) return "scared";
   if (fx.vt - fx.saveT < 700) return "happy";
   if (age < 450 && (fx.hitTier === "perfect" || (fx.hitTier === "good" && age < 250))) return "happy";
   if (age < 380 && (fx.hitTier === "weak" || fx.hitTier === "strong" || fx.hitTier === "stuck")) return "oops";
@@ -1280,318 +1731,316 @@ function faceOf(now) {
   if (r.charging) return "focus";
   return (fl(now / 3100) !== fl((now + 150) / 3100)) ? "blink" : "idle";
 }
-function drawHead(x, y, face, now, eyes, goldBody) {
-  eyes = eyes == null ? run.eyes : eyes; goldBody = goldBody == null ? run.goldBody : goldBody;
-  const flap = (run.gust && run.c >= run.gust.start) || (fl(now / 260) & 1) && phaseNow().wind ? 1 : 0;
-  spr(goldBody ? (flap ? SP.headG2 : SP.headG) : (flap ? SP.head2 : SP.head), x, y);
-  const eye = side => face === "happy" ? "happy" : face === "blink" ? "shut" : face === "oops" ? "squint" : face === "bonk" ? "swirl" : face === "scared" ? (eyes > (side < 0 ? 0 : 1) ? "wide" : "blank") : eyes > (side < 0 ? 0 : 1) ? "dot" : "blank";
-  const brow = face === "worried" || face === "worried2" || face === "oops" || face === "bonk" ? "up" : face === "scared" ? "hi" : face === "focus" ? "dn" : "n";
-  const mouth = face === "happy" ? "open" : face === "scared" ? "o" : face === "worried2" || face === "oops" || face === "bonk" ? "wavy" : face === "worried" ? "n" : face === "focus" ? "n" : "smile";
-  spr(SP["eye_" + eye(-1)], x + 10, y + 11); spr(SP["eye_" + eye(1)], x + 18, y + 11, eye(1) === "squint");
-  spr(SP["brow_" + brow], x + 9, y + (brow === "hi" ? 7 : 8)); spr(SP["brow_" + brow], x + 17, y + (brow === "hi" ? 7 : 8), true);
-  spr(SP.must, x + 9, y + 16); spr(SP["mouth_" + mouth], x + 13, y + 19);
-  if (face === "happy") { R(x + 9, y + 17, 2, 1, "h"); R(x + 22, y + 17, 2, 1, "h"); }
-  if (face === "worried2" || face === "scared") spr(SP.sweat, x + 26, y + 9 + (fl(now / 160) & 1));
-  if (face === "scared") spr(SP.sweat, x + 3, y + 12 + (fl(now / 190) & 1));
+const flapNow = now => run && ((run.gust && run.c >= run.gust.start) || ((fl(now / 260) & 1) && phaseNow().wind)) ? 1 : 0; // the headband tails fly in the wind
+function drawDaruma(x, X, Y, a, face, now, eyes, gold, sq, s, flap) {
+  s = s || 1; const sx = s * (1 + (sq || 0) * 0.25), sy = s * (1 - (sq || 0) * 0.3);
+  drawLit(x, headSpr(gold, flap == null ? flapNow(now) : flap), X, Y, a, sx, sy);
+  x.save(); x.translate(X, Y); x.scale(sx, sy); x.rotate(a); faceArt(x, face, eyes, now); x.restore();
 }
-function drawHammer(now) {
+function drawTower(x, now) {
+  const r = run, P = fx.pose = towerPose(now), ca = Math.cos(P.rock), sa = Math.sin(P.rock);
+  const turn = (X, Y) => [P.px + (X - P.px) * ca - (Y - P.py) * sa, P.py + (X - P.px) * sa + (Y - P.py) * ca];
+  const sx = P.sq ? 1 + P.sq * 0.3 : 0, sy = P.sq ? 1 - P.sq * 0.35 : 0;
+  r.stack.forEach((d, i) => { const p = P.d[i], [X, Y] = turn(p.x, p.y); putDisc(x, d, X, Y, p.a + P.rock, sx, sy); });
+  const [hx, hy] = turn(P.h.x, P.h.y);
+  drawDaruma(x, hx, hy, P.h.a + P.rock, faceOf(now), now, r.eyes, r.goldBody, P.sq);
+}
+function drawGauge(x, now) { // the brass pointer over the gauge on the stand's apron
+  const t = vtilt(now), px = MID + clamp(t * 56, -60, 60), hot = Math.abs(t) >= ZONE[1];
+  shape(x, pPoly([[px - 6, GAUGE_Y - 7], [px + 6, GAUGE_Y - 7], [px + 0.6, GAUGE_Y + 6], [px - 0.6, GAUGE_Y + 6]]), hot && (fl(now / 120) & 1) ? "paper" : "gold", 1.2, "goldD", 1, 1.4);
+}
+function drawMallet(x, now) {
   const r = run, s = r.side, age = fx.vt - fx.hitT, k = r.charging ? r.pw / 100 : 0, held = state === "play" && (input.want || r.charging);
-  let gap = 3, lift = 0, smear = false;
-  if (age < 45) { gap = 0; smear = true; }                 // contact (the smear frame)
-  else if (age < 120) gap = -3;                            // follow-through into the gap the disc left
-  else if (age < 230) gap = 7;                             // recoil
-  else if (r.charging) { gap = 7 + Math.round(k * 10); lift = 1 + Math.round(k * 3); } // pulled back on the first frame, then further with the power
-  else if (held) gap = 5;
-  else gap = 3 + (fl(now / 600) & 1);
-  const d = r.stack[0], ex = MID + s * (fl(DW / 2) + 1) + (d ? d.shift : 0);
-  const hx = s > 0 ? ex + gap : ex - gap - 16, hy = STAND_Y - 12 - lift, hcx = hx + 8, tx = hcx + s * (10 + lift * 2), ty = hy - 30 + lift;
-  line(hcx, hy - 1, tx, ty, "k", 4); line(hcx, hy - 1, tx, ty, "O", 2); line(hcx + s, hy - 2, tx + s, ty, "o", 1);
-  R(tx - 2, ty - 3, 5, 5, "k"); R(tx - 1, ty - 2, 3, 3, "R"); // the grip's red cord
-  R(hx, hy, 16, 12, "k"); R(hx + 1, hy + 1, 14, 10, "o"); R(hx + 1, hy + 1, 14, 2, "q"); R(hx + 1, hy + 8, 14, 1, "O"); R(hx + 1, hy + 9, 14, 2, "D");
-  R(hx + 3, hy + 1, 2, 10, "Y"); R(hx + 11, hy + 1, 2, 10, "Y"); R(hx + 3, hy + 1, 2, 1, "y"); R(hx + 11, hy + 1, 2, 1, "y");
-  R(s > 0 ? hx + 1 : hx + 13, hy + 2, 2, 8, "O"); R(s > 0 ? hx + 1 : hx + 14, hy + 3, 1, 6, "D"); // end grain faces the disc
-  if (smear) for (let i = 1; i <= 3; i++) R(s > 0 ? hx + 15 + i * 4 : hx - i * 4, hy + 2 + (i & 1) * 2, 3, 8 - (i & 1) * 4, "w");
-}
-function drawFlyers(now) {
-  for (const f of fx.flyers) {
-    const x = fl(f.x), y = fl(f.y);
-    if (f.trail) for (let i = 1; i <= 3; i++) R(f.vx > 0 ? x - i * 5 : x + DW + i * 5 - 3, y + 2 + i, 3, 1, "w");
-    spr(discSpr(f.d), x, y);
+  let gap, tilt = 0;
+  if (age >= 0 && age < 45) { gap = 0; tilt = -s * 0.1; }                 // contact
+  else if (age >= 45 && age < 120) { gap = -7; tilt = -s * 0.14; }       // follow-through into the gap the disc left
+  else if (age >= 120 && age < 230) gap = 16 * Math.sin((age - 120) / 110 * Math.PI) + 6; // recoil
+  else if (r.charging) { gap = 14 + k * 22; tilt = s * 0.34 * k; }       // pulled back on the first frame, then further with the power
+  else if (held) gap = 12;
+  else gap = 7 + (Juice.reduce ? 0 : Math.sin(now / 520) * 1.6);
+  const d = r.stack[0], ex = MID + s * (DW / 2 + 1) + (d ? d.shift : 0), hx = ex + s * (gap + 21 * MAL_S), hy = STAND_Y - DH / 2;
+  if (age >= 0 && age < 110) for (const dy of [-9, 0, 9]) { // speed lines behind the head, brushed in ink (never a ghost copy)
+    const l = (40 - Math.abs(dy) * 1.2) * (1 - age / 110);
+    brush(x, [[hx + s * (32 + l * 1.5), hy + dy], [hx + s * (32 + l * 0.8), hy + dy - 0.6], [hx + s * 30, hy + dy]], 2.6);
   }
-  if (fx.bodies) for (const b of fx.bodies) {
-    if (b.head) {
-      const face = fx.vt - fx.bonkT < 1e8 && b.hit ? "bonk" : "scared";
-      drawHead(fl(b.x), fl(b.y), face, now);
-      if (b.hit) for (let i = 0; i < 3; i++) { const a = now / 260 + i * 2.1; spr(SP.star, fl(b.x + 16 + Math.cos(a) * 15) - 2, fl(b.y - 2 + Math.sin(a) * 4) - 2); }
-    } else {
-      const f = b.rest ? 0 : (fl(fx.vt / 90) + b.spin) % 4;
-      if (f % 2 && b.edge) spr(b.edge[f === 1 ? 0 : 1], fl(b.x) - 2, fl(b.y)); else spr(b.spr, fl(b.x), fl(b.y));
-    }
-  }
+  putRot(x, "mal" + s, MAL_W, MAL_H, malletArt(s), hx, hy, tilt);
 }
-function flyersStep(dt) {
+function flyersStep(dt) { // knocked discs: a crisp arc, one bounce on the boards, then a skid out of view
   for (let i = fx.flyers.length - 1; i >= 0; i--) {
-    const f = fx.flyers[i]; f.t += dt; f.vy += 420 * dt; f.x += f.vx * dt; f.y += f.vy * dt;
-    if (f.x < -PX.cx0 - 70 || f.x > PX.LW - PX.cx0 + 20 || f.y > 400) fx.flyers.splice(i, 1);
+    const f = fx.flyers[i], fy = FLOOR_Y - DH / 2; f.t += dt;
+    if (f.hit < 2) {
+      f.vy += 1500 * dt; f.y += f.vy * dt;
+      if (f.y >= fy && f.vy > 0) { f.y = fy; f.hit++; if (f.hit === 1) { f.vy = -f.vy * 0.3; f.vx = f.vx * 0.6; } else f.vy = 0; }
+    } else f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), 300 * dt);
+    f.x += f.vx * dt;
+    if (f.x < vLeft() - 90 || f.x > vRight() + 90 || f.t > 3) fx.flyers.splice(i, 1);
   }
 }
-function drawGaugePointer(now) {
-  const t = vtilt(now), a = Math.abs(t), px = MID + clamp(Math.round(t * 26), -27, 27);
-  const col = a >= 0.7 ? ((fl(now / 120) & 1) ? "w" : "r") : a >= 0.35 ? "y" : "l";
-  R(px - 3, 236, 7, 1, "k"); R(px - 2, 237, 5, 1, "k"); R(px - 1, 238, 3, 1, "k"); P(px, 239, "k");
-  R(px - 2, 236, 5, 1, col); R(px - 1, 237, 3, 1, col);
+function drawFlyers(x) {
+  for (const f of fx.flyers) {
+    const dir = Math.sign(f.vx) || 1, a = f.hit ? 0 : clamp(f.vy / 1400, -0.3, 0.3) * dir;
+    if (!f.hit) for (const dy of [-7, 1, 8]) { // brush lines trail the disc
+      const l = (f.fast ? 54 : 40) * (1 - clamp(f.t / 0.5, 0, 0.7)), bx = f.x - dir * (DW / 2 + 6);
+      brush(x, [[bx, f.y + dy], [bx - dir * l * 0.5, f.y + dy - f.vy * 0.012], [bx - dir * l, f.y + dy - f.vy * 0.03]], 2.2);
+    }
+    putDisc(x, f.d, f.x, f.y, a);
+  }
+}
+function drawBodies(x, now) {
+  for (const b of fx.bodies) {
+    if (!b.head) { putDisc(x, b.d, b.x, b.y, b.a); continue; }
+    drawDaruma(x, b.x, b.y, b.a, b.hit ? "bonk" : "scared", now, run.eyes, run.goldBody, 0, 1, 0);
+    if (b.hit) for (let i = 0; i < 3; i++) { const a = now / 260 + i * 2.1; star(x, b.x + Math.cos(a) * 34, b.y - 40 + Math.sin(a) * 8, 6, "goldL", a); }
+  }
+}
+function drawImpact(x, now) { // a flat inked star where the mallet met the disc; the top tier gets the big one
+  const age = fx.vt - fx.hitT, t = fx.hitTier;
+  if (t && age >= 0 && age < 110 && !fx.bodies) {
+    const k = 1 - age / 110, hx = MID + fx.hitSide * (DW / 2 + 2), hy = STAND_Y - DH / 2;
+    const r = (t === "perfect" ? 26 : t === "good" ? 19 : 15) * (0.7 + 0.3 * k);
+    star(x, hx, hy, r, t === "perfect" ? "goldL" : t === "good" ? "paper" : t === "strong" ? "redL" : "grey", age / 60, t === "perfect" ? "gold" : null);
+  }
+  if (fx.vt - fx.bigT < 160) star(x, fx.bigX, fx.bigY, 48, "goldL", 0.2, "gold");
+}
+function drawWind(x, now) { // gusts: ink streaks race across the sky in the wind's direction
+  const r = run, g = r.gust; if (!g || r.dead || r.c < g.start || Juice.reduce) return;
+  const t = fx.vt / 1000, span = vRight() - vLeft() + 400;
+  for (let i = 0; i < 6; i++) {
+    const y = 150 + i * 46 + Math.sin(t * 2 + i) * 6, xx = vLeft() - 200 + (((t * 760 + i * 211) * g.dir % span) + span) % span, l = 70 + (i % 3) * 30;
+    brush(x, [[xx, y], [xx + g.dir * l * 0.3, y - 3], [xx + g.dir * l * 0.7, y + 1], [xx + g.dir * l, y - 2]], 2.4);
+  }
 }
 function recSide() { // the side that helps: a teeter wants the leaning side; otherwise the notch decides, then the lean
   const r = run, d = r.stack[0];
   if (r.teeter) return r.teeter.side;
   if (d && d.kind === "N") return d.side;
-  const t = r.teeter ? r.teeter.side : r.L + r.wob;
+  const t = r.L + r.wob;
   return Math.abs(t) >= 0.2 ? (t > 0 ? 1 : -1) : 0;
 }
-function drawMeter(now) {
+function drawRuler(x, now) {
   const r = run, d = r.stack[0]; if (!d) return;
-  const x = METER_X, y = METER_Y, w = METER_W, h = METER_H, frozen = !!r.dead, b = frozen && r.dead.band ? r.dead.band : bandOf(d), u = v => x + Math.round(clamp(v, 0, 100) * w / 100);
-  nr(x - 2, y - 2, w + 4, h + 4, "k", 1); R(x - 1, y - 1, w + 2, h + 2, "o"); R(x, y, w, h, "w"); R(x, y + h - 3, w, 1, "m");
-  for (let v = 0; v <= 100; v += 5) R(u(v), y + h - (v % 10 ? 2 : 4), 1, v % 10 ? 2 : 4, "c");
-  if (r.charging) R(x, y + h - 2, u(r.pw) - x, 2, "a"); // the power fill stays under the band (bar: the target never fades)
-  const gold = d.kind === "G" && !frozen, bx0 = u(b.lo), bx1 = u(b.hi), px0 = u(b.c - b.pw), px1 = u(b.c + b.pw);
-  const bandBlink = frozen && r.dead.struck && (fl(now / 110) & 1);
-  R(bx0, y, bx1 - bx0 + 1, h - 3, bandBlink ? "r" : gold ? "y" : "l"); for (let xx = bx0 + 1; xx < bx1; xx += 3) P(xx, y + 1, gold ? "Y" : "g");
-  R(px0, y, Math.max(2, px1 - px0 + 1), h - 3, gold ? "q" : "y"); R(bx0, y - 1, 1, h + 1, "k"); R(bx1, y - 1, 1, h + 1, "k");
+  const X = METER_X, Y = METER_Y, w = METER_W, h = METER_H, frozen = !!r.dead, b = frozen && r.dead.band ? r.dead.band : bandOf(d), u = v => X + clamp(v, 0, 100) * w / 100;
+  put(x, rulerSpr(), X, Y);
+  const gold = d.kind === "G" && !frozen, blink = frozen && r.dead.struck && (fl(now / 110) & 1);
+  x.save(); x.beginPath(); x.rect(X + 1, Y + 1, w - 2, h - 2); x.clip();
+  if (r.charging) { x.fillStyle = C("red"); x.fillRect(X, Y + h - 6, u(r.pw) - X, 4); } // the power fill runs under the band
+  x.fillStyle = C(blink ? "red" : gold ? "gold" : "pine"); x.fillRect(u(b.lo), Y + 2, u(b.hi) - u(b.lo), h - 9);
+  x.fillStyle = C(gold ? "red" : "goldL"); x.fillRect(u(b.c - b.pw), Y + 2, Math.max(3, u(b.c + b.pw) - u(b.c - b.pw)), h - 9);
+  x.restore();
+  put(x, ticksSpr(), X, Y);
+  for (const v of [b.lo, b.hi]) ST.line(x, pLine(u(v), Y - 1, u(v), Y + h - 6), 1.3);
   const showNeedle = r.charging || (frozen && r.dead.struck) || fx.vt - fx.hitT < 400;
   if (showNeedle) {
     const p = r.charging ? r.pw : frozen ? r.dead.p : fx.hitP, nx = u(p), inB = p >= b.lo && p <= b.hi;
-    R(nx - 1, y - 4, 3, h + 6, "k"); R(nx, y - 3, 1, h + 4, inB ? "y" : "w"); R(nx - 2, y - 6, 5, 2, "k"); R(nx - 1, y - 5, 3, 1, "r");
+    cordLine(x, pLine(nx, Y - 6, nx, Y + h + 5), 1.6, inB ? "goldL" : "paper", 0.9);
+    shape(x, pEll(nx, Y - 8, 4.2, 4.2), inB ? "gold" : "red", 1.1);
   }
   // the side cue at both ends of the ruler: an arrow on the side to strike from, a cross on a notch's wrong side
   const rs = frozen ? 0 : recSide();
   for (const s of [-1, 1]) {
-    const ax = s < 0 ? x - 10 : x + w + 4, ay = y + 1;
-    if (rs === s) { R(ax + (s < 0 ? 0 : 3), ay + 1, 3, 5, "k"); for (let i = 0; i < 3; i++) R(s < 0 ? ax + 3 + i : ax + 2 - i, ay + 1 + i, 1, 5 - 2 * i, "y"); } // steady, never blinking
-    else if (d.kind === "N" && rs && !r.teeter) { for (let i = 0; i < 5; i++) { P(ax + 1 + i, ay + 1 + i, "r"); P(ax + 5 - i, ay + 1 + i, "r"); } }
+    const ax = s < 0 ? X - 15 : X + w + 15, ay = Y + h / 2;
+    if (rs === s) shape(x, pPoly([[ax - s * 8, ay - 8], [ax + s * 7, ay], [ax - s * 8, ay + 8], [ax - s * 4, ay]]), "gold", 1.3, "goldD", 1, 1.4); // steady, never blinking
+    else if (d.kind === "N" && rs && !r.teeter) { brush(x, [[ax - 6, ay - 6], [ax, ay], [ax + 6, ay + 6]], 3.6, "red"); brush(x, [[ax + 6, ay - 6], [ax, ay], [ax - 6, ay + 6]], 3.6, "red"); }
   }
 }
-function drawCushions(now) {
-  const rs = recSide();
+function drawCushions(x, now) {
+  const rs = recSide(), r = run;
   for (const s of [-1, 1]) {
-    const x = s < 0 ? 6 : 134, held = state === "play" && (input.want || run.charging) && run.side === s, y = 283 + (held ? 1 : 0), w = 40, h = 14;
-    if (rs === s) { // the side to strike from: a gold rim and a steady arrow on the heri border above it
-      nr(x - 2, y - 2, w + 4, h + 4, "k", 2); nr(x - 1, y - 1, w + 2, h + 2, "y", 2);
-      const ax = x + w / 2, ay = 275 + (run.teeter && (fl(now / 160) & 1) ? 1 : 0);
-      R(ax - 4, ay - 1, 9, 1, "k"); for (let i = 0; i < 4; i++) { R(ax - 4 + i, ay + i, 9 - 2 * i, 1, "y"); P(ax - 5 + i, ay + i, "k"); P(ax + 4 - i, ay + i, "k"); } P(ax, ay + 4, "k");
+    const cx = CUSH_X[s < 0 ? 0 : 1], held = state === "play" && (input.want || r.charging) && r.side === s, y = CUSH_Y + (held ? 2 : 0);
+    if (rs === s) { // the side to strike from: a gold rim and a small arrow just above it
+      at(x, cx, y, 1, 0, () => cordLine(x, cushPath(), 2.6, "gold", 0.8));
+      const ay = CUSH_Y - 12 + (r.teeter && !Juice.reduce && (fl(now / 160) & 1) ? 2 : 0);
+      shape(x, pPoly([[cx - 7, ay - 4], [cx + 7, ay - 4], [cx, ay + 4]]), "gold", 1.1);
     }
-    nr(x, y, w, h, "k", 2); R(x + 2, y + 1, w - 4, h - 2, held ? "n" : "b"); R(x + 2, y + 1, w - 4, 1, held ? "b" : "s"); R(x + 2, y + h - 3, w - 4, 1, "n");
-    for (const [cx, cy] of [[x + 1, y], [x + w - 2, y], [x + 1, y + h - 1], [x + w - 2, y + h - 1]]) R(cx, cy, 1, 1, "y");
-    R(x + w / 2 - 1, y + 5, 2, 2, "y");
-    // a small mallet pointing at the tower: "hold this side to strike from this side"
-    const mx = s < 0 ? x + 25 : x + 6;
-    R(mx, y + 4, 9, 5, "k"); R(mx + 1, y + 5, 7, 3, rs === s ? "y" : "o"); R(s < 0 ? mx - 5 : mx + 9, y + 6, 5, 1, "k");
-    if (rs && rs !== s && !held) D(x, y, w, h, null, "k", 8); // the other side dims
-    if (rs && rs !== s && held && !run.dead) { // held from the side that hurts: chevrons run toward the other cushion (slide the finger across)
+    put(x, cushSpr(s, rs && rs !== s && !held), cx, y, 0, held ? 1.04 : 0, held ? 0.88 : 0);
+    if (rs && rs !== s && held && !r.dead) { // held from the side that hurts: chevrons run toward the other cushion (slide the finger across)
       const lit = fl(now / 110) % 3;
-      for (let i = 0; i < 3; i++) {
-        const cx = MID + rs * (i * 11 - 11) - 2, cy = 288, col = i === (rs > 0 ? lit : 2 - lit) ? "q" : "y";
-        for (let j = 0; j < 4; j++) { const xx = cx + (rs > 0 ? j : 3 - j); R(xx, cy + j + 1, 2, 1, "k"); R(xx, cy + 7 - j, 2, 1, "k"); R(xx, cy + j, 2, 1, col); R(xx, cy + 6 - j, 2, 1, col); }
-      }
+      for (let i = 0; i < 3; i++) { const vx = MID + rs * (i * 18 - 18), on = i === (rs > 0 ? lit : 2 - lit); ST.line(x, pPoly([[vx - rs * 5, CUSH_Y + 6], [vx + rs * 5, CUSH_Y + 16], [vx - rs * 5, CUSH_Y + 26]], true), on ? 4.4 : 3.4, on ? "goldL" : "gold"); }
     }
   }
 }
-function scrollFrame(cx, y, pw, ph, nail) { // a hanging scroll: cord, top roller, indigo mounting, paper, bottom roller
-  const x = cx - fl(pw / 2) - 4, w = pw + 8;
-  if (nail) { line(x + 6, y, cx, y - 8, "k"); line(x + w - 7, y, cx, y - 8, "k"); R(cx - 1, y - 10, 3, 3, "k"); P(cx, y - 9, "y"); }
-  R(x - 3, y, w + 6, 4, "k"); R(x - 2, y + 1, w + 4, 2, "D"); R(x - 2, y + 1, w + 4, 1, "O"); R(x - 3, y + 1, 2, 2, "y"); R(x + w + 1, y + 1, 2, 2, "y");
-  R(x, y + 4, w, ph + 8, "k"); R(x + 1, y + 4, w - 2, ph + 7, "n"); D(x + 1, y + 4, w - 2, ph + 7, "n", "b", 2); R(x + 1, y + 5, w - 2, 1, "Y");
-  R(x + 3, y + 7, pw + 2, ph + 2, "k"); R(x + 4, y + 8, pw, ph, "w"); D(x + 4, y + 8, pw, ph, null, "m", 1);
-  const by = y + ph + 12; R(x - 1, by, w + 2, 4, "k"); R(x, by + 1, w, 2, "D"); R(x, by + 1, w, 1, "O"); R(x - 3, by + 1, 3, 2, "y"); R(x + w, by + 1, 3, 2, "y");
-  return { px: x + 4, py: y + 8, bottom: by + 4 };
+// the score sheet (left side area on a wide screen) and, on a wide screen, the best plank and the wish daruma on the right
+function drawHud(x, now) {
+  const s = hudS(), wide = L.wide, sx = wide ? sideX(-1) : 180, sy = vTop() + (wide ? 66 : 40), a = Juice.reduce ? 0 : fx.sa * 0.5, top = beamY(), r = run;
+  cords(x, [-1, 1].map(k => [sx + s * k * (SHEET_W / 2 + 6) * Math.cos(a), sy + s * k * (SHEET_W / 2 + 6) * Math.sin(a)]), top);
+  at(x, sx, sy, s, a, () => {
+    put(x, sheetSpr(), 0, 0);
+    at(x, 0, 42, 1 + 0.22 * Math.max(0, wob((now - fx.scoreT) / 320, 8, 5)), 0, () => text(x, fx.disp, 0, 0, 44, "ink", { f: ST.title, w: 900, deep: "paperD" }));
+    const n = fx.note && now - fx.note.t < 1600 ? fx.note : null, t = Math.abs(r.L + r.wob), z = r.teeter ? 2 : t >= ZONE[1] ? 2 : t >= ZONE[0] ? 1 : 0, o = { max: SHEET_W - 12 };
+    if (n) { if ((fl((now - n.t) / 120) & 1) || now - n.t > 360) text(x, S(n.key), 0, 80, 16, "redD", o); }
+    else if (z && !r.dead) { if (z < 2 || (fl(now / 160) & 1)) text(x, S("risk", z + 1), 0, 80, 16, z === 2 ? "red" : "redD", o); }
+    else if (r.streak >= 2) text(x, S("streak", r.streak), 0, 80, 16, "plank", o);
+  });
+  if (wide) drawShelf(x, now, r.mode === "play" && bestOf() > 0);
 }
-const hudPos = () => wide() ? { x: -fl(PX.cx0 / 2), y: vTop() + 14 } : { x: MID, y: Math.max(22, vTop() + (DEMO ? 14 : 22)) };
-function drawHud(now) {
-  const r = run, hp = hudPos(), roll = clamp((T() - fx.rollT) / 220, 0, 1), ph = r.mode === "play" ? Math.max(1, Math.round(30 * easeOut(roll))) : 30;
-  const s = scrollFrame(hp.x, hp.y, 84, ph, true);
-  if (ph < 30) return;
-  const bump = now - fx.scoreT < 90 ? -1 : 0;
-  bigText(String(fx.disp), hp.x, s.py + 3 + bump, 3, "k");
-  const n = fx.note && now - fx.note.t < 1600 ? fx.note : null, t = Math.abs(r.L + r.wob), z = r.teeter ? 2 : t >= ZONE[1] ? 2 : t >= ZONE[0] ? 1 : 0;
-  if (n) { if ((fl((now - n.t) / 120) & 1) || now - n.t > 360) txt(S(n.key), hp.x, s.py + 19, { c: "R", px: 12 }); }
-  else if (z && !r.dead) { if (z < 2 || (fl(now / 160) & 1)) txt(S("risk", z + 1), hp.x, s.py + 19, { c: z === 2 ? "r" : "R", px: 12 }); }
-  else if (r.streak >= 2) txt(S("streak", r.streak), hp.x, s.py + 19, { c: "D", px: 12 });
+function drawShelf(x, now, best) { // right side area: the best plank, and under it the wish daruma that gets its eyes from the best
+  const s = hudS(), lx = sideX(1), ly = vTop() + 66, top = beamY(), r = run;
+  let sy = ly;
+  if (best) {
+    const rk = runsOf() >= 2 ? S("ranks")[rankOf(bestOf())] : "", t = S("best") + " " + Math.max(bestOf(), r.mode === "play" ? r.score : 0), w = Math.round((textW(x, t, 16) + 40) / 10) * 10 + 10;
+    cords(x, [[lx - (w / 2 - 14) * s, ly + 2 * s], [lx + (w / 2 - 14) * s, ly + 2 * s]], top);
+    at(x, lx, ly, s, 0, () => { put(x, plankSpr(w), 0, 0); text(x, t, 0, 18, 16, "paper", {}); if (rk) seal(x, 0, 60, rk, 999, 16); });
+    sy = ly + (rk ? 92 : 50) * s;
+  }
+  const shy = sy + 86 * s;
+  cords(x, [[lx - 40 * s, shy + 4 * s], [lx + 40 * s, shy + 4 * s]], best ? sy - 4 * s : top);
+  at(x, lx, shy, s, 0, () => { put(x, shelfSpr(), 0, 0); drawDaruma(x, 0, -19, 0, (fl(now / 2700) !== fl((now + 160) / 2700)) ? "blink" : "idle", now, r.eyes, r.goldBody, 0, 0.55, 0); });
 }
-function word(str, x, y, col, big) { // a judgement word: chunky Latin or crisp kana, always outlined
-  if (isLatin(str)) bigText(str, x, y, big ? 3 : 2, col, "k");
-  else txt(str, x, y, { c: col, o: "k", px: big ? 16 : 13 });
-}
-const callPos = () => wide() ? { x: 180 + fl(PX.cx0 / 2), y: vTop() + 30 } : { x: MID, y: Math.max(76, vTop() + 62) };
-function drawCall(now) {
+function drawCall(x, now) { // the judgement word: pops in from 0.8 with an overshoot, holds, fades out
   const cl = fx.call; if (!cl) return;
   const fail = cl.key[0] === "f" && cl.key.length > 1, age = now - cl.t, life = fail || cl.key === "save" || cl.key === "gold" || cl.key === "teeter" ? 1300 : 900;
   if (age > life) { fx.call = null; return; }
-  if (age > life - 120 && (fl(age / 40) & 1)) return; // blink out
-  const p = callPos(), big = fail || ["perfect", "gold", "save", "streak5", "teeter"].includes(cl.key);
-  const label = S(cl.key, run.streak), shown = age < 20 * label.length ? label.slice(0, 1 + fl(age / 20)) : label; // pushed out letter by letter
-  word(shown, p.x, p.y - (age < 60 ? 2 : 0), cl.col, big);
-  if (cl.sub) txt(cl.sub, p.x, p.y + (big ? 20 : 17), { c: "q", o: "k", px: 12, sc: 2 }); // points read at 2x
+  const big = fail || ["perfect", "gold", "save", "streak5", "teeter"].includes(cl.key), sc = L.u * (age < 200 ? lerp(0.8, 1, easeBack(age / 200)) : 1);
+  x.globalAlpha = age > life - 200 ? (life - age) / 200 : 1;
+  at(x, MID, 168 - Math.min(age, 700) * 0.012, sc, 0, () => {
+    text(x, S(cl.key, run.streak), 0, 0, big ? 42 : 32, cl.col, { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink", max: 330 });
+    if (cl.sub) text(x, cl.sub, 0, big ? 38 : 32, 18, "paper", { ol: "ink", ow: 0.28, max: 330 });
+  });
+  x.globalAlpha = 1;
 }
-function drawBig(now) { // the top tier's own picture: a 2x impact star in the world for 160 ms
-  if (fx.vt - fx.bigT < 160) spr(SP.bigstar, fx.bigX - 9, fx.bigY - 9, false, 2);
-}
-function drawHint(now) { // first run: a finger on the cushion to hold, lifting toward the band; a ring says "let go now"
+function drawHint(x, now) { // first run: a hand on the cushion to hold; a ring says "let go now"; the words above the ruler
   const r = run, d = r.stack[0]; if (!d) return;
-  const b = bandOf(d), s = recSide() || r.side || 1, fx0 = s < 0 ? 26 : 154;
-  let k;
-  if (r.charging) k = clamp((Math.abs(r.pw - b.c) - b.hw) / 25, 0, 1);
-  else k = (fl(now / 450) & 1) ? 0.9 : 0.45;
-  drawTapHint(fx0, 291, r.charging ? k : 1 - (k > 0.5 ? 1 : 0) * 0.6);
-  if (fl(now / 300) & 1) { const u = v => METER_X + Math.round(v * METER_W / 100); R(u(b.lo) - 2, METER_Y - 4, 2, 2, "k"); R(u(b.hi) + 1, METER_Y - 4, 2, 2, "k"); }
-  txt(S("hintRel"), MID, 274, { c: "q", o: "k", px: 12 });
+  const b = bandOf(d), s = recSide() || r.side || 1, hx = CUSH_X[s < 0 ? 0 : 1];
+  const k = r.charging ? clamp((Math.abs(r.pw - b.c) - b.hw) / 25, 0, 1) : (fl(now / 450) & 1) ? 1 : 0.4;
+  drawTapHint(x, hx, CUSH_Y + 12, k);
+  if (fl(now / 300) & 1) for (const v of [b.lo, b.hi]) { const ux = METER_X + v * METER_W / 100; shape(x, pPoly([[ux - 4, METER_Y - 11], [ux + 4, METER_Y - 11], [ux, METER_Y - 4]]), "paper", 1); }
+  text(x, S("hintRel"), MID, 507, 15 * L.u, "paper", { ol: "ink", ow: 0.3 });
 }
-const titleCol = () => wide() ? { x: -fl(PX.cx0 / 2), y: vTop() + 18 } : { x: 46, y: Math.max(26, vTop() + 26) };
-function drawTitleUI(now) {
-  const tp = titleCol(), s = scrollFrame(tp.x, tp.y, 60, 92, true);
-  // vertical calligraphy, right column first: だるま / 落とし
-  const col = (str, x) => [...str].forEach((ch, i) => spr(inkArt(TG, ch, null, "k", "c"), x, s.py + 2 + i * 30, false, 2));
-  col("だるま", s.px + 31); col("落とし", s.px + 1); noteText(STRINGS.ja.title, 12);
-  R(s.px + 51, s.py + 84, 6, 6, "r"); P(s.px + 53, s.py + 86, "q"); P(s.px + 54, s.py + 87, "q"); // the seal
-  // a little plaque under the scroll with the English name
-  const py = s.bottom + 4, en = lang === "en", pw = en ? 58 : 54, ph = en ? 26 : 12, nudge = wide() ? 0 : 6, px = tp.x - fl(pw / 2) - nudge; // portrait: keep clear of the daruma head
-  line(px + 8, py, px + 8, s.bottom, "k"); line(px + pw - 9, py, px + pw - 9, s.bottom, "k");
-  nr(px, py, pw, ph, "k", 1); R(px + 1, py + 1, pw - 2, ph - 2, "o"); R(px + 1, py + 1, pw - 2, 1, "q"); R(px + 1, py + ph - 2, pw - 2, 1, "O");
-  if (en) { bigText("DARUMA", tp.x - nudge, py + 3, 2, "k"); bigText("KNOCK", tp.x - nudge, py + 14, 2, "R"); } else txt(STRINGS.en.title, tp.x - nudge, py + 3, { c: "D" });
-  // best and rank on a wooden tag hanging at the right (from the second visit)
-  const b = Number(store.get("best", 0)) || 0;
-  if (b > 0) {
-    const runs = Number(store.get("runs", 0)) || 0, rk = runs >= 2 ? S("ranks")[rankOf(b)] : "", bx = wide() ? 180 + fl(PX.cx0 / 2) : 154, by = wide() ? vTop() + 20 : 44;
-    const w1 = Math.max(textW(S("best"), { px: 12, sc: 2 }), textW(String(b), { sc: 2 })) + 12, w2 = rk ? textW(rk, { px: 12, sc: 2 }) + 10 : 0, tw = Math.max(w1, w2), tx = bx - fl(tw / 2);
-    line(bx, by - 14, bx, by, "k");
-    nr(tx, by, tw, rk ? 46 : 30, "k", 1); R(tx + 1, by + 1, tw - 2, (rk ? 46 : 30) - 2, "o"); R(tx + 1, by + 1, tw - 2, 1, "q");
-    txt(S("best"), bx, by + 3, { c: "D", px: 12, sc: 2 }); txt(String(b), bx, by + 17, { c: "k", sc: 2 });
-    if (rk) seal(bx - fl((w2 - 4) / 2), by + 29, rk);
+const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
+const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, e.s);
+function norenPlace() { // a wide screen hangs the curtain in the workshop doorway on the left; a phone, across the top
+  if (L.wide) { const s = Math.min(hudS(), (L.x0 - 24) / 236); return { x: sideX(-1), y: vTop() + 22, s, w: 236 }; }
+  const s = L.u; return { x: 180, y: vTop() + 22, s, w: Math.round(Math.min(344, (L.W - 16) / s) / 4) * 4 };
+}
+function drawTitle(x, now) {
+  const u = L.u, ja = lang === "ja", still = Juice.reduce, n = norenPlace(), sw = still ? 0 : Math.sin(now / 1100) * 0.008;
+  cords(x, [[n.x - (n.w / 2 + 8) * n.s, n.y + 19 * n.s], [n.x + (n.w / 2 + 8) * n.s, n.y + 19 * n.s]], beamY());
+  at(x, n.x, n.y, n.s, sw, () => {
+    put(x, norenSpr(n.w), 0, 0);
+    text(x, S("title"), 0, 68, ja ? 44 : 38, "ink", { f: ST.title, w: 900, max: n.w - 50, deep: "paperD" });
+    text(x, ja ? STRINGS.en.title : STRINGS.ja.title, 0, 106, 16, "redD", { w: 700 });
+    text(x, S("how1"), 0, 134, 16, "ink", { max: n.w - 24 }); text(x, S("how2"), 0, 156, 16, "redD", { max: n.w - 24 });
+  });
+  const b = bestOf();
+  if (L.wide) drawShelf(x, now, b > 0);
+  else if (b > 0) { // best and, from the second run, the rank on a dark plank hung at the left, clear of the tower
+    const rk = runsOf() >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b, w = Math.round((textW(x, t, 16) + 34) / 10) * 10 + 10, px = 26 + w * u / 2, py = n.y + (NOREN_H + 12) * n.s;
+    cords(x, [[px - (w / 2 - 12) * u, py + 2 * u], [px + (w / 2 - 12) * u, py + 2 * u]], n.y + NOREN_H * n.s - 4);
+    at(x, px, py, u, 0, () => { put(x, plankSpr(w), 0, 0); text(x, t, 0, 18, 16, "paper", {}); if (rk) seal(x, 0, 58, rk, 999, 16); });
   }
-  { // the how-to on a paper slip pinned over the tatami, clear of the dark heri border
-    const sw = Math.min(176, Math.max(textW(S("how1"), { px: 12 }), textW(S("how2"), { px: 12 })) + 12), sx = MID - fl(sw / 2);
-    nr(sx, 250, sw, 31, "k", 1); R(sx + 1, 251, sw - 2, 29, "w"); D(sx + 1, 251, sw - 2, 29, null, "m", 1); R(sx + 1, 279, sw - 2, 1, "c");
-    P(sx + 3, 252, "R"); P(sx + sw - 4, 252, "R");
-    txt(S("how1"), MID, 253, { c: "k", px: 12 }); txt(S("how2"), MID, 266, { c: "R", px: 12 });
-  }
-  const [tx, ty, tw, th] = UI.start, bob = fl(now / 400) & 1;
-  tag(tx, ty + bob, tw, th, S("start"), true);
-  spr(SP.pointer, tx - 15 + (fl(now / 300) & 1) * 2, ty + 6 + bob);
-  if (finePointer) txt(S("space"), tx + tw + 4, ty + 8, { c: "D", a: "l" });
-  txt(S("credit"), 4, 311, { c: "D", a: "l" });
+  const st = UI.start;
+  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => tagBtn(x, 0, 0, st.w, st.h, S("start"), 24));
+  pointAt(x, st, now);
+  if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 10) * u, st.y + 30 * u, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3 });
+  text(x, S("credit"), vLeft() + 10, vBot() - 14, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3, w: 700 });
 }
-const fitO = (str, o, maxW) => textW(str, o) > maxW ? Object.assign({}, o, { sc: 1 }) : o; // long Latin lines drop to 1x
-const fitTxt = (str, x, y, o, maxW) => txt(str, x, y, fitO(str, o, maxW));
-function seal(x, y, str) { // a red hanko: the rank in white on vermilion
-  const w = textW(str, { px: 12, sc: 2 }) + 6;
-  nr(x - 1, y - 1, w + 2, 17, "k", 1); R(x, y, w, 15, "r"); R(x + 1, y + 1, w - 2, 1, "h"); R(x, y + 14, w, 1, "R");
-  txt(str, x + 3, y + 2, { c: "w", px: 12, sc: 2, a: "l" });
-  return w;
+function drawPause(x, now) {
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 260)), y = pauseY() + dy;
+  cords(x, [[180 - 100 * u, y + 4 * u], [180 + 100 * u, y + 4 * u]], beamY());
+  at(x, 180, y, u, 0, () => { board(x, 0, 0, 300, 206); text(x, S("paused"), 0, 38, 28, "paneT", { f: ST.title, w: 900, deep: "paneL" }); });
+  btn(x, UI.resume, S("resume"), 22, 0, dy); btn(x, UI.restart, S("restart"), 17, 0, dy); btn(x, UI.quit, S("toTitle"), 17, 0, dy);
 }
-function drawPause(now) {
-  D(-PX.cx0, -PX.cy0, PX.LW, PX.LH, null, "k", 8);
-  const dy = Math.round(-30 * (1 - easeOut((T() - fx.pauseT) / 200))), y = pauseY();
-  g.translate(0, dy);
-  win(8, y, 164, 96);
-  txt(S("paused"), 90, y + 10, { c: "q", px: 14, sc: 2 });
-  tag(...UI.resume, S("resume"), true); tag(...UI.restart, S("restart")); tag(...UI.quit, S("toTitle"));
-  g.translate(0, -dy);
-}
-const pauseY = () => Math.max(84, vTop() + 20);
-const overY = () => Math.max(26, vTop() + 4);
-function drawOver(now) {
-  const r = run.result, play = state === "over", age = resAge(r, now);
-  const extra = (r.tip ? 13 : 0), x = 10, w = 160, h = play ? 167 + extra : 129;
-  const y = overY() + Math.round(-200 * (1 - easeOut(age / RES.drop))) + (age > RES.drop && age < RES.drop + 80 ? 1 : 0);
-  line(x + 20, y, x + 20, y - 40, "k"); line(x + w - 21, y, x + w - 21, y - 40, "k"); // hung from the beam
-  win(x, y, w, h);
-  if (age > RES.head) word(S("over"), 90, y + 7, "q", true);
-  if (age > RES.cause) { fitTxt(r.cause, 90, y + 28, { c: "h", px: 12, sc: 2 }, 140); if (r.tip) fitTxt(r.tip, 90, y + 41, { c: "p", px: 12, sc: 2 }, 140); }
-  const y2 = y + extra;
-  if (age > RES.count) {
-    const k = clamp((age - RES.count) / RES.countDur, 0, 1), shown = String(Math.round(r.score * easeOut(k)));
-    const rk = r.showRank && r.rankDone ? S("ranks")[r.rank] : "", sw = textW(String(r.score)) * 4;
-    bigText(shown, r.showRank ? x + 12 + fl(sw / 2) : 90, y2 + 45, 4, "q", "k");
-    if (rk) { const rw = textW(rk, { px: 12, sc: 2 }) + 6; seal(x + w - 12 - rw, y2 + 48, rk); }
-  }
-  if (age > RES.rows) {
-    [["rKnock", run.knocked], ["rPerf", run.perfects], ["rStreak", run.maxStreak], ["rStrong", run.nStrong]].forEach(([k, v], i) => {
-      const ry = y2 + 72 + i * 13;
-      txt(S(k), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" }); txt(String(v), x + w - 10, ry, { c: "q", sc: 2, a: "r" });
-      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 11, "b");
-    });
-    if (play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
-      const ry = y2 + 124;
-      txt(S("rBest"), x + 10, ry, { c: "p", px: 12, sc: 2, a: "l" });
-      if (r.newBest) { if (age > RES.best) { const t = textCanvas(S("newBest"), { c: "w", px: 12, sc: 2 }), bw = t.width + 8, bx = x + w - 10 - bw, j = age < RES.best + 90 ? -2 : 0; noteText(S("newBest"), 12); nr(bx - 1, ry - 2 + j, bw + 2, 15, "k", 1); R(bx, ry - 1 + j, bw, 13, "r"); spr(t, bx + 4, ry + 1 + j); } }
-      else { txt(String(r.best), x + 60, ry, { c: "q", sc: 2, a: "l" }); txt(r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), x + w - 10, ry, { c: "y", px: 12, sc: 2, a: "r" }); }
-      for (let xx = x + 10; xx < x + w - 10; xx += 3) P(xx, ry + 11, "b");
+function drawOver(x, now) {
+  const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, B = BOARD, H = play ? B.play : B.demo, big = { f: ST.title, w: 900, deep: "paneL" };
+  const y = overY() - (H + 80) * u * (1 - easeBack(age / RES.drop));
+  cords(x, [[180 - 110 * u, y + 4 * u], [180 + 110 * u, y + 4 * u]], beamY());
+  at(x, 180, y, u, 0, () => {
+    board(x, 0, 0, B.w, H);
+    if (age > RES.head) text(x, S("over"), 0, B.title, 30, "paneT", big);
+    if (age > RES.cause) { text(x, r.cause, 0, B.cause, 17, "paneS", { max: 280 }); if (r.tip) text(x, r.tip, 0, B.tip, 15, "paneT", { w: 700, max: 280 }); }
+    if (age > RES.count) {
+      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -56 : 0, B.score, 56, "paneT", big);
+      if (r.showRank && r.rankDone) seal(x, 84, B.score, S("ranks")[r.rank], age - RES.rank);
     }
-  }
-  if (play && age > RES.goal) {
-    const gt = r.eye ? S(r.eye) : r.goal ? S(r.goal.k, r.goal.n) : "";
-    if (gt) { const o = fitO(gt, { c: r.eye ? "q" : "y", px: 12, sc: 2, a: "l" }, 124), tw = textW(gt, o), gx = 90 - fl((tw + 14) / 2), gy = y2 + 145; spr(SP.pointer, gx, gy + 1); txt(gt, gx + 14, gy, o); }
-    if (r.eye && age < RES.goal + 900 && (fl(age / 120) & 1)) { burst(90, y2 + 151, 1, 60, { col: "y" }); }
-  }
-  if (play) {
-    tag(...UI.retry, S("retry"), true); tag(...UI.toTitle, S("toTitle"));
-    if (retryReady()) spr(SP.pointer, UI.retry[0] + UI.retry[2] + 2 - (fl(now / 300) & 1) * 2, UI.retry[1] + 6, true);
-  }
+    if (age > RES.rows) {
+      const row = (ry, k, v) => { text(x, S(k), -134, ry, 17, "paneT", { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, "paneS", { a: "right", f: ST.title, w: 900 }); x.fillStyle = C("paneL"); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 14, 2, 2); };
+      [["rKnock", run.knocked], ["rPerf", run.perfects], ["rStreak", run.maxStreak], ["rStrong", run.nStrong]].forEach(([k, v], i) => row(B.rows + i * B.gap, k, v));
+      if (play && (r.newBest || r.best > 0)) { // no "BEST 0 / 0 TO GO" on a first record
+        row(B.best, "rBest", r.newBest ? null : r.best);
+        if (r.newBest) { if (age > RES.best) seal(x, 70, B.best, S("newBest"), age - RES.best); }
+        else text(x, r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), 20, B.best, 17, "paneS", {});
+      }
+    }
+    if (play && age > RES.goal) {
+      const gt = r.eye ? S(r.eye) : r.goal ? S(r.goal.k, r.goal.n) : "";
+      if (gt) { const tw = Math.min(250, textW(x, gt, 17)); hand(x, -tw / 2 - 6, B.goal, Math.PI / 2, 0.75); text(x, gt, -tw / 2 + 6, B.goal, 17, r.eye ? "red" : "paneS", { a: "left", max: 250 }); }
+      if (r.eye && age < RES.goal + 900 && (fl(age / 120) & 1)) burst(180, overY() + B.goal * u, 1, 90, { col: "gold", kind: "star", s: 2.4 });
+    }
+  });
+  if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, true); if (retryReady()) pointAt(x, UI.retry, now); }
 }
-function drawDemoLabel() { // ?demo=1: a small bilingual title instead of any tool, BEST or button
-  txt(STRINGS.ja.title, 90, 286, { c: "q", o: "k", px: 12 }); txt(STRINGS.en.title, 90, 303, { c: "q", o: "k" });
+function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
+  at(x, 180, vBot() - 62 * L.u, L.u, 0, () => { put(x, plankSpr(210, 46), 0, 0); text(x, STRINGS.ja.title, 0, 15, 16, "paper", {}); text(x, STRINGS.en.title, 0, 33, 14, "tagL", { w: 700 }); });
+}
+function drawPlaques(x) {
+  const pq = (e, kind, label) => at(x, e.cx, e.y, e.s, 0, () => plaque(x, 0, 0, e.w, kind, label));
+  if (!btnMute.hidden) pq(UI.mute, AU.muted ? "mute" : "sound");
+  if (!btnPause.hidden) pq(UI.pause, "pause");
+  if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang", S("lang"));
 }
 function draw(now) {
   if (!run) return;
-  const c = run.c, sh = shakeOffset(5), pk = punchK(now);
-  if (pk < 0.4) sh.y -= 1;
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  if (bgC) g.drawImage(bgC, sh.x - BGM, sh.y - BGM);
-  g.setTransform(1, 0, 0, 1, PX.cx0 + sh.x, PX.cy0 + sh.y);
-  drawWindowLife(now, c);
-  drawGaugePointer(now);
-  if (!fx.bodies) drawStack(now);
-  if (!fx.bodies && (!isTitle() || run.charging || fx.vt - fx.hitT < 300)) drawHammer(now);
-  drawFlyers(now);
-  partsDraw(now);
-  drawBig(now);
-  g.setTransform(1, 0, 0, 1, PX.cx0, PX.cy0); // HUD and feedback never shake
-  if (!isTitle()) { drawMeter(now); if (!DEMO && !isOver()) drawCushions(now); }
-  if (!isTitle() && !isOver()) { drawHud(now); drawCall(now); }
-  if (state === "play" && hint.active) drawHint(now);
-  if (run.teeter && !reduceMotion) { // the edge closes in: dithered bars grow in whole dots (no camera scaling, the grid stays clean)
-    const k = smooth((run.c - run.teeter.at) / (run.teeter.until - run.teeter.at)), bh = 6 + Math.round(k * 8);
-    D(-PX.cx0, -PX.cy0, PX.LW, bh, null, "k", 4); D(-PX.cx0, PX.LH - PX.cy0 - bh, PX.LW, bh, null, "k", 4);
-    D(-PX.cx0, -PX.cy0 + bh, PX.LW, 2, null, "k", 2); D(-PX.cx0, PX.LH - PX.cy0 - bh - 2, PX.LW, 2, null, "k", 2);
-  }
-  if (pk < 1) { const bh = Math.round(5 * (1 - smooth(pk))); if (bh) { R(-PX.cx0, -PX.cy0, PX.LW, bh, "k"); R(-PX.cx0, PX.LH - PX.cy0 - bh, PX.LW, bh, "k"); } }
-  if (isTitle()) drawTitleUI(now);
-  if (state === "paused") drawPause(now);
-  if (isOver()) drawOver(now);
-  if (DEMO) drawDemoLabel();
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  if (!DEMO) {
-    if (!btnMute.hidden) icon(PX.LW - 17, 2, 15, 15, AU.muted ? "mute" : "sound");
-    if (!btnPause.hidden) icon(PX.LW - 17, 19, 15, 15, "pause");
-    if (isTitle() && !ovTitle.hidden) icon(2, 2, langW(), 15, S("lang"));
-  }
-  pixBlit(ctx, zoomNow(now));
+  const x = ctx, sh = shakeOffset(10);
+  let zm = zoomNow(now);
+  if (!zm && fx.push > 0.002) zm = { x: MID, y: 380, s: 1 + 0.05 * fx.push }; // the edge: a slow push-in, released by the punch
+  putLayer(x, BG, sh.x, sh.y, zm);
+  view(x, sh.x, sh.y, zm);
+  drawGauge(x, now);
+  if (fx.bodies) drawBodies(x, now);
+  else { drawTower(x, now); if (!isTitle() || run.charging || fx.vt - fx.hitT < 300) drawMallet(x, now); }
+  drawFlyers(x);
+  drawImpact(x, now);
+  partsDraw(x);
+  drawWind(x, now);
+  view(x, 0, 0, zm); // the floor tools follow the camera but never shake
+  if (!isTitle() && !isOver()) { drawRuler(x, now); if (!DEMO) drawCushions(x, now); }
+  if (state === "play" && hint.active) drawHint(x, now);
+  view(x); // the HUD and the boards never move with the camera
+  if (!isTitle() && !isOver()) { drawHud(x, now); drawCall(x, now); }
+  if (isTitle()) drawTitle(x, now);
+  if (state === "paused") drawPause(x, now);
+  if (isOver()) drawOver(x, now);
+  if (DEMO) drawDemoLabel(x); else drawPlaques(x);
+  grainOver(x);
+  textEnd();
 }
-const langW = () => textW(S("lang"), { px: 12, sc: 2 }) + 8;
+function visualStep(dt) { // springs, swings and petals (the rules never read them)
+  if (!dt || !run) return;
+  const r = run, g = r.gust, gustOn = g && r.c >= g.start, ph = phaseNow();
+  // the score sheet swings on its cords: knocks kick it (fx.sv), the wind lifts it a second before a gust
+  const wind = r.dead ? 0 : gustOn ? g.dir * (0.5 + 0.12 * Math.sin(fx.vt / 70)) : g ? g.dir * 0.22 : 0;
+  fx.sv += (-50 * (fx.sa - wind) - 3.5 * fx.sv) * dt; fx.sa += fx.sv * dt;
+  const tk = r.teeter ? smooth((r.c - r.teeter.at) / (r.teeter.until - r.teeter.at)) : 0;
+  fx.push += (tk - fx.push) * Math.min(1, dt * (r.teeter ? 5 : 9));
+  // red plum petals drift on the draft; a gust sends a stream across the tower
+  const dir = gustOn ? g.dir : r.windDir, rate = gustOn ? 0.035 : ph.wind ? 0.2 : 0.7;
+  if ((fx.petal += dt) > rate) {
+    fx.petal = 0;
+    const far = L.wide && rnd() < 0.4, px = far ? 380 + rnd() * 160 : 236 + rnd() * 110, py = 160 + rnd() * 150, v = gustOn ? 160 + rnd() * 120 : ph.wind ? 26 + rnd() * 40 : 6 + rnd() * 14;
+    addPart({ x: px, y: py, vx: dir * v, vy: 14 + rnd() * 22, g: 16, life: 4, max: 4, kind: "chip", col: rnd() < 0.75 ? "orange" : "paper", s: 2.2 + rnd() * 0.6, rot: rnd() * TAU, vr: (rnd() - 0.5) * 6 });
+  }
+  if ((fx.twinkle += dt) > 0.24 && fx.pose && !fx.bodies) { // a gold disc twinkles
+    fx.twinkle = 0;
+    const i = r.stack.findIndex(d => d.kind === "G"), p = i >= 0 && fx.pose.d[i];
+    if (p) addPart({ x: p.x + (rnd() - 0.5) * 84, y: p.y + (rnd() - 0.5) * 14, kind: "star", col: "goldL", s: 1.8 + rnd(), life: 0.4, max: 0.4, vr: 3 });
+  }
+}
 
 // ---------- KEEP: screen, language, mute ----------
-const UI = { start: [57, 284, 66, 22], retry: [57, 284, 66, 22], toTitle: [4, 290, 50, 17], resume: [0, 0, 94, 22], restart: [0, 0, 66, 18], quit: [0, 0, 66, 18] };
-function layoutUI() {
-  const py = pauseY(); UI.resume = [43, py + 34, 94, 22]; UI.restart = [12, py + 66, 76, 18]; UI.quit = [92, py + 66, 76, 18];
-  const core = (el, r, p) => place(el, r[0] - p + PX.cx0, r[1] - p + PX.cy0, r[2] + 2 * p, r[3] + 2 * p);
-  core($("btnStart"), UI.start, 3); core($("btnResume"), UI.resume, 1); core($("btnRestart"), UI.restart, 1); core($("btnQuit"), UI.quit, 1);
-  core($("btnRetry"), UI.retry, 2); core($("btnToTitle"), UI.toTitle, 1);
-  place(btnMute, PX.LW - 19, 0, 19, 18); place(btnPause, PX.LW - 19, 18, 19, 18); place($("btnLang"), 0, 0, langW() + 4, 19);
-}
 function resize() {
-  const box = pixResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, CW, CH, [0, 40, 60, 80, 100], bay => bay >= 70);
-  if (DEMO && !wide() && PX.cy0 < 20) PX.cy0 -= 32; // ?demo=1 portrait: lift the scene so the ruler clears the Shorts caption area
-  for (const el of [cv, uiEl]) { el.style.width = box.w + "px"; el.style.height = box.h + "px"; el.style.left = box.left + "px"; el.style.top = box.top + "px"; }
+  const cw = wrap.clientWidth || innerWidth, ch = wrap.clientHeight || innerHeight;
+  artResize(cv, cw, ch, CW, CH, 220);
+  // A wide screen frames the scene closer (up to 1.25x) so the tower is not a small strip in the middle: the sky
+  // above the tower goes off screen, the side areas stay wide enough for the HUD.
+  const z = L.wide ? clamp(L.W / (CW + 2 * 296 * L.u), 1, 1.25) : 1;
+  if (z > 1.01) { artResize(cv, cw, ch, CW, CH / z, 1); L.y0 = -(CH - CH / z) * 0.85; L.wide = true; }
+  if (DEMO && !L.wide) { // ?demo=1 portrait: frame the scene a little smaller, with the extra floor at the bottom, so the ruler clears the Shorts caption area
+    artResize(cv, cw, ch, CW, CH * 1.11, 220);
+    if (!L.wide) L.y0 = Math.min(L.y0, (L.H - CH) * 0.2);
+  }
   buildBg(); layoutUI();
+  if (run && manual) draw(simT);
 }
 window.addEventListener("resize", resize);
 function applyLang() {
@@ -1658,7 +2107,7 @@ function catchUp() { // judge the needle where it is at the moment of release, n
   while (run.acc >= STEP_MS) { run.acc -= STEP_MS; simStep(); if (run.dead) { run.acc = 0; break; } }
 }
 function cancelHold() { input.want = false; input.latched = false; input.id = null; if (run && run.charging && state === "play" && !autopilot) run.charging = false; }
-function sideOfX(clientX) { const b = cv.getBoundingClientRect(), u = PX.K / PX.dpr; return clientX < b.left + (PX.cx0 + MID) * u ? -1 : 1; }
+function sideOfX(clientX) { const b = cv.getBoundingClientRect(); return clientX < b.left + (L.x0 + MID) * L.kc ? -1 : 1; }
 auUnlock();
 cv.addEventListener("pointerdown", e => {
   e.preventDefault();
@@ -1743,7 +2192,7 @@ function update(now, dt) {
   const slow = state === "demo-dying" ? 0.55 : 1;               // the demo's collapse plays in slow motion
   const vdt = (Juice.stop > 0 ? dt * 0.15 : dt) * slow * (run.teeter ? 0.6 : 1);
   fx.vt += vdt * 1000;
-  partsStep(vdt); flyersStep(vdt); bodiesStep(vdt);
+  partsStep(vdt); flyersStep(vdt); bodiesStep(vdt); visualStep(vdt);
   if (fx.vt - fx.dropT > 70 && fx.vt - fx.dropT - vdt * 1000 <= 70 && loud() && !run.dead) sfx.drop();
 }
 function step(now, dt) {
@@ -1784,14 +2233,15 @@ window.__game = {
   autoplay(on) { autopilot = !!on; if (run) { run.aiAt = null; if (!autopilot && run.mode === "play") run.charging = false; } },
   fail() { if (state === "play" && run && !run.dead) collapse("late"); },
   audioState() { return AU.ctx ? AU.ctx.state : "none"; },
-  view() { return { K: PX.K, dpr: PX.dpr, w: PX.LW, h: PX.LH, top: PX.TOP, reduce: Juice.reduce, textMin: TXT.min }; },
+  // K = device px per logical px; textMin = the smallest text drawn so far, in logical px as it shows on screen;
+  // left and cw = where the core scene sits across the screen (logical px), for the wide-sides check
+  view() { return { K: L.K, dpr: L.dpr, w: L.W, h: L.H, top: L.y0, left: L.x0, cw: CW, reduce: Juice.reduce, textMin: TXT.min, wide: L.wide }; },
   texts() { return TXT.last.slice(); },
-  target() { const u = PX.K / PX.dpr, b = cv.getBoundingClientRect(); return { x: b.left + (PX.cx0 + MID) * u, y: b.top + (PX.cy0 + 290) * u }; }, // a fixed point between the cushions, never a moving object
+  target() { const k = L.kc, b = cv.getBoundingClientRect(); return { x: b.left + (L.x0 + MID) * k, y: b.top + (L.y0 + CUSH_Y + 16) * k }; }, // a fixed point between the cushions, never a moving object
   peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); }
 };
 
 // ---------- boot ----------
-buildSprites();
 resize();
 applyLang();
 AU.muted = !!store.get("mute", false); setMute(AU.muted);
