@@ -327,7 +327,7 @@ function washiTex(w, h, S, seed) {
 }
 const GRAIN = {};
 function grainOver(x) {
-  if (!ST.grain) return;
+  if (!ST.grain || LITE.on) return;
   const k = L.K.toFixed(3);
   if (!GRAIN[k]) GRAIN[k] = x.createPattern(washiTex(256, 256, L.K, 3), "repeat");   // 256: never lines up with the 360 scene
   x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = GRAIN[k]; x.fillRect(0, 0, x.canvas.width, x.canvas.height);
@@ -642,10 +642,19 @@ const T_ARRIVE = 650, T_OPEN = 220, T_BELL = 1500, T_BELL_EARLY = 700, T_CLOSE =
 // The cadence changes twice a line (bar 1.5.2): a quick stop ("q") where the express halts for two beats and rings a
 // two-beat bell, and a last-stop rush ("r") at each terminal with twice the crowd and twice the time, so a line ends on
 // a set piece. Only on the three lines: the daily, the extras and the demo keep their own rhythm.
-const KIND = { 4: "q", 8: "r", 14: "q", 16: "r", 22: "q", 24: "r" };
-const kindOf = n => !run || run.daily || run.mode === "demo" || n > LAST ? "" : KIND[n] || "";
+// The two-door lines also get a one-door stop ("o") twice a line, where only one door opens and both queues funnel
+// into it, and the express passes stations ("x") without stopping: a first run that is still clean at stop 4 runs
+// express past stops 6 and 7 to the line-1 rush, and any run passes a plain stop the stamp book already has at 3 stars.
+const KIND = { 4: "q", 8: "r", 11: "o", 14: "q", 15: "o", 16: "r", 19: "o", 22: "q", 23: "o", 24: "r" };
+const kindOf = n => !run || run.daily || run.mode === "demo" || n > LAST ? "" : run.pass && run.pass.includes(n) ? "x" : KIND[n] || "";
+const openSide = n => (n >> 2) & 1; // a one-door stop: the door that opens (11 and 19 the left, 15 and 23 the right)
+const PASS_MS = 1500, PASS_PTS = 40; // an express pass: the train runs through in 1.5 s, a small bonus keeps the score moving
+// Peak hour (bar 1.5.2): from 25 s into a run the queues grow, up to half a unit a beat past the line's own pace by 70 s,
+// so a strong player's run rises to an end near a minute and a half instead of levelling off for minutes
+const PEAK_AT = 25000, PEAK_LEN = 45000, PEAK_UPB = 0.5;
+const peakOf = c => PEAK_UPB * smooth(clamp((c - PEAK_AT) / PEAK_LEN, 0, 1));
 const QUICK_BEATS = 2, RUSH_BONUS = 150, RUSH_UPB = 0.1; // a rush is packed a little past the line's steady pace
-const arriveMs = n => kindOf(n) === "q" ? 380 : n >= 3 ? 520 : T_ARRIVE, departMs = n => kindOf(n) === "q" ? 520 : n >= 3 ? 700 : T_DEPART;
+const arriveMs = n => kindOf(n) === "q" ? 380 : n >= 3 || run.mode === "demo" ? 520 : T_ARRIVE, departMs = n => kindOf(n) === "q" ? 520 : n >= 3 || run.mode === "demo" ? 700 : T_DEPART; // the clip keeps its trains brisk
 const bellOf = st => st.def.bell || T_BELL; // a quick stop rings its melody once, over two beats
 const STEP_MS = 220;               // a queued rider stepping up to the door
 const PW = 75, GW = 165;           // PERFECT and GOOD windows, early and late (bar 1.5.6)
@@ -679,26 +688,32 @@ function stationDef(n) {
   if (n <= LAST) {
     const d = mkDef(LINES[lineOf(n)].s[(n - 1) % 8], n > 8), kind = kindOf(n);
     // a player who has mastered line 1 finds it fuller and quicker, so the 25 to 45 s twist bites; a first run that is
-    // still clean at station 5 gets the same from there on, so its arc peaks at the line-1 rush near a minute (bar 1.5.2)
-    if (play && n <= 8 && !run.strong && n >= 5 && run.first && run.hot == null) run.hot = run.lives === 3 && run.complaints === 0 && [1, 2, 3, 4].reduce((a, i) => a + (run.hist[i] || 0), 0) >= 10;
+    // still clean at stop 4 gets the same, and the express takes it past stops 6 and 7 straight to the line-1 rush, so
+    // real risk lands near 35 to 45 s (bar 1.5.2). A first run that is struggling by then keeps a gentler line 1.
+    if (play && n <= 8 && !run.strong && n >= 4 && run.first && run.hot == null) {
+      run.hot = run.lives === 3 && run.complaints === 0 && [1, 2, 3].reduce((a, i) => a + (run.hist[i] || 0), 0) >= 7;
+      if (run.hot) run.pass.push(6, 7);
+    }
     const hot = play && n <= 8 && n >= 5 && !run.strong && !!run.hot, back = hot || (play && n <= 8 && run.strong);
+    const easy = play && run.first && n <= 8 && n >= 5 && run.hot === false; // still learning: a little more room on line 1
     if (back) { d.q += LINE1_MORE[n - 1]; d.board = Math.round(d.board * (hot ? 0.86 : 0.92)); }
     d.kind = kind;
     if (kind === "q") { d.runner = 0; d.surge = 0; d.note = d.note || "nQuick"; }
     if (kind === "r") { d.q += d.q.slice(1); d.board *= 2; d.note = d.note || "nRush"; }
+    if (kind === "o") { d.shut = 1 - openSide(n); d.note = d.note || "nOne"; d.surge = Math.min(d.surge || 0, 2); }
     if (play) {
       d.q = deal(d.q, d.note);
       if (d.surge) d.surge = Math.max(2, d.surge + fl(run.rQ() * 3) - 1);   // the surge varies per run
       if (run.first && !run.hot) { d.q = d.q.replace(/p/g, "g"); if (d.note === "nPair" || d.note === "nRapid") d.note = 0; d.beat = RAPID_HOLD[n] || d.beat; } // the first run holds pairs and the rapid section, unless it came through line 1 clean
     }
     if (kind === "q") d.board = d.bell = QUICK_BEATS * d.beat;
-    return fitDef(d, upbOf(n) + (hot ? 0.2 : back ? 0.16 : 0) + (kind === "r" ? RUSH_UPB : 0));
+    return fitDef(d, upbOf(n) + (hot ? (kind === "r" ? 0.4 : 0.2) : back ? 0.16 : easy ? -0.1 : 0) + (kind === "r" ? RUSH_UPB : 0) + (play ? peakOf(run.c) : 0));
   }
   const k = n - LAST, boss = k % 4 === 0, f = "wpmcx"[(k - 1) % 5], mix = "smscpgscmp" + ("pmc".includes(f) ? f.repeat(3) : ""); // extra stations rotate a twist
   let q = ""; for (let i = 0; i < 8 + Math.min(2, k >> 1); i++) q += mix[(i * 3 + k * 7) % mix.length];
   if (boss) q = "m" + q.slice(1, 5) + "m" + q.slice(6);
   return fitDef({ q, board: Math.max(3400, 4200 - 150 * k), beat: Math.max(300, 352 - 8 * k - (f === "x" ? 24 : 0)), R: Math.min(205, 196 + 2 * k), runner: 1, surge: boss ? 6 : f === "w" ? 5 : 1, two: true, tw: FEAT.indexOf(f), boss,
-    note: boss ? "nBoss" : k === 1 ? "nFaster" : 0 }, upbOf(n));
+    note: boss ? "nBoss" : k === 1 ? "nFaster" : 0 }, upbOf(n) + (run.mode === "play" ? peakOf(run.c) : 0));
 }
 const RAPID_HOLD = { 12: 450, 13: 450, 14: 450, 20: 420 };
 const LINE1_MORE = ["", "s", "gs", "sc", "sg", "ss", "gs", "sm"]; // riders added to line 1 once a player has mastered it
@@ -731,23 +746,25 @@ const tierOf = R => R < 150 ? 0 : R < 200 ? 1 : R < 250 ? 2 : 3;
 
 // ?demo=1: a scripted 30 s clip that never reads the save. Station 1 boards three at once, so the score climbs from
 // the first second, then the last one rides the bell half in and is shoved in between the closing doors at about 4 s.
-// Station 2 is a clean ALL ABOARD with the sumo. Station 3 turns clumsy at 200 %: the window breaks near 15 s and costs
-// a glove, the oshiya keeps going, and the last rider is caught in the doors at about 24 s. The clip is exactly
+// Station 2 is a clean ALL ABOARD with the sumo. Station 3 opens just under 200 %: one PERFECT boarding keeps the score
+// moving, then the oshiya turns clumsy, the window breaks near 15.5 s and costs a glove, he keeps going, and the sumo is
+// caught in the doors at about 23 s (bar 1.9.2: the number never sits still for long). The clip is exactly
 // DEMO_LOOP long on the wall clock: the result holds about 2.5 s, then the clip starts again, so a 30 s recording that
 // begins about 2 s in ends on the next run's opening near miss and loops back into the same scene. A busy recorder may stall frames; the clip gives up at most DEMO_LAG of its clock to
 // stalls (so short hitches stay smooth) and then keeps to the wall clock, so the failure still lands before 28 s.
 const DEMO_STATIONS = [
   { q: "sgsgrs", board: 2300, beat: 470, R: 150, name: 2 },
   { q: "ssmsgs", board: 4600, beat: 500, R: 165, name: 4 },
-  { q: "sscssmsscs", board: 8500, beat: 480, R: 200, name: 5 }
+  { q: "sscssmsscs", board: 8500, beat: 480, R: 190, name: 5 }
 ];
-const DEMO_LOOP = 27500, DEMO_LAG = 1200; // the clip's wall-clock length; the most of its clock a stalled recorder may slow
+const DEMO_LOOP = 26800, DEMO_LAG = 1200; // the clip's wall-clock length; the most of its clock a stalled recorder may slow
 const RANKS = [0, 400, 1200, 2500, 4500, 7000, 10000, 14000, 20000, 28000, 38000, 50000]; // the top four keep a strong player's seal moving (bar 1.6.2)
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
-// the top four ranks also come from the stamp book: [station reached, stars]. Scores level off once runs start late,
-// so a strong player keeps climbing by reaching line 3 and filling the book: [station, stars, 3-star stations].
-// The top rank is the full 3-star book, so the ladder lasts several sessions (bar 1.6.2)
-const RANK_MILE = { 8: [17, 36, 6], 9: [17, 50, 12], 10: [24, 66, 18], 11: [24, 72, 24] };
+// ranks 5 and up also come from the stamp book: [station reached, stars, 3-star stations]. Scores level off once runs
+// start late, so a player keeps climbing by reaching further and filling the book. The third star is a stop of PERFECT
+// heaves only, so the 3-star count is the slow, skilled part, and the top rank is the full 3-star book: a steady player
+// climbs a rank every few runs and the ladder lasts several sessions (bar 1.6.2)
+const RANK_MILE = { 5: [9, 20, 1], 6: [13, 28, 3], 7: [15, 36, 6], 8: [17, 44, 10], 9: [21, 54, 15], 10: [24, 64, 20], 11: [24, 72, 24] };
 // [stars (negative: streak days), slot (gloves, badge, stripe), colour code]. Codes are what the save holds (eq).
 const REWARDS = [[4, 0, "y"], [8, 1, "h"], [14, 2, "s"], [20, 0, "s"], [28, 1, "y"], [36, 2, "a"], [50, 0, "r"], [64, 2, "y"], [-2, 1, "g"], [-7, 2, "g"]];
 const EQ0 = "wql"; // the default gloves, badge and stripe
@@ -759,14 +776,15 @@ const chainMult = n => n >= 30 ? 3 : n >= 20 ? 2 : n >= 10 ? 1.5 : 1;
 const STRINGS = {
   ja: {
     title: "押し屋ラッシュ", reading: "おしや らっしゅ", prevSt: "おしあい", nextSt: "へしあい",
-    how1: "リズムに合わせてタップ!", how2: "まにあわない人は押さない", howW: "リズムに合わせて|タップ!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
+    how1: "リズムに合わせてタップ!", how2: "まにあわない人は押さない", howW: "リズムに合わせて|タップ!|まにあわない人は|押さない", how1K: "リズムに合わせてスペース!", howWK: "リズムに合わせて|スペースかクリック!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     perfect: "ドンピシャ!", boardP: "ドンピシャ乗車!", good: "よし!", bad: "ぐえっ", board: "スポン!", giri: "ギリギリ!", clang: "ゴン!", clangSub: "よしは半分",
     pinch: "はさまった!", pop: "パリーン!", complain: "苦情5件!", allAboard: "全員乗車!", left: "乗り残し {n}人", term: "終点 到着!", hold: "まった!",
     nCase: "かたい荷物|よしは半分だけ", nSumo: "おすもうさん|何回も押す", nExpress: "急行|テンポアップ", nRapid: "快速区間|テンポアップ",
     nRunner: "かけこみ乗車|ベルの間に来る", nFaster: "ラッシュの山|もっと速く", nCrack: "200%から|ミスで窓にヒビ", nBoss: "大ラッシュ!|人の波とおすもう",
     nQuick: "ちょい停車|すぐドアが閉まる", nRush: "終点ラッシュ|乗る人が2倍", quick: "ちょい停車", rush: "終点ラッシュ",
-    nTwo: "ドアが2つ|左右をタップ", nPair: "ふたり組|まとめて押す", nSurge: "人の波|まとめて来る", wave: "人の波!", boss: "大ラッシュ 突破!",
+    nOne: "片側ドア|開くのは1つだけ", nPeak: "ラッシュの山|列がのびる", passBy: "急行は通過", pass: "通過!", healed: "苦情1件 とりけし",
+    nTwo: "ドアが2つ|左右をタップ", nTwoK: "ドアが2つ|←→キーで左右をえらぶ", nPair: "ふたり組|まとめて押す", nSurge: "人の波|まとめて来る", wave: "人の波!", boss: "大ラッシュ 突破!",
     nWait: "まにあわない人は|押さずに待つ", wait: "まって", pinchTeach: "半分で閉まると はさまる", pinchFree: "今回はセーフ",
     station: "{n}駅目", chain: "せーの ×{n}", chainUp: "せーの {n}連!", chainOff: "せーの 途切れた", rate: "乗車率", complaints: "苦情", gloves: "軍手", warn: "あと{n}件",
     tiers: ["まあまあ", "満員", "超満員!!", "限界突破!!!"],
@@ -779,21 +797,22 @@ const STRINGS = {
     nDaily: "今日のダイヤ|", streak: "連続{n}日", rewards: "ごほうび", next: "つぎ", stamped: "スタンプ{n}こ", todayNew: "まだ", todayDone: "済",
     feat: ["ドア2つ", "ふたり組", "おすもう", "かたい荷物", "人の波", "急行"], slot: ["軍手", "バッジ", "車両"],
     col: { y: "きん", h: "さくら", s: "そらいろ", a: "ゆうやけ", r: "あか", g: "わかば", w: "しろ", q: "ふつう", l: "ももいろ" }, rw: "{c}の{s}",
-    gTomorrow: "あした連続{n}日", gRank: "{n}点で{s}", gGot: "{s}をゲット!", rTmr: "あした", gStart: "{s}から出発OK!", gStar: "あと★{n}で{s}", gFrom: "あと★{n}で{s}発", gGo: "{s}まで行く", g3: "{s}で★3つ", gDaily: "今日のダイヤへ",
+    gTomorrow: "あした連続{n}日", gRank: "{n}点で{s}", gGot: "{s}をゲット!", rTmr: "あした", gStart: "{s}から出発OK!", gStar: "あと★{n}で{s}", g3s: "★3つの駅 あと{n}で{s}", gFrom: "あと★{n}で{s}発", gGo: "{s}まで行く", g3: "{s}で★3つ", gDaily: "今日のダイヤへ",
     seals: "達人の印", sealN: ["せーの50連", "★3つ一路線", "ドンピシャ一路線", "大ラッシュ突破"], nSeal: "達人の印!|{s}", gSeal: "{s}の印をゲット!",
     sealG: ["印: せーの 50連", "印: 1つの線を全駅★3つで", "印: 1つの線をドンピシャだけで", "印: 臨時4の大ラッシュ突破"],
     gHome: "豆ヶ丘から出ると点がのびる", gGoFrom: "{s}から出発", tmrTease: "あしたのダイヤ: {s}", dailyTease: "今日のダイヤ: {s}", equipped: "つけた!"
   },
   en: {
     title: "OSHIYA RUSH", reading: "OSHIYA RUSH", gloss: "TRAIN PUSHER", prevSt: "PUSH", nextSt: "SHOVE",
-    how1: "TAP ON THE BEAT TO HEAVE!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP ON THE BEAT|TO HEAVE!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
+    how1: "TAP ON THE BEAT TO HEAVE!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP ON THE BEAT|TO HEAVE!|DON'T PUSH WHO|CAN'T MAKE IT", how1K: "PRESS SPACE ON THE BEAT!", howWK: "SPACE OR CLICK|ON THE BEAT!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
     perfect: "PERFECT!", boardP: "PERFECT IN!", good: "GOOD", bad: "OOF", board: "IN!", giri: "JUST IN!", clang: "CLANG!", clangSub: "GOOD = HALF",
     pinch: "PINCHED!", pop: "SMASH!", complain: "5 GRIPES!", allAboard: "ALL ABOARD!", left: "{n} LEFT BEHIND", term: "END OF LINE!", hold: "HOLD IT!",
     nCase: "HARD LUGGAGE|GOOD MOVES IT HALF", nSumo: "SUMO|MANY HEAVES", nExpress: "EXPRESS|FASTER BEAT", nRapid: "RAPID SECTION|FASTER BEAT",
     nRunner: "LATE RUNNERS|AT THE BELL", nFaster: "PEAK RUSH|FASTER", nCrack: "FROM 200%|MISSES CRACK", nBoss: "BIG RUSH!|SURGE AND SUMO",
     nQuick: "QUICK STOP|DOORS SHUT FAST", nRush: "LAST-STOP RUSH|TWICE THE CROWD", quick: "QUICK STOP", rush: "LAST-STOP RUSH",
-    nTwo: "TWO DOORS|TAP LEFT OR RIGHT", nPair: "PAIRS|ONE PUSH FOR TWO", nSurge: "CROWD SURGE|MANY AT ONCE", wave: "SURGE!", boss: "BIG RUSH CLEARED!",
+    nOne: "ONE DOOR|ONLY ONE OPENS", nPeak: "PEAK HOUR|LONGER QUEUES", passBy: "EXPRESS PASSES", pass: "EXPRESS!", healed: "1 GRIPE TAKEN BACK",
+    nTwo: "TWO DOORS|TAP LEFT OR RIGHT", nTwoK: "TWO DOORS|← → PICKS THE DOOR", nPair: "PAIRS|ONE PUSH FOR TWO", nSurge: "CROWD SURGE|MANY AT ONCE", wave: "SURGE!", boss: "BIG RUSH CLEARED!",
     nWait: "CAN'T MAKE IT?|DON'T PUSH", wait: "WAIT", pinchTeach: "HALF IN = PINCHED", pinchFree: "FREE THIS TIME",
     station: "STATION {n}", chain: "HEAVE x{n}", chainUp: "{n} IN A ROW!", chainOff: "HEAVES BROKEN", rate: "LOAD", complaints: "GRIPES", gloves: "LIVES", warn: "{n} MORE",
     tiers: ["SO-SO", "PACKED", "JAMMED!!", "OVER LIMIT!!!"],
@@ -806,7 +825,7 @@ const STRINGS = {
     nDaily: "TODAY|", streak: "{n} DAYS", rewards: "REWARDS", next: "NEXT", stamped: "{n} STAMPS", todayNew: "NEW", todayDone: "DONE",
     feat: ["2 DOORS", "PAIRS", "SUMO", "LUGGAGE", "SURGE", "EXPRESS"], slot: ["GLOVES", "BADGE", "TRAIN"],
     col: { y: "GOLD", h: "SAKURA", s: "SKY", a: "SUNSET", r: "RED", g: "LEAF", w: "WHITE", q: "PLAIN", l: "PINK" }, rw: "{c} {s}",
-    gTomorrow: "TOMORROW: {n} DAYS", gRank: "{n} FOR {s}", gGot: "GOT {s}!", rTmr: "NEXT DAY", gStart: "START AT {s}!", gStar: "{n}★ TO {s}", gFrom: "{n}★: START {s}", gGo: "REACH {s}", g3: "3★ AT {s}", gDaily: "TRY THE DAILY",
+    gTomorrow: "TOMORROW: {n} DAYS", gRank: "{n} FOR {s}", gGot: "GOT {s}!", rTmr: "NEXT DAY", gStart: "START AT {s}!", gStar: "{n}★ TO {s}", g3s: "{n} MORE 3★ FOR {s}", gFrom: "{n}★: START {s}", gGo: "REACH {s}", g3: "3★ AT {s}", gDaily: "TRY THE DAILY",
     seals: "MASTER SEALS", sealN: ["50 IN A ROW", "ALL-3★ LINE", "ALL-PERFECT LINE", "BIG RUSH"], nSeal: "MASTER SEAL!|{s}", gSeal: "SEAL: {s}!",
     sealG: ["SEAL: 50 HEAVES IN A ROW", "SEAL: ALL 3★ ON A LINE", "SEAL: ALL PERFECT ON A LINE", "SEAL: BEAT EXTRA 4 RUSH"],
     gHome: "START AT ST 1 FOR MORE", gGoFrom: "START AT {s}", tmrTease: "TOMORROW: {s}", dailyTease: "DAILY: {s}", equipped: "ON!"
@@ -826,6 +845,7 @@ function stName(n) {
 let lang = store.get("lang", null);
 if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
 const S = (k, n, sv) => { let v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; if (typeof v === "string") { if (n != null) v = v.replace("{n}", n); if (sv != null) v = v.replace("{s}", sv); } return v; };
+const SK = k => finePointer && STRINGS.ja[k + "K"] ? S(k + "K") : S(k); // a mouse and keyboard player is told about keys and clicks, not taps
 
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
@@ -849,7 +869,6 @@ const num = (k, d) => DEMO ? d || 0 : Number(store.get(k, d || 0)) || 0;
 const starStr = () => DEMO ? "" : String(store.get("stars", ""));
 const starAt = n => +(starStr()[n - 1] || 0);
 const starSum = (a, b) => { let t = 0; for (let n = a; n <= b; n++) t += starAt(n); return t; };
-const starMin = (a, b) => { let m = 3; for (let n = a; n <= b; n++) m = Math.min(m, starAt(n)); return m; };
 const star3 = () => { let t = 0; for (let n = 1; n <= LAST; n++) if (starAt(n) >= 3) t++; return t; };
 // the career rank: the best score, or a milestone of the stamp book, whichever is higher
 function careerRank(best) {
@@ -900,10 +919,10 @@ function newRun(mode, seed, opt) {
     offset: T(), holdAt: null, pauseClock: 0, startAt: T(), c: 0, lag: 0,
     score: 0, lives: mode === "demo" ? 2 : 3, chain: 0, maxChain: 0, boarded: 0, stars: 0, perfects: 0, star3: 0, n: 0, hist: [],
     complaints: 0, ids: 0, coolUntil: -1e9, grid: null, st: null, dead: null, result: null, starts0: mode === "play" ? starts() : [], rw0: mode === "play" ? REWARDS.filter(hasRw) : [], rank0: mode === "play" ? careerRank() : 0,
-    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false, lf: [0, 0, 0], seals: ""
+    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false, lf: [0, 0, 0], seals: "", pass: [], peakNoted: false
   };
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
-  newStation(run.from, 0, true);
+  planPasses(); newStation(run.from, 0, true);
   if (mode === "play") hint.begin();
   musicLevel(mode === "attract" ? "title" : "play");
 }
@@ -932,12 +951,19 @@ const beatPhase = tc => { const g = run.grid, x = (tc - g.t0) / g.iv; return x -
 // -- stations
 function defFor(n) { return run.mode === "demo" ? DEMO_STATIONS[Math.min(n, DEMO_STATIONS.length) - 1] : run.daily ? dailyDef(n) : stationDef(n); }
 const stLabel = st => (st.n > LAST && !run.daily ? S("extra", st.n - LAST) : S("station", run.daily ? st.n : (st.n - 1) % 8 + 1)) + " " + stName(st.name);
+// the express passes every plain stop the stamp book already has at 3 stars (never two in a row, never the start or
+// a line's first stop), so a returning player's run spends its time on the stops still to master (bar 1.5.2, 1.6.2)
+function planPasses() {
+  if (run.mode !== "play" || run.daily) return;
+  for (let n = run.from + 1; n <= LAST; n++) if (!KIND[n] && n % 8 !== 1 && starAt(n) >= 3 && !run.pass.includes(n - 1)) run.pass.push(n);
+}
 function newStation(n, t, atPlatform) {
-  const def = defFor(n);
+  const pass = !atPlatform && kindOf(n) === "x", prev = run.st;
+  const def = pass ? { q: "ssgs".slice(0, 2 + (n & 1)), board: 0, beat: run.grid ? run.grid.iv : 500, R: 230, kind: "x", two: prev && prev.two } : defFor(n);
   run.n = n;
   if (run.complaints >= 5) run.complaints -= 5; // a full tally clears at the next station
-  if (n > 1 && run.complaints > 0) fx.carryT = T(); // the gripes carried in show as the train pulls in (bar 1.4.3)
-  const st = { n, def, two: !!def.two, name: def.name || (run.daily ? 1 + (run.seed + n * 5) % LAST : n), t0: t, ph: atPlatform ? "board" : "arrive", phAt: t, R: def.R, cracks: 0, bads: 0, queue: [],
+  if (n > 1 && run.complaints > 0 && !pass) fx.carryT = T(); // the gripes carried in show as the train pulls in (bar 1.4.3)
+  const st = { n, def, two: !!def.two, shut: def.two && def.shut != null ? def.shut : -1, name: def.name || (run.daily ? 1 + (run.seed + n * 5) % LAST : n), t0: t, ph: pass ? "pass" : atPlatform ? "board" : "arrive", phAt: t, R: def.R, cracks: 0, bads: 0, goods: 0, queue: [],
     doors: def.two ? [null, null] : [null], boarded: 0, bellLen: T_BELL, boardEnd: (atPlatform ? t : t + arriveMs(n) + T_OPEN) + def.board, runnerIn: false, out: [], pinched: null, left: 0 };
   for (const ch of def.q) st.queue.push(newRider(ch));
   st.extras = extrasFor(run.daily ? n + 40 : n);
@@ -945,8 +971,10 @@ function newStation(n, t, atPlatform) {
   run.st = st;
   setTempo(def.beat, t);
   if (atPlatform) st.doors.forEach((d, i) => { stepUp(t, i); st.doors[i].state = "ready"; });
-  if (def.note && run.mode === "play") notice(def.note, def.note === "nDaily" ? S("nDaily") + featNames(run.feat, "|") : null, false, def.note === "nQuick" || def.note === "nRush");
+  if (pass) { run.hist[n] = -1; notice(null, stLabel(st) + "|" + S("passBy")); if (loud()) sfx.pass(); }
+  else if (def.note && run.mode === "play") notice(def.note, def.note === "nDaily" ? S("nDaily") + featNames(run.feat, "|") : null, false, def.note === "nQuick" || def.note === "nRush" || def.note === "nOne");
   else if (!atPlatform && run.mode !== "attract") notice(null, stLabel(st) + (def.tw >= 0 ? "|" + S("feat")[def.tw] : ""));
+  if (!pass && run.mode === "play" && !run.peakNoted && !run.daily && run.c >= PEAK_AT) { run.peakNoted = true; notice("nPeak"); } // the queues start to grow
   if (run.mode === "play" && !run.daily && n > num("maxSt") && n <= LAST) store.set("maxSt", n);
 }
 function newRider(type) { return { id: ++run.ids, type, look: fl(run.rnd() * LOOKS), need: 2, d: 0, perf: 0, state: "q", at: 0, di: 0, waitAt: null, dec: false, flip: false }; }
@@ -1020,7 +1048,7 @@ function press(tc, side) {
   if (!run || run.dead) return;
   const st = run.st, now = T();
   if (tc < run.coolUntil) { fx.eatT = now; if (loud()) sfx.tap(); return; } // still mid-heave: a muted tick and a twitch, so no press feels lost
-  const i = st.two && side != null ? side : pickDoor(st, tc), r = st.doors[i], x = doorX(st, i), y = FEET_DOOR - 40;
+  const i = st.two && side != null && side !== st.shut ? side : pickDoor(st, tc), r = st.doors[i], x = doorX(st, i), y = FEET_DOOR - 40;
   fx.face = i; fx.heaveT = fx.vt; fx.whiff = false; fx.heaveId = r ? r.id : 0;
   const pushable = r && pushPhase(st.ph) && (r.state === "ready" || (r.state === "step" && tc >= r.at + STEP_MS - EARLY));
   const off = tc - nearestBeat(tc), a = Math.abs(off), [pw, gw] = winOf(run.n);
@@ -1040,7 +1068,7 @@ function press(tc, side) {
     return;
   }
   run.coolUntil = tc + COOL;
-  if (tier === "good") lineFault(st);
+  if (tier === "good") { lineFault(st); st.goods++; }
   if (tier === "good" && r.type === "c" && !r.half) { // hard luggage gives half to a GOOD: two GOODs move it one step (bar 1.4.3)
     r.half = true; call("clang", "mist", now, S("clangSub")); if (loud()) sfx.clang();
     burst(x - 16, y + 16, 6, 140, { col: "gold", kind: "spark", s: 2 });
@@ -1137,18 +1165,21 @@ function depart(c) {
   st.left = st.queue.length; // a pinched rider is not also a complaint (bar 1.4.3)
   if (st.pinched) { for (const p of st.pinched) { st.queue.unshift(p); p.state = "q"; p.backAt = c; p.wasPinched = true; } st.pinched = null; }
   setPh("depart", c); bellMusic(false);
-  const tier = tierOf(st.R), stars = (st.left === 0 ? 1 : 0) + (st.R >= 200 ? 1 : 0) + (st.bads === 0 && st.boarded > 0 ? 1 : 0);
+  // stars: everyone aboard, a load of 200 %, and (bar 1.6.2) a stop of PERFECT heaves only: no GOOD, no OOF
+  const tier = tierOf(st.R), stars = (st.left === 0 ? 1 : 0) + (st.R >= 200 ? 1 : 0) + (st.bads === 0 && st.goods === 0 && st.boarded > 0 ? 1 : 0);
+  const heal = st.left === 0 && run.complaints > 0 && run.complaints < 5; // an ALL ABOARD takes back one carried gripe (bar 1.4.3)
+  if (heal) { run.complaints--; fx.compT = now - 400; }
   const boss = st.def.boss && st.left === 0, rushed = st.def.kind === "r" && st.left === 0, bonus = (st.left === 0 ? 30 + 10 * st.n : 0) + stars * 20 + (boss ? 300 : 0) + (rushed ? RUSH_BONUS : 0);
   run.score += bonus; run.stars += stars; run.hist[st.n] = stars; if (stars === 3) run.star3++; if (bonus) fx.scoreT = now;
   if (st.left === 0) run.clears++; else { run.clean = false; lineFault(st); }
   if (play && !run.daily && st.n <= LAST && st.n % 8 === 0 && run.from <= st.n - 7) { // a whole line in this run: the line seals
     if (!run.lf[lineOf(st.n)]) earnSeal("a", now);
-    let all3 = true; for (let i = st.n - 7; i <= st.n; i++) if (run.hist[i] !== 3) all3 = false;
+    let all3 = true; for (let i = st.n - 7; i <= st.n; i++) if (run.hist[i] !== 3 && !(run.hist[i] === -1 && starAt(i) >= 3)) all3 = false; // a stop the express passed counts when the book has it at 3
     if (all3) earnSeal("s", now);
   }
   if (boss && play && !run.daily) earnSeal("b", now);
   if (play && !run.daily && st.n <= LAST && stars > starAt(st.n)) { const a = starStr().padEnd(LAST, "0").split(""); a[st.n - 1] = stars; store.set("stars", a.join("")); }
-  fx.stamp = { t: now, tier, stars, bonus, R: st.R, left: st.left };
+  fx.stamp = { t: now, tier, stars, bonus, R: st.R, left: st.left, heal };
   if (loud()) { sfx.depart(); sfx.stamp(tier); }
   const term = loud() && !run.daily && ((st.n % 8 === 0 && st.n <= LAST) || boss); // the end of a line (or a big rush cleared): the big goal of a run
   if (term) {
@@ -1176,6 +1207,10 @@ function simStep(c) {
     case "close": if (c - st.phAt >= T_CLOSE) slam(c); break;
     case "pinch": if (c - st.phAt >= T_PINCH) depart(c); break;
     case "depart": if (c - st.phAt >= departMs(st.n)) { const out = st.queue.slice(0, 4); newStation(run.n + 1, c, false); run.st.out = out; } break;
+    case "pass": // the express runs through: a small bonus as it clears the platform, then the next stop
+      if (!st.paid && c - st.phAt >= PASS_MS * 0.45) { st.paid = true; run.score += PASS_PTS; fx.scoreT = T(); fx.sv += 0.6; call("pass", "gold", T(), "+" + PASS_PTS); }
+      if (c - st.phAt >= PASS_MS) newStation(run.n + 1, c, false);
+      break;
   }
   if (run.dead) return;
   const s2 = run.st;
@@ -1185,7 +1220,7 @@ function simStep(c) {
     if (loud()) { notice(null, S("wave")); sfx.notice(); }
   }
   s2.doors.forEach((d, i) => {
-    if (!d && s2.queue.length && (s2.ph === "open" || s2.ph === "board" || s2.ph === "bell")) {
+    if (!d && i !== s2.shut && s2.queue.length && (s2.ph === "open" || s2.ph === "board" || s2.ph === "bell")) {
       const q = s2.queue[0];
       if (q.type !== "r" || q.runAt == null || c - q.runAt >= (q.delay || 420)) stepUp(c, i);
     }
@@ -1259,7 +1294,7 @@ function notice(key, text, q, ann) {
   if (key && !q && !ann && run.mode === "play" && (fx.noteQ.length || T() - fx.ruleT < noteGap())) { fx.noteQ.push([key, text]); return; }
   fx.note = { key, text, t: T() }; if (key && !ann) fx.ruleT = T(); if (loud() && key) sfx.notice();
 }
-const noteParts = n => String(n.text || S(n.key)).split("|");
+const noteParts = n => String(n.text || SK(n.key)).split("|");
 const noteLife = n => 1500 * noteParts(n).length;
 
 // ---------- KEEP: audio. SFX are data-like functions; every voice goes through the kit bus (mixed for a phone speaker) ----------
@@ -1330,6 +1365,12 @@ const sfx = {
   pinch() { if (!audioOn()) return; const w = now0(), k = 1.12; hiss("bandpass", 950, 1.4, 0.1, 0.45 * k, w); tone("square", 150, 120, 0.14, 0.14 * k, w, null, 0.003, 1100); thump(170, 0.14, 0.24 * k, w, 1500); voice(340, 190, 0.3, 1.05 * k, 600, 1100, w + 0.05); },
   slam() { if (!audioOn()) return; const w = now0(), q = lv(25, 0.06, 1.3), k = q.g; thump(150 * q.f, 0.18, 0.75 * k, w, 1600); hiss("bandpass", 2600, 1.5, 0.03, 0.52 * k, w); hiss("bandpass", 900, 1, 0.14, 0.42 * k, w + 0.04, null, 400); tone("square", 300 * q.f, 220, 0.08, 0.12 * k, w, null, 0.002, 1800); },
   doorOpen() { if (!audioOn()) return; const w = now0(); hiss("highpass", 2600, 0.8, 0.32, 0.45, w, null, 1300); },
+  pass() { // the express runs through: a rush of air, the rail joints, a two-note horn that drops as it goes by
+    if (!audioOn()) return; const w = now0(), q = lv(30, 0.06, 1);
+    hiss("bandpass", 600, 0.7, 1.3, 0.5 * q.g, w, null, 1700); hiss("highpass", 3200, 0.8, 0.8, 0.16 * q.g, w + 0.3, null, 1600);
+    for (let i = 0; i < 6; i++) thump(95 + (i & 1) * 20, 0.06, (0.2 - i * 0.02) * q.g, w + 0.25 + i * 0.15, 900);
+    for (const [f, d] of [[pz(9), 0], [pz(11), 0]]) { tone("triangle", f * q.f, f * q.f * 0.94, 0.42, 0.13 * q.g, w + 0.18 + d, null, 0.02, 2600); tone("triangle", f * q.f * 0.89, f * q.f * 0.86, 0.3, 0.1 * q.g, w + 0.62 + d, null, 0.02, 2200); }
+  },
   doorClose() { if (!audioOn()) return; const w = now0(), q = lv(30, 0.08, 0.7); bellNote(pz(9) * q.f, w, 0.2 * q.g); bellNote(pz(5) * q.f, w + 0.2, 0.2 * q.g); hiss("highpass", 2600, 0.8, 0.45, 0.1, w + 0.05, null, 1100); },
   bell(at, step, alt) {
     if (!audioOn()) return; const w = Math.max(now0(), at || now0() + 0.02), dt = step || 0.165, q = vary(25, 0.06);
@@ -1397,7 +1438,7 @@ const sfx = {
 // an unlock) on top, UI ticks under; every single peak stays in one band of about 6 dB and at most touches the
 // compressor's knee (bar 1.3.2, 1.3.4). A function trims by its first argument (the stamp tier).
 const TRIM = { whiff: 0.35, tap: 1.33, good: 0.43, perfect: 0.41, bad: 0.54, clang: 0.38, board: 0.73, giri: 1.07, crack: 0.3, pop: 1.0, pinch: 0.81, slam: 0.37,
-  doorOpen: 0.44, doorClose: 1.4, bell: 1.5, allAboard: 1.31, warn: 1.81, depart: 1.15, stamp: t => [1.27, 1.37, 1.29, 1.29][t] || 1.29, lifeLost: 1.17, fail: 1.58,
+  doorOpen: 0.44, pass: 0.95, doorClose: 1.4, bell: 1.5, allAboard: 1.31, warn: 1.81, depart: 1.15, stamp: t => [1.27, 1.37, 1.29, 1.29][t] || 1.29, lifeLost: 1.17, fail: 1.58,
   notice: 1.15, best: 0.96, tick: 0.28, rank: 0.65, ui: 0.36, term: 1.27, unlock: 0.55, chainUp: 1.32, chainOff: 0.36 };
 for (const k of Object.keys(TRIM)) {
   const f = sfx[k];
@@ -2064,6 +2105,7 @@ const livery = () => COL[eqv()[2]] || "redL";
 function carOffset(c) {
   const st = run.st, t = c - st.phAt, [a, b] = carSpan();
   if (st.ph === "arrive") return (1 - easeOut(t / arriveMs(st.n))) * (vRight() - (DX + a * PITCH - CAR_W / 2) + 90);
+  if (st.ph === "pass") return lerp(vRight() - (DX + a * PITCH - CAR_W / 2) + 90, -(DX + b * PITCH + CAR_W / 2 - vLeft() + 90), clamp(t / PASS_MS, 0, 1)); // the express never slows
   if (st.ph === "depart") { if (t < 250) return 0; const k = (t - 250) / (departMs(st.n) - 250); return -k * k * (DX + b * PITCH + CAR_W / 2 - vLeft() + 90); }
   return 0;
 }
@@ -2075,6 +2117,7 @@ function doorLight(x, c) {
   const hw = LAY[st.two ? 1 : 0].hw * o, k = Math.round(hw);
   const spill = (a, b, d) => pc("spill" + k + "/" + a + "/" + b + "/" + d, () => pPoly([[-k * a, 378], [k * a, 378], [k * a + b, 378 + d], [-k * a - b, 378 + d]]));
   st.doors.forEach((_, i) => {
+    if (i === st.shut) return;
     const X = doorX(st, i); x.translate(X, 0);
     x.fillStyle = C("poolA"); x.fill(spill(0.95, 16, 58)); x.fillStyle = C("poolB"); x.fill(spill(0.6, 6, 30));
     x.translate(-X, 0);
@@ -2107,6 +2150,8 @@ const dmSpr = (lk, f) => bake("dm" + lk + "/" + f, 48, 156, 24, 60, x => {
   for (const s of [-1, 1]) shape(x, pEll(s * 8, 89, 7.4, 3), "ink", 0.8);
   bustArt(x, lk, f);
 });
+// a door that stays shut at a one-door stop: a paper no-entry sign on its glass (a red ring and bar, inked)
+const noEntry = (x, X, Y) => put(x, bake("noent", 34, 34, 17, 17, q => { shape(q, pBlob(0, 0, 13.5, 13.5, 0.03, 7), "paper", 1.2, "paperD", 1, 1.4); ST.line(q, pEll(0, 0, 9.6, 9.6), 2.6, "red"); ST.line(q, pLine(-6.4, 6.4, 6.4, -6.4), 2.8, "red"); }), X, Y);
 function leaves(x, dc, open, hw) { const b = leafSpr(hw), sh = hw * open; put(x, b, dc - hw - sh, 0); put(x, b, dc + hw + sh, 0, 0, -1, 1); }
 // what shows through one window, in car coords: a warm ceiling with straps, then the busts and the faces on the glass
 function winArt(x, k0, wi, sd, R, ev, breath) {
@@ -2241,13 +2286,16 @@ function drawTrain(x, c, now) {
     if (main) for (let wi = 0; wi < lay.w.length; wi++) put(x, winSpr(k0, wi, seed + wi * 5, R, ev, breath), cx, 0);
     lay.d.forEach((o, i) => {
       const dc = cx + o; if (dc + off + lay.hw < vLeft() - 4 || dc + off - lay.hw > vRight() + 4) return;
-      if (open > 0.01) put(x, doorSpr(k0, i, seed + i * 7, R, ev, main ? breath : 0, R >= 200 ? 3 : 0, main && i === fx.face && fx.heaveTier === "perfect" && fx.vt - fx.heaveT < 120 ? 3 : 0), cx, 0); // a PERFECT nudges the crowd in
+      const shut = main && i === st.shut; // a one-door stop: this door stays shut and says so
+      if (open > 0.01 && !shut) put(x, doorSpr(k0, i, seed + i * 7, R, ev, main ? breath : 0, R >= 200 ? 3 : 0, main && i === fx.face && fx.heaveTier === "perfect" && fx.vt - fx.heaveT < 120 ? 3 : 0), cx, 0); // a PERFECT nudges the crowd in
       const pin = main && st.ph === "pinch";
-      if (!pin || !st.pinched.some(r => r.di === i)) leaves(x, dc, pin ? 0 : open, lay.hw);
+      if (!pin || !st.pinched.some(r => r.di === i)) leaves(x, dc, pin || shut ? 0 : open, lay.hw);
+      if (shut && st.ph !== "arrive") noEntry(x, dc, 268);
       if (main && st.giri && open < 0.05 && now - fx.slamT < 520) ST.line(x, pRR(dc - lay.hw, DOOR_T, lay.hw * 2, SILL_Y - DOOR_T, 3), 3 * (1 - (now - fx.slamT) / 520) + 0.5, "gold"); // a one-beat gold rim after a giri
     });
   }
   putSpan(x, trainStrip(k0, livery()), 0, 0, vl + 30 - off, vr - 30 - off); // then every car body over them in one copy of what shows
+  if (st.ph === "pass") for (let j = 0; j < 5; j++) { const y = [146, 182, 236, 284, 318][j], l = Math.max(vl - off, DX + a * PITCH - CAR_W / 2), r = Math.min(vr - off, DX + b * PITCH + CAR_W / 2), s0 = l + (r - l) * h01(j * 5 + st.n); brush(x, [[s0, y], [Math.min(r, s0 + 90 + 60 * h01(j)), y + 0.6]], 1.3); } // ink streaks, never a ghost copy
   for (let k = a; k <= b; k++) {
     if (!seen(k)) continue;
     const cx = DX + k * PITCH;
@@ -2318,7 +2366,11 @@ function drawOshiya(x, now, c) {
   put(x, oshHeadSpr(face, eq[1]), hx, hy, P.tilt, sx, 1);
   if (face === "strain" && (fl(now / 90) & 1)) shape(x, pSmooth([[hx + sx * 11, hy - 10], [hx + sx * 13.6, hy - 4], [hx + sx * 11, hy - 1.6], [hx + sx * 8.6, hy - 4]]), "mist", 0.7);
 }
-function queueSlot(i) { return { x: QX[i & 1], y: QY0 + (i >> 1) * QDY }; }
+function queueSlot(i) { // two lines at two doors; at a one-door stop both lines close up on the open door
+  const sh = run && run.st ? run.st.shut : -1;
+  if (sh >= 0) { const o = 1 - sh, d = o ? 1 : -1; return { x: QX[o] + d * (i & 1 ? 30 : -12), y: QY0 + (i >> 1) * QDY }; }
+  return { x: QX[i & 1], y: QY0 + (i >> 1) * QDY };
+}
 function stepPositions(dt) {
   if (!run || !run.st) return;
   const st = run.st, pos = fx.pos || (fx.pos = new Map()), seen = new Set(), sp0 = L.wide ? { x: STAIR_X, y: 540 } : { x: 400, y: 660 };
@@ -2516,6 +2568,8 @@ function routeArt(x, w, n) { // the line map: stations behind with their stars, 
     const i = n + k, sx = k * gap; if (i < 1 || k === 0) continue;
     if (!run.daily && i % 8 === 0 && i <= LAST) { shape(x, pCut(sx - 5.5, ly - 5.5, 11, 11, 2), k < 0 ? lc(i) : "paper", 1); if (k > 0) ST.line(x, pCut(sx - 8.5, ly - 8.5, 17, 17, 3), 1, "red"); } // a terminal: its rush ahead gets a red frame
     else if (!run.daily && KIND[i] === "q" && i <= LAST) shape(x, pPoly([[sx, ly - 6.4], [sx + 6.4, ly], [sx, ly + 6.4], [sx - 6.4, ly]]), k < 0 ? lc(i) : "goldL", 0.9); // a quick stop: a diamond
+    else if (run.pass.includes(i)) { shape(x, pCut(sx - 2.2, ly - 7, 4.4, 14, 1), k < 0 ? lc(i) : "paperD", 0.8); continue; } // the express passes: a bar across the line, no stars
+    else if (!run.daily && KIND[i] === "o" && i <= LAST) { shape(x, pEll(sx, ly, 4.4, 4.4), k < 0 ? lc(i) : "paper", 0.9); ST.line(x, pLine(sx - 2, ly, sx + 2, ly), 1.6); } // a one-door stop: a bar inside
     else shape(x, pEll(sx, ly, 4.4, 4.4), k < 0 ? lc(i) : "paper", 0.9);
     if (k < 0) { const sc = run.hist[i] || 0; for (let j = 0; j < 3; j++) { const p = pEll(sx - 5.6 + j * 5.6, ly + 10, 2, 2); if (j < sc) { x.fillStyle = C("gold"); x.fill(p); } else ST.line(x, p, 0.6, "tagL"); } }
   }
@@ -2523,7 +2577,7 @@ function routeArt(x, w, n) { // the line map: stations behind with their stars, 
 }
 function drawRoute(x, X, Y, s, w, now, ct) { // ct: where its cords end, in board px above it
   const n = run.st.n, side = fl((w / 2 - 16) / 26), h = [];
-  for (let k = -side; k < 0; k++) h.push(run.hist[n + k] || 0);
+  for (let k = -side; k <= side; k++) h.push(k < 0 ? run.hist[n + k] || 0 : run.pass.includes(n + k) ? "x" : "");
   const t = Math.round(ct);
   put(x, hudBake("rt" + n + (run.daily ? "d" : "") + "/" + w + "/" + h.join("") + "/" + t, s, w + 8, 54 - t, w / 2 + 4, 2 - t, q => {
     cords(q, [[-(w / 2 - 18), 6], [w / 2 - 18, 6]], t); routeArt(q, w, n);
@@ -2612,7 +2666,7 @@ function callY() {
   return bot - top >= 38 * L.u ? (top + bot) / 2 : LED_Y + 18;
 }
 const subInline = cl => /^\+/.test(cl.sub);
-const stampOn = now => { const s = fx.stamp, st = run.st; return !!s && now - s.t >= 120 && now - s.t <= 1700 && (st.ph === "depart" || st.ph === "arrive"); };
+const stampOn = now => { const s = fx.stamp, st = run.st; return !!s && now - s.t >= 120 && now - s.t <= 1700 && (st.ph === "depart" || st.ph === "arrive" || st.ph === "pass"); };
 const ledHidden = now => { const cl = callOn(now); return stampOn(now) || (!!cl && (callY() > LED_Y || (!!cl.sub && !subInline(cl)))); };
 function drawCall(x, now) {
   const cl = callOn(now); if (!cl) { if (fx.call && now - fx.call.t > callLife(fx.call)) fx.call = null; return; }
@@ -2634,7 +2688,7 @@ const star = (x, X, Y, on, r) => { const p = pStar(X, Y, r || 7, (r || 7) * 0.45
 function drawStamp(x, now) {
   const s = fx.stamp; if (!s) return;
   const age = now - s.t, st = run.st;
-  if (age > 1700 || (st.ph !== "depart" && st.ph !== "arrive")) { if (age > 400) fx.stamp = null; return; }
+  if (age > 1700 || (st.ph !== "depart" && st.ph !== "arrive" && st.ph !== "pass")) { if (age > 400) fx.stamp = null; return; }
   if (age < 120 || (fx.call && now - fx.call.t < 1200 && BIG.includes(fx.call.key))) return;
   const t = s.tier, lab = S("tiers")[t], land = 1 + 0.5 * (1 - easeOut((age - 120) / 140));
   at(x, 180, 168, L.u, 0, () => {
@@ -2648,6 +2702,7 @@ function drawStamp(x, now) {
     for (let i = 0; i < 3; i++) star(x, -26 + i * 26, 76, i < s.stars, 9);
     if (age > 420 && s.bonus) text(x, "+" + s.bonus, 0, 114, 20, "gold", { ol: "ink", ow: 0.3, f: ST.title, w: 900 });
     if (age > 420 && s.left) text(x, S("left", s.left), 0, s.bonus ? 140 : 114, 16, "red", { ol: "ink", ow: 0.28 });
+    else if (age > 420 && s.heal) text(x, S("healed"), 0, s.bonus ? 140 : 114, 16, "leaf", { ol: "ink", ow: 0.3 }); // a flawless stop takes back a gripe
   });
 }
 
@@ -2665,11 +2720,11 @@ const titleSignSpr = () => bake("ts" + lang, 332, 140, 166, 3, x => {
 });
 function titleTop() { const u = L.u, l = UI.lang, m = UI.mute, half = 158 * u; return vTop() + (l.cx + l.w * u / 2 > 180 - half - 4 || m.cx - m.w * u / 2 < 180 + half + 4 ? 12 + 48 * u : 30); }
 function drawHow(x, cx, y, u) { // the two lines of how to play, on a notice pinned under the sign
-  const a = S("how1"), b = S("how2"), w = Math.max(textW(x, a, 17), textW(x, b, 15)) + 44;
+  const a = SK("how1"), b = S("how2"), w = Math.max(textW(x, a, 17), textW(x, b, 15)) + 44;
   at(x, cx, y, u, 0, () => { put(x, slipSpr(w, 66), 0, 0); for (const s of [-1, 1]) dot(x, s * (w / 2 - 11), 10, 3.2, "red"); text(x, a, 0, 23, 17, "ink", {}); text(x, b, 0, 47, 15, "redD", {}); });
 }
 function drawHowSide(x, cx, y, s) { // a wide screen: the same notice in four short lines, hung in the side world
-  const ls = S("howW").split("|"), w = Math.max(...ls.map((t, i) => textW(x, t, i < 2 ? 17 : 15))) + 44;
+  const ls = SK("howW").split("|"), w = Math.max(...ls.map((t, i) => textW(x, t, i < 2 ? 17 : 15))) + 44;
   cords(x, [[cx - (w / 2 - 18) * s, y + 4 * s], [cx + (w / 2 - 18) * s, y + 4 * s]], beamB());
   at(x, cx, y, s, 0, () => { put(x, slipSpr(w, 108), 0, 0); for (const k of [-1, 1]) dot(x, k * (w / 2 - 11), 10, 3.2, "red"); ls.forEach((t, i) => text(x, t, 0, 22 + i * 22 + (i > 1 ? 4 : 0), i < 2 ? 17 : 15, i < 2 ? "ink" : "redD", {})); });
 }
@@ -2798,11 +2853,15 @@ function drawPause(x, now) {
   at(x, 180, y, u, 0, () => { board(x, 0, 0, 300, 206); text(x, S("paused"), 0, 38, 28, "paneT", { f: ST.title, w: 900, deep: "paneL" }); });
   btn(x, UI.resume, S("resume"), 22, false, dy); btn(x, UI.restart, S("restart"), 17, false, dy); btn(x, UI.quit, S("toTitle"), 17, false, dy);
 }
-const overH = (r, play) => play ? 320 + 30 * Math.max(0, r.lines.length - 1) : 252;
+// on a phone the result board packs its rows 12 % closer, so more of the stage (the pinched rider, the slumped oshiya)
+// shows below it (STYLE.md 7: the board hangs over the stage, it does not cover it)
+const RY = v => L.wide ? v : Math.round(v * 0.88);
+const overH = (r, play) => RY(play ? 320 + 30 * Math.max(0, r.lines.length - 1) : 252);
 function starRow(x, r, x0, y, x1) { // one small card per station of this run, its stars printed on it
   const n = Math.min(r.n - r.from + 1, fl((x1 - x0) / 11)), first = r.n - n + 1;
   for (let i = 0; i < n; i++) {
     const s = r.hist[first + i] || 0, sx = x0 + i * 11;
+    if (s < 0) { ST.line(x, pCut(sx + 1, y - 7, 7, 14, 2), 0.7, "paneL"); x.fillStyle = C("paneL"); x.fillRect(sx + 2.5, y - 0.6, 4, 1.4); continue; } // the express passed it
     shape(x, pCut(sx, y - 9, 9, 18, 2), s === 3 ? "gold" : "pane", 0.7);
     for (let j = 0; j < 3; j++) { x.fillStyle = C(j < s ? "red" : "paneL"); x.fillRect(sx + 3, y + 4 - j * 5, 3, 3); }
   }
@@ -2819,12 +2878,19 @@ function sealMark(x, on, id) {
   else ST.line(x, pLine(-4, 0, 4, 0), 1.4, "paper");
 }
 // a goal line: an unlock is stamped on a plate (the new start station is a button), the forward goal points on
+// a GOT line is a luggage tag (an eyelet and a red string at its cut end), not a UI chip (STYLE.md 10)
+function gotTag(x, w) {
+  const l = -w / 2, p = pPoly([[l + 11, -14], [w / 2 - 1.5, -14.5], [w / 2, 13.6], [l + 11, 14], [l, 6.5], [l, -6.5]]);
+  shape(x, p, "paper", 1.1, "paperD", 1.4, 1.8);
+  ST.line(x, pEll(l + 8.5, 0, 2.6, 2.6), 1.1);
+  ST.line(x, pSmooth([[l + 8.5, 0], [l + 1, -6], [l - 7, -4], [l - 12, -9]], true), 1.5, "red");
+}
 function goalLine(x, r, g, gy, now, i) {
   const age = now - r.at - RES.goal - i * 120; if (age < 0) return null;
-  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go", "sg"].includes(g.kind), tw = textW(x, g.t, 17), w = tw + 46 + (go ? 18 : 0), fit = Math.max(TEXT_MIN / 17, Math.min(1, 288 / w)), s = Math.min((plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit, 320 / w); // a long line shrinks inside the board (bar 1.8.5), never under the text minimum (bar 1.4.4)
-  at(x, 0, gy, s, 0, () => {
-    if (plate) shape(x, pCut(-w / 2, -14, w, 28, 4), "paper", 1.1, "paperD", 1.4, 1.8);
-    const x0 = -w / 2 + 22;
+  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go", "sg"].includes(g.kind), pad = plate ? 6 : 0, tw = textW(x, g.t, 17), w = tw + 46 + pad + (go ? 18 : 0), fit = Math.max(TEXT_MIN / 17, Math.min(1, 288 / w)), s = Math.min((plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit, 320 / w); // a long line shrinks inside the board (bar 1.8.5), never under the text minimum (bar 1.4.4)
+  at(x, 0, gy, s, plate ? (i % 2 ? 0.02 : -0.025) : 0, () => { // a GOT line hangs a little askew, like a tag tied on by hand
+    if (plate) gotTag(x, w);
+    const x0 = -w / 2 + 22 + pad;
     if (g.kind === "w") put(x, rwSpr(g.w, false), x0 - 4, 0, 0, 0.7, 0.7);
     else if (go) startFlag(x, x0 - 6, 4, true);
     else if (g.kind === "d") { ST.line(x, pBlob(x0 - 6, 0, 9, 9, 0.04, 3), 2, "red"); dot(x, x0 - 6, 0, 3, "red"); }
@@ -2841,25 +2907,25 @@ function drawOver(x, now) {
   cords(x, [[180 - 110 * u, y + 4 * u], [180 + 110 * u, y + 4 * u]], beamB());
   at(x, 180, y, u * bump, 0, () => {
     board(x, 0, 0, 316, H);
-    if (age > RES.head) text(x, S("over"), 0, 38, 30, "paneT", big);
-    if (age > RES.cause) text(x, r.cause, 0, 68, 17, "paneS", {});
+    if (age > RES.head) text(x, S("over"), 0, RY(38), 30, "paneT", big);
+    if (age > RES.cause) text(x, r.cause, 0, RY(68), 17, "paneS", {});
     if (age > RES.count) {
-      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -50 : 0, 108, 50, "paneT", big);
-      if (r.showRank && r.rankDone) seal(x, 86, 108, S("ranks")[r.rank], age - r.rankAt, r.rankUp ? 19 : 17); // a promotion stamps bigger
+      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -50 : 0, RY(108), L.wide ? 50 : 46, "paneT", big);
+      if (r.showRank && r.rankDone) seal(x, 86, RY(108), S("ranks")[r.rank], age - r.rankAt, r.rankUp ? 19 : 17); // a promotion stamps bigger
     }
     const rows = r.rows || 0, dots = ry => { x.fillStyle = C("paneL"); for (let j = -134; j < 134; j += 5) x.fillRect(j, ry + 14, 2, 2); };
     const row = (k, v, ry, vs) => { text(x, S(k), -134, ry, 17, "paneT", { a: "left", w: 700 }); text(x, v, 134, ry, vs || 20, "paneS", { a: "right", f: ST.title, w: 900 }); dots(ry); };
-    if (rows > 0) row("rRiders", r.boarded, 156);
-    if (rows > 1) { const v = S("stOf", r.n); row("rStation", v, 186); starRow(x, r, -134 + textW(x, S("rStation"), 17, { w: 700 }) + 12, 186, 126 - textW(x, v, 20, { f: ST.title, w: 900 })); }
-    if (rows > 2) { if (run.daily) row("rTmr", r.tmr, 216, 17); else row("rChain", r.maxChain, 216); }
-    if (rows > 3 && play && (r.newBest || r.best > 0 || r.fromBest)) { // no "BEST 0 / 0 TO GO" on a first record; a first run from a start shows its record
+    if (rows > 0) row("rRiders", r.boarded, RY(156));
+    if (rows > 1) { const v = S("stOf", r.n); row("rStation", v, RY(186)); starRow(x, r, -134 + textW(x, S("rStation"), 17, { w: 700 }) + 12, RY(186), 126 - textW(x, v, 20, { f: ST.title, w: 900 })); }
+    if (rows > 2) { if (run.daily) row("rTmr", r.tmr, RY(216), 17); else row("rChain", r.maxChain, RY(216)); }
+    if (rows > 3 && play && (r.newBest || r.best > 0 || r.fromBest)) { const by = RY(246); // no "BEST 0 / 0 TO GO" on a first record; a first run from a start shows its record
       const full = run.daily ? S("rDaily") : r.rowLate ? S("rBestFrom", null, stName(r.from)) : S("rBest");
-      if (r.newBest) { text(x, full, -134, 246, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, 246, S("newBest"), age - RES.best, 18); }
+      if (r.newBest) { text(x, full, -134, by, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, by, S("newBest"), age - RES.best, 18); }
       else if (r.fromBest) { // a quiet row: this start's best moved, no seal and no happytime
         const fits = l => textW(x, l, 17, { w: 700 }) + textW(x, String(r.score), 20, { f: ST.title, w: 900 }) + textW(x, S("upd"), 17) + 30 <= 268;
         const lb = [full, S("fromOf", null, stName(r.from))].find(fits) || S("rBest"); // bar 1.4.5: label and number never touch
-        text(x, lb, -134, 246, 17, "paneT", { a: "left", w: 700 }); text(x, String(r.score), -134 + textW(x, lb, 17, { w: 700 }) + 12, 246, 20, "paneS", { a: "left", f: ST.title, w: 900 });
-        text(x, S("upd"), 134, 246, 17, "paneS", { a: "right" });
+        text(x, lb, -134, by, 17, "paneT", { a: "left", w: 700 }); text(x, String(r.score), -134 + textW(x, lb, 17, { w: 700 }) + 12, by, 20, "paneS", { a: "left", f: ST.title, w: 900 });
+        text(x, S("upd"), 134, by, 17, "paneS", { a: "right" });
       }
       else {
         const bs = String(r.best), bw = textW(x, bs, 20, { f: ST.title, w: 900 }), diff0 = r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score);
@@ -2867,13 +2933,13 @@ function drawOver(x, now) {
         if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268 && r.rowLate) lb = S("fromOf", null, stName(r.from));
         if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268 && r.score !== r.best) d = "-" + (r.best - r.score);
         if (textW(x, lb, 17, { w: 700 }) + bw + textW(x, d, 17) + 30 > 268) lb = S("rBest"); // bar 1.4.5: a long start name gives way
-        text(x, lb, -134, 246, 17, "paneT", { a: "left", w: 700 }); text(x, bs, -134 + textW(x, lb, 17, { w: 700 }) + 12, 246, 20, "paneS", { a: "left", f: ST.title, w: 900 });
-        text(x, d, 134, 246, 17, "paneS", { a: "right" });
+        text(x, lb, -134, by, 17, "paneT", { a: "left", w: 700 }); text(x, bs, -134 + textW(x, lb, 17, { w: 700 }) + 12, by, 20, "paneS", { a: "left", f: ST.title, w: 900 });
+        text(x, d, 134, by, 17, "paneS", { a: "right" });
       }
-      dots(246);
+      dots(by);
     }
     if (play && age > RES.goal) r.lines.forEach((g, i) => {
-      const gy = 288 + i * 30, w = goalLine(x, r, g, gy, now, i);
+      const gy = RY(288 + i * 30), w = goalLine(x, r, g, gy, now, i);
       if (["st", "home", "go"].includes(g.kind) && w && !r.placed) { r.placed = true; const b = $("btnFromNew"); b.hidden = false; place(b, 180 - (w / 2 + 6) * u, y + (gy - 18) * u, (w + 12) * u, 36 * u); }
     });
   });
@@ -2964,9 +3030,9 @@ function makeGoal(r) {
   if (lock) c.push(S("gFrom", Math.max(1, 6 - starSum(lock - 4, lock - 1)), stName(lock)));
   if (n >= num("maxSt") && n < LAST) c.push(S("gGo", null, stName(n + 1)));
   for (let i = r.from; i <= Math.min(n, LAST); i++) if (starAt(i) < 3) { c.push(S("g3", null, stName(i))); break; }
-  const rb = careerRank(Math.max(num("best"), r.score)), m = RANK_MILE[rb + 1], tot2 = starSum(1, LAST);
-  const need = m ? Math.max(1, m[1] - tot2, m[2] - star3()) : 99;
-  if (rb < RANKS.length - 1) c.push(m && num("maxSt") >= m[0] && need <= 10 ? S("gStar", need, S("ranks")[rb + 1]) : S("gRank", RANKS[rb + 1], S("ranks")[rb + 1]));
+  const rb = careerRank(Math.max(num("best"), r.score)), m = RANK_MILE[rb + 1], tot2 = starSum(1, LAST), s3n = m ? m[2] - star3() : 0;
+  const need = m ? Math.max(1, m[1] - tot2, s3n) : 99, rn = S("ranks")[rb + 1]; // name the 3-star stops when they are what is missing
+  if (rb < RANKS.length - 1) c.push(m && num("maxSt") >= m[0] && need <= 10 ? (s3n > 0 && s3n >= m[1] - tot2 ? S("g3s", s3n, rn) : S("gStar", need, rn)) : S("gRank", RANKS[rb + 1], rn));
   if (!c.length) c.push(S("gGo", null, stName(n + 1)));
   const sg = nearFull() && [...SEALS].find(id => !sealsGot().includes(id)); // a near-full book: the next master seal leads
   if (sg && num("runs") % 3 !== 2) { r.sealGoal = sg; return S("sealG")[SEALS.indexOf(sg)]; }
@@ -2977,16 +3043,16 @@ function resultStep(now) {
   if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
   if (!r.rankDone && r.showRank && age > RES.count + RES.countDur + 60) {
     r.rankDone = true; r.rankAt = age; sfx.rank();
-    if (r.rankUp) { const gy = overY() + 108 * L.u; burst(180 + 86 * L.u, gy, 12, 170, { col: "red", kind: "chip", s: 2.4 }); burst(180 + 86 * L.u, gy, 4, 190, { kind: "star", col: "goldL", s: 3 }); }
+    if (r.rankUp) { const gy = overY() + RY(108) * L.u; burst(180 + 86 * L.u, gy, 12, 170, { col: "red", kind: "chip", s: 2.4 }); burst(180 + 86 * L.u, gy, 4, 190, { kind: "star", col: "goldL", s: 3 }); }
   }
   const rows = clamp(fl((age - RES.rows) / 110) + 1, 0, 4); if (rows > (r.rows || 0)) { r.rows = rows; sfx.tick(10 + rows * 3); } // rising ticks
   if (state === "over" && !r.unlockDone && r.lines.some(g => !["goal", "day", "home", "go", "sg"].includes(g.kind)) && age > RES.goal) {
-    r.unlockDone = true; sfx.unlock(); const gy = overY() + 288 * L.u;
+    r.unlockDone = true; sfx.unlock(); const gy = overY() + RY(288) * L.u;
     burst(180, gy, 14, 170, { col: "gold", kind: "chip", s: 2.6 }); burst(180, gy, 5, 190, { kind: "star", col: "goldL", s: 3 });
   }
   if (!r.stamped && r.newBest && age > RES.best) { // the peak of the result: a slammed seal, a star ring, the music drops out
     r.stamped = true; r.bestAt = now; sfx.best(); musicCut(1.4); platform("happytime"); addTrauma(0.35);
-    const bx = 180 + 84 * L.u, by = overY() + 246 * L.u;
+    const bx = 180 + 84 * L.u, by = overY() + RY(246) * L.u;
     for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; addPart({ x: bx, y: by, vx: Math.cos(a) * 240, vy: Math.sin(a) * 240 - 30, g: 260, life: 0.65, max: 0.65, col: i % 2 ? "gold" : "goldL", kind: "star", s: 3.2, rot: a, vr: 6 }); }
     burst(bx, by, 16, 220, { col: "red", kind: "chip", s: 2.6 });
   }
@@ -3026,13 +3092,17 @@ function layoutUI() {
 // pop or a boarding first, then the oshiya and every rider, so no peak moment stalls on a first bake.
 let WARM = [], WARM_CTX = null;
 function warmUp() {
-  const e = eqv(), q = [];
+  const e = eqv(), q = [], wx = WARM_CTX || (WARM_CTX = document.createElement("canvas").getContext("2d"));
+  for (const p of ["ready", "heave", "back", "slump", "m1", "m2"]) q.push(() => oshBodySpr(p, e[0])); // the oshiya first: the slump and the sad face
+  for (const m of ["normal", "strain", "shock", "grin", "sad"]) q.push(() => oshHeadSpr(m, e[1]));  // land on the clip's peak (bar 1.10.5)
+  q.push(() => { // the big calls' glyphs at their screen size, so a first pinch or smash does not stall on the font
+    wx.setTransform(L.K * L.u, 0, 0, L.K * L.u, 0, 0); // drawn as a bake, so the text check never counts it
+    baking(() => { for (const k of BIG.concat(["allAboard", "boardP", "perfect", "good", "bad", "hold", "pass"])) for (const z of [32, 27]) text(wx, S(k), 100, 40, z, "red", { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink" }); });
+  });
   for (let f = 4; f >= 0; f--) for (let l = 0; l < LOOKS; l++) { q.push(() => bustSpr(l, f)); q.push(() => dmSpr(l, f)); }
   for (let l = 0; l < LOOKS; l++) q.push(() => glassSpr(l));
-  for (const p of ["ready", "heave", "back", "slump", "m1", "m2"]) q.push(() => oshBodySpr(p, e[0]));
-  for (const m of ["normal", "strain", "shock", "grin", "sad"]) q.push(() => oshHeadSpr(m, e[1]));
-  const wx = WARM_CTX || (WARM_CTX = document.createElement("canvas").getContext("2d")); // the result boards, so the board's first frame costs no more than a play frame
-  for (const h of [252, 320, 350, 380]) q.push(() => board(wx, 0, 0, 316, h));
+  // the result boards, so the board's first frame costs no more than a play frame
+  for (const h of [252, 320, 350, 380, 410].map(RY)) q.push(() => board(wx, 0, 0, 316, h));
   q.push(() => leafSpr(LAY[0].hw), () => leafSpr(LAY[1].hw), () => carSpr(0, livery()), () => carSpr(1, livery()), () => trainStrip(0, livery()), () => trainStrip(1, livery()), () => pantoSpr(), () => lipSpr());
   q.push(() => gloveSpr(e[0], false), () => gloveSpr(e[0], true));
   for (const p of ["stand", "peck", "fly", "fly2"]) q.push(() => pigeonSpr(p));
@@ -3136,9 +3206,9 @@ function onShow() { if (book < 0) releaseClock(); lastNow = performance.now(); }
 const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
 // AGAIN goes where the new stations are: the furthest open start once every station before it has 3 stars, so a
 // returning player never replays a mastered line; the start of this run stays one tap away on the result (bar 1.5.2)
-// AGAIN skips ahead to the furthest open start whose earlier stations are all 3-starred, or all cleared with 2 stars
-// while still about ten stations short of the furthest one reached, so a strong player's runs stay near 90 to 120 s (bar 1.5.1)
-const aheadOf = from => starts().filter(f => f > from && (starSum(1, f - 1) >= 3 * (f - 1) || (f <= num("maxSt") - 10 && starMin(1, f - 1) >= 2))).pop() || 0;
+// AGAIN skips ahead to the furthest open start whose earlier stations are all 3-starred, or whose four stops before it
+// hold 7 stars while the player has been six stations past it; peak hour keeps each run near 90 s wherever it starts (bar 1.5.1)
+const aheadOf = from => starts().filter(f => f > from && (starSum(1, f - 1) >= 3 * (f - 1) || (f <= num("maxSt") - 6 && starSum(f - 4, f - 1) >= 7))).pop() || 0;
 function retryOpt() { const o = lastOpt || { from: 1 }, f = o.daily ? 0 : aheadOf(o.from || 1); return f ? { from: f } : o; }
 function retry() { if (state === "over" && retryReady()) startPlay(retryOpt()); }
 // the stamp book opens over the title; the attract run waits behind it
@@ -3234,7 +3304,7 @@ function update(now, dt) {
   else fx.dzx += (DX - fx.dzx) * Math.min(1, vdt * 4);
   // a wide screen shows the doorway small: lean in on it through the push phases (bar 1.9.4, 1.11.2)
   const peak = isDying() || (fx.flyer && now - fx.flyer.t < 1600); // the smash and the pinch lean in a little more on wide screens
-  const wideIn = L.wide && !reduceMotion && !isTitle() && !isOver() && (peak || (!run.dead && pushPhase(st.ph))) ? (peak ? 1.15 : 1.1) : 1;
+  const wideIn = L.wide && !reduceMotion && !LITE.on && !isTitle() && !isOver() && (peak || (!run.dead && pushPhase(st.ph))) ? (peak ? 1.15 : 1.1) + (demo ? 0.05 : 0) : 1; // the clip has no side HUD to keep clear: a little closer (bar 1.9.4)
   const zt = wideIn * (!race ? 1 : demo ? 1.05 : 1 + 0.04 * smooth((clockNow() - st.phAt) / T_CLOSE));
   fx.dz += (zt - fx.dz) * Math.min(1, vdt * (race ? 9 : zt > fx.dz ? 3 : 6));
 }
@@ -3250,11 +3320,15 @@ function step(now, dt) {
   musicStep();
 }
 let lastNow = performance.now();
+// a slow device (real frames under about 36 fps for a few seconds) drops two pure looks for the session: the paper
+// grain and the wide screen's lean (bar 1.10.5). Never in ?demo=1, so a recording keeps one look from end to end
+const LITE = { on: false, ema: 16.7, n: 0 };
 function frame() {
   requestAnimationFrame(frame);
   if (manual) return;
   let now = performance.now(); if (now < lastNow) now = lastNow;
   const raw = now - lastNow, prev = lastNow; lastNow = now;
+  if (!LITE.on && !DEMO && raw < 250) { LITE.ema += (raw - LITE.ema) * 0.05; LITE.n = LITE.ema > 28 ? LITE.n + 1 : 0; if (LITE.n > 120) LITE.on = true; }
   if (raw > 300 && state === "play") pauseGame(prev); // a long stall must not count as time the player had
   if (raw > 250 && run && run.ai && run.holdAt == null && !isDying() && !isOver()) { // the AI never teleports ...
     const k = run.mode === "demo" ? clamp(DEMO_LAG - run.lag, 0, raw - 16) : raw - 16; // ... but the demo keeps near the wall clock
