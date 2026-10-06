@@ -29,6 +29,8 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
     <button id="btnStart" type="button" data-qa="start" data-s="start"></button>
     <button id="btnLang" type="button" data-qa="lang"></button>
     <button id="btnBook" type="button" data-s="book"></button>
+    <button id="btnDaily" type="button" data-s="daily"></button>
+    <button id="btnSeal" type="button" data-s="sealBook"></button>
   </section>
   <section id="ovPause" class="ov" hidden>
     <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
@@ -42,6 +44,10 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
   </section>
   <section id="ovBook" class="ov" hidden>
     <button id="btnBookClose" type="button" data-s="close"></button>
+  </section>
+  <section id="ovSeal" class="ov" hidden>
+    <button id="btnCos0" type="button">1</button><button id="btnCos1" type="button">2</button><button id="btnCos2" type="button">3</button><button id="btnCos3" type="button">4</button>
+    <button id="btnSealClose" type="button" data-s="close"></button>
   </section>
   <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
   <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
@@ -663,6 +669,7 @@ PW._sleep = function (dt) {
 };
 // ==== ENGINE END ====
 // ==== CHARMS (this game only) ====
+const COSM = [0, 0, 0, 0];   // the seal book's decorations in use: kumade charm, lantern colour, mochi cloth, scroll colour
 // Each charm is drawn inside a unit circle (radius 1 = its collider) from a few parts, in this order:
 // base fills, flat tones, painted details, ink edge. The style decides what a fill or an ink line looks like.
 // flat: the outer ink is one even stroke, for charms that roll; their lit frames add the heavier lower-right brush rim
@@ -930,8 +937,12 @@ const CHARMS = [
     d.edge(base);
     d.inkIn(base, cut, 1);
     d.part(pRR(-0.86, 0.53, 1.72, 0.13, 0.03), c.woodL);
-    d.part(pPoly([[-0.92, 0.55], [0, 0.4], [0.92, 0.55], [0, 0.66]]), c.red, 0.8);
-    d.fill(pPoly([[-0.78, 0.54], [0, 0.43], [0.78, 0.54], [0, 0.63]]), c.white);
+    // the paper under the cakes: red and white, or the cloth chosen in the seal book (COSM[2]): wave crests on indigo,
+    // hemp leaves on paper, seven-treasure rings on red
+    const mc = [[c.red, c.white], [c.far, c.sky2, c.paper], [c.green, c.paper, c.leafD], [c.gold, c.red, c.gold]][COSM[2]] || [c.red, c.white], inner = pPoly([[-0.78, 0.54], [0, 0.43], [0.78, 0.54], [0, 0.63]]);
+    d.part(pPoly([[-0.92, 0.55], [0, 0.4], [0.92, 0.55], [0, 0.66]]), mc[0], 0.8);
+    d.fill(inner, mc[1]);
+    if (mc[2]) { const q = P2(); for (let X = -0.72; X < 0.75; X += 0.12) { if (COSM[2] === 1) { q.moveTo(X + 0.07, 0.57); q.arc(X, 0.57, 0.07, 0, Math.PI, true); } else if (COSM[2] === 2) { q.moveTo(X, 0.46); q.lineTo(X + 0.06, 0.6); q.lineTo(X + 0.12, 0.46); } else { q.moveTo(X + 0.05, 0.53); q.arc(X, 0.53, 0.05, 0, TAU); } } d.inkIn(inner, q, 0.45, mc[2]); }
     const big = pSmooth([[-0.88, 0.36], [-0.8, 0.08], [-0.4, -0.02], [0.4, -0.02], [0.8, 0.08], [0.88, 0.36], [0.6, 0.58], [-0.6, 0.58]]);
     d.fill(big, c.mochi); d.shade(big, c.mochiD, 0, 3.2); d.edge(big);
     const sm = pSmooth([[-0.7, -0.04], [-0.62, -0.26], [-0.3, -0.34], [0.3, -0.34], [0.62, -0.26], [0.7, -0.04], [0.46, 0.14], [-0.46, 0.14]]);
@@ -978,7 +989,7 @@ const ROLLS = [1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1];
 // base: the print for icons and upright charms; roll: the plain-rimmed print the lit frames turn; dark: the locked print.
 const SPR = {};
 function sprites(st, S) {
-  const key = st.id + S.toFixed(3);
+  const key = st.id + S.toFixed(3) + COSM[2];
   if (SPR[key]) return SPR[key];
   for (const k in SPR) delete SPR[k];
   const s = SPR[key] = { st, S, base: [], roll: [], frames: [], N: [], k: [], dark: [] };
@@ -1405,6 +1416,32 @@ function drawFront(x, st) {
     for (let k = -12; k < 12; k += 3) { x.beginPath(); x.moveTo(X + k, 564); x.lineTo(X + k + 8, 584); x.stroke(); }
     x.restore(); st.edge(x, w, 0.9);
   }
+  if (COSM[0]) for (const m of [1, -1]) kumadeDeco(x, st, COSM[0], m > 0 ? 87 : 273, 520, m);
+}
+// The kumade's charm from the seal book, tied to each side pole facing out (m: 1 left, -1 right): 1 rice ears,
+// 2 a pine sprig, 3 a small gold chest on a red cord
+function kumadeDeco(x, st, k, X, Y, m) {
+  const p = st.pal, P = pts => pPoly(pts.map(q => [X - q[0] * m, Y + q[1]]), true), S = pts => pSmooth(pts.map(q => [X - q[0] * m, Y + q[1]]), true);
+  if (k === 1) for (let i = 0; i < 3; i++) {
+    const a = 6 + i * 5, stalk = [[0, 3], [a * 0.6, -12 - i * 3], [a + 6, -20 - i * 2], [a + 12, -12 - i * 3]];
+    st.line(x, S(stalk), 1.4, p.bambooD);
+    for (let j = 0; j < 4; j++) { const gx = X - (a + 5 + j * 2.4) * m, gy = Y - 19 - i * 2 + j * 2.2, g = pEll(gx, gy, 2.1, 3, -m * 0.6); st.fill(x, g, p.gold); st.edge(x, g, 0.6); }
+  }
+  else if (k === 2) {
+    st.line(x, S([[0, 2], [8, -6], [17, -9]]), 2, p.plank);
+    for (const [fx2, fy, r] of [[17, -10, 9], [8, -12, 7], [13, 3, 7]]) {
+      const cx = X - fx2 * m, fan = P([[fx2 - r * 0.2, fy + 2], [fx2 - r, fy - r * 0.4], [fx2 - r * 0.3, fy - r], [fx2 + r * 0.6, fy - r * 0.8], [fx2 + r, fy - r * 0.1]]);
+      st.fill(x, fan, p.green); x.save(); x.clip(fan); x.strokeStyle = p.leafD; x.lineWidth = 0.6;
+      for (let j = 0; j < 7; j++) { const a = Math.PI * (1.05 + j * 0.14); x.beginPath(); x.moveTo(cx, Y + fy + 2); x.lineTo(cx + Math.cos(a) * r * 1.3 * m, Y + fy + 2 + Math.sin(a) * r * 1.3); x.stroke(); }
+      x.restore(); st.edge(x, fan, 0.8);
+    }
+  } else if (k === 3) {
+    cordLine(x, P([[0, 0], [9, 7]]), 1.3, p.cord, p.ink, 0.5);
+    const bx = X - 21 * m, box = pRR(Math.min(bx, bx + 22 * m), Y + 7, 22, 15, 1), lid = pRR(Math.min(bx, bx + 22 * m) - 1, Y + 5, 24, 5, 1);
+    st.fill(x, box, p.plank); st.shade(x, box, p.plankD, 1.2, 1.4); st.edge(x, box, 0.9); st.fill(x, lid, p.plankL); st.edge(x, lid, 0.8);
+    for (const u of [5, 17]) { const b = pRR(Math.min(bx, bx + 22 * m) + u - 1.4, Y + 5, 2.8, 17, 0); st.fill(x, b, p.gold); }
+    const lock = pCirc(X - 10 * m, Y + 14, 2.2); st.fill(x, lock, p.gold); st.edge(x, lock, 0.6);
+  }
 }
 // The rim rope is the overflow line. It is lowered in steps late in a run, so it is drawn on its own (baked once
 // per step): its ends ride down the side poles and its tassels hang from them.
@@ -1489,8 +1526,8 @@ function drawSign(x, st, o) {
   st.line(x, pPoly([[60, 47], [180, 14], [300, 47]], true), 0.9, p.ink);
   x.fillStyle = p.ink; x.beginPath(); x.arc(180, 14, 2, 0, TAU); x.fill();
   const cloth = pRR(62, 48, 236, 156, 0);
-  st.fill(x, cloth, p.indigo); st.edge(x, cloth, 1.2);
-  x.fillStyle = p.mist;
+  st.fill(x, cloth, o.cloth ? o.cloth[0] : p.indigo); st.edge(x, cloth, 1.2);
+  x.fillStyle = o.cloth ? o.cloth[1] : p.mist;
   for (let i = 0; i < 22; i++) for (const yy of [53, 200]) { x.beginPath(); x.arc(68 + i * 10.6, yy, 0.8, 0, TAU); x.fill(); }
   const paper = pRR(70, 60, 220, 134, 0);
   st.fill(x, paper, p.paper); st.edge(x, paper, 0.9);
@@ -1602,7 +1639,8 @@ function sceneKit(st, S, spr, o, hs, ss) {
   if (SCN[key]) return SCN[key];
   for (const k in SCN) delete SCN[k];
   const p = st.pal, k = {}, SH = S * hs;
-  k.big = lanternSprite(st, S, 20, 27, "祭"); k.small = lanternSprite(st, S, 14, 19, "");
+  const sl = o.lant ? Object.assign({}, st, { pal: Object.assign({}, p, o.lant) }) : st;   // the seal book's lantern colour
+  k.big = lanternSprite(sl, S, 20, 27, "祭"); k.small = lanternSprite(sl, S, 14, 19, "");
   k.near = [0, 1, 2, 3, 4, 5, 0, 1, 2, 4].map((kind, i) => personSprite(S, 56 + (i * 7) % 16, kind, p.crowdN, p.rimWarm, 20 + i));
   k.far = [4, 0, 5, 1, 3, 0, 2, 4, 5, 1, 3, 2].map((kind, i) => personSprite(S, 31 + (i * 5) % 10, kind, p.crowdF, p.rimWarm, 40 + i));
   k.emaOn = []; k.emaOff = [];
@@ -1764,18 +1802,21 @@ const AI_HURRY = 1;
 const AIH = { sig0: 3, sigGrow: 0.03, care0: 0.01, careGrow: 0.0005, wait0: 0.7, waitR: 0.8 };
 
 const gaussR = r => Math.sqrt(-2 * Math.log(Math.max(1e-9, r()))) * Math.cos(2 * Math.PI * r());
+// 今日のお題 (the daily draw): one seed from the Japan-time date string, so everyone gets the same heap and the same
+// order of charms that day. The k-th charm on the cord comes from the date and k alone (DAILY_Q), never from the heap
+// (no kind cord, no fill); the phase table, the waves and their mallets come at the same drops as in play. Only what
+// a run earns slips in ahead of the queue without using it up: a 宝船's mallet and a warning's rescue twin. Each day
+// has a lucky charm (DAILY_LUCKY) that scores double when made, and the heap is generated (dailyPile) and checked.
+const fnv = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); return (h ^ h >>> 16) >>> 0; };   // FNV-1a, then a final mix
+const DAILY_LUCKY = [2, 3, 4, 5, 6], DAILY_UP = 0.4;
+const dailyOf = ymd => { const seed = fnv('fukuyose ' + ymd); return { seed, lucky: DAILY_LUCKY[seed % 5], ymd }; };
 
 function Run(mode, seed, o) {
   o = o || {};
-  this.mode = mode; this.seed = seed >>> 0;
+  this.mode = mode; this.seed = seed >>> 0; this.daily = !!o.daily; this.lucky = o.daily ? o.daily.lucky : -1; this.qi = 0; this.fromQ = false;
   this.rnd = rng32(this.seed ^ 0x2545f491); this.rAI = rng32((this.seed * 7 + 13) ^ 0x5bd1e995); this.rJ = rng32(this.seed ^ 0x3c6ef372);
-  const W = this.world = new PhysWorld({ gravity: 1500, iterations: 8, posIterations: 3 });
-  const n = (x, y) => { const d = Math.hypot(x, y); return [x / d, y / d]; };
-  let m = n(406, -70); W.addSeg(30, 160, 100, 566, m[0], m[1]);
-  m = n(-406, -70); W.addSeg(330, 160, 260, 566, m[0], m[1]);
-  W.addSeg(90, 566, 270, 566, 0, -1);
-  W.addSeg(30, -400, 30, 160, 1, 0); W.addSeg(330, -400, 330, 160, -1, 0);   // invisible: nothing leaves over the claws
-  W.onImpact = (b, nx, ny, sp, other) => this.impact(b, nx, ny, sp, other);
+  this.mkWorld();
   this.events = []; this.t = 0; this.runT = 0; this.steps = 0; this.score = 0; this.drops = 0; this.merges = 0;
   this.maxLv = 0; this.made = new Array(11).fill(0); this.seen = new Array(11).fill(0); this.offered = 0; this.bestChain = 1;
   this.hold = mode === 'demo' ? DEMO_HOLD : OVER_HOLD; this.phase = 0; this.malletDue = false; this.over = 0; this.warned = false; this.dead = null; this.spilling = false;
@@ -1785,15 +1826,83 @@ function Run(mode, seed, o) {
   this.hang = { x: 180, tx: 180, v: 0, loaded: false, reload: o.warm != null ? o.warm : 0.5, lv: 0, timer: 0, tmax: 1, wait: 0, tick: 4, planRow: null };
   this.plan = mode === 'demo' ? DEMO_PLAN.map(r => r.slice()) : [];
   if (mode === 'demo') this.keep = 'k4';
-  this.mirror = mode === 'demo' ? false : this.rnd() < 0.5;
-  const op = mode === 'demo' ? null : OPENINGS[o.opening != null ? o.opening : Math.floor(this.rnd() * OPENINGS.length)];
-  this.pour(op ? op.pile : DEMO_PILE);
+  this.mirror = mode === 'demo' || this.daily ? false : this.rnd() < 0.5;
+  const op = mode === 'demo' ? null : this.daily ? this.dailyPile() : OPENINGS[o.opening != null ? o.opening : Math.floor(this.rnd() * OPENINGS.length)];
+  if (!op || !op.poured) this.pour(op ? op.pile : DEMO_PILE);
   this.next = op ? op.first : this.plan.length ? this.plan[0][0] : 0;   // the first charm on the cord matches the tower's top
-  // the cord starts right above its first target: the tower's bean, or the demo's first planned landing
+  // the cord starts right above its first target (the tower's top, or the demo's first planned landing) on a first
+  // run under the hand hint; a returning player's cord starts across the basket, so the opening chain takes an aimed
+  // drop (o.far, bar 1.6.2, 1.1.4)
   const aim = this.world.bodies.find(b => b.role === (mode === 'demo' ? this.plan[0][1] : 's0'));
-  if (aim) this.hang.x = this.hang.tx = this.clampX(aim.x, this.next);
+  if (aim) this.hang.x = this.hang.tx = this.clampX(o.far ? (aim.x < 180 ? 296 : 64) : aim.x, this.next);
 }
 const RN = Run.prototype;
+RN.mkWorld = function () {
+  const W = this.world = new PhysWorld({ gravity: 1500, iterations: 8, posIterations: 3 });
+  const n = (x, y) => { const d = Math.hypot(x, y); return [x / d, y / d]; };
+  let m = n(406, -70); W.addSeg(30, 160, 100, 566, m[0], m[1]);
+  m = n(-406, -70); W.addSeg(330, 160, 260, 566, m[0], m[1]);
+  W.addSeg(90, 566, 270, 566, 0, -1);
+  W.addSeg(30, -400, 30, 160, 1, 0); W.addSeg(330, -400, 330, 160, -1, 0);   // invisible: nothing leaves over the claws
+  W.onImpact = (b, nx, ny, sp, other) => this.impact(b, nx, ny, sp, other);
+};
+// The day's heap: a tower of four charms in a row (its top the first charm's twin) somewhere off the middle, and
+// eight to eleven charms around it, a third of them the day's lucky charm. A heap is kept only if, once poured, no two
+// alike touch, a charm dropped on the tower's x lands on its top, each tower step touches the next (so the first drop
+// chains) and the top of the heap is well under the rope; else the next draw of the same seed is tried.
+RN.dailyPile = function () {
+  const r = rng32(this.seed ^ 0x7f4a7c15), W0 = () => this.world;
+  for (let t = 0; t < 40; t++) {
+    if (t) { this.mkWorld(); this.seen.fill(0); }
+    const W = W0(), b = Math.floor(r() * 3), tx = 128 + r() * 104, n = 7 + Math.floor(r() * 4), bag = [0, 1, 2, 3, 4, 5, 6, this.lucky, this.lucky, 1 + Math.floor(r() * 6)].filter(l => l !== b), side = [];   // the first charm's only twin is the tower's top
+    let y = F.floorY;
+    const tower = [];
+    for (let i = 3; i >= 0; i--) { const rr = LV[b + i].r; y -= rr; tower.push([b + i, tx, y, 's' + i]); y -= rr + 0.5; }
+    this.pour(tower);
+    const pin = W.bodies.slice(), keep = pin.map(o => [o.x, o.y]);
+    for (let i = 0; i < n && bag.length; i++) {
+      const lv = bag.splice(Math.floor(r() * bag.length), 1)[0], rr = LV[lv].r, left = i % 2 === 0, gap = LV[b + 3].r + rr + 3;
+      const x = left ? 52 + rr + r() * Math.max(0, tx - gap - 52 - rr) : tx + gap + r() * Math.max(0, 308 - rr - tx - gap);
+      W.add(this.body(lv, x, 300 + r() * 120, { role: 'p' + i, vy: 120, landed: true, age: 5 })); this.seen[lv] = 1;
+      for (let k = 0; k < 40; k++) { W.step(); pin.forEach((o, m) => { o.x = keep[m][0]; o.y = keep[m][1]; o.vx = o.vy = o.w = 0; }); }
+    }
+    for (let k = 0; k < 240; k++) W.step();
+    const B = W.bodies, s = k => B.find(o => o.role === 's' + k), near = (o, q, lv) => Math.hypot(o.x - q.x, o.y - q.y) < LV[lv].r + q.r + 3;
+    // repairs: a heap charm resting over the tower's top is taken away, and a heap charm touching its twin becomes the
+    // nearest size that touches no twin (then the heap settles again)
+    for (let fix = 0; fix < 3; fix++) {
+      let moved = false;
+      for (const o of B.slice()) if (o.role[0] === 'p' && o.y < s(0).y && Math.abs(o.x - s(0).x) < o.r + LV[b].r) { W.remove(o); moved = true; }
+      for (const o of B) {
+        if (o.role[0] !== 'p' || !B.some(q => q !== o && q.lv === o.lv && near(o, q, o.lv))) continue;
+        const lv = [o.lv - 1, o.lv + 1, o.lv - 2, o.lv + 2].find(l => l >= 0 && l < 7 && l !== b && !B.some(q => q !== o && q.lv === l && near(o, q, l)));
+        if (lv == null) continue;
+        o.lv = lv; o.R = o.r = LV[lv].r; o.im = 1 / (o.R * o.R); o.ii = 2 / (o.R * o.R * o.R * o.R); this.seen[lv] = 1; moved = true;
+      }
+      if (!moved) break;
+      W.wakeAll(); for (let k = 0; k < 160; k++) W.step();
+    }
+    for (const o of B) { o.sq = 0; o.sqv = 0; }
+    this.events.length = 0;
+    let ok = this.landing(s(0).x, LV[b].r).b === s(0) && this.headroom() > 95;
+    for (let k = 0; k < 3 && ok; k++) { const a = s(k), c = s(k + 1); ok = Math.hypot(a.x - c.x, a.y - c.y) < a.r + c.r + 3; }
+    for (let i = 0; i < B.length && ok; i++) for (let j = i + 1; j < B.length && ok; j++) if (B[i].lv === B[j].lv && Math.hypot(B[i].x - B[j].x, B[i].y - B[j].y) < B[i].r + B[j].r + 3) ok = false;
+    if (ok) { this.tries = t + 1; return { first: b, poured: true }; }
+  }
+  this.mkWorld(); this.seen.fill(0);
+  return OPENINGS[this.seed % OPENINGS.length];   // never seen in a year of dates (see NOTES.md), kept as a guard
+};
+// The daily queue's k-th charm: weights of the drop it is meant for (phase, wave or calm) and one draw from the
+// date's seed and k, a share of them a size up (DAILY_UP, as the fill rule does for a roomy basket in play).
+RN.dq = function () {
+  const k = this.qi++, d = k + 2, wv = waveAt(d), c = d - WAVE_AT - Math.floor((d - WAVE_AT) / WAVE_EVERY) * WAVE_EVERY;
+  const w = wv ? wv.w : d >= WAVE_AT && c >= WAVE_LEN && c < WAVE_LEN + CALM_LEN ? CALM_W : phaseAt(d).w, r = rng32((this.seed ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0);
+  let s = 0; for (const v of w) s += v;
+  let u = r() * s, lv = 0;
+  for (let i = 0; i < w.length; i++) { u -= w[i]; if (u < 0) { lv = i; break; } }
+  this.fromQ = true;
+  return lv < FILL_TOP && k >= 1 && !wv && r() < DAILY_UP ? lv + 1 : lv;
+};
 RN.body = function (lv, x, y, extra) {
   // all game fields declared up front with the engine's, so every charm has one object shape (solver speed)
   const b = PhysWorld.body(x, y, LV[lv].r, { lv, age: 0, grow: 1, sq: 0, sqv: 0, sqx: 0, sqy: 1, pop: 1, popv: 0, rw: 0, role: '', drop: false, aim: 0, used: false, landed: false, ch: 1, bt: -9, offer: 0, ow: 1, m: 0 });
@@ -1829,7 +1938,9 @@ RN.landing = function (x, r) {
   return { y, b: hb };
 };
 RN.pick = function () {
+  this.fromQ = false;
   if (this.malletDue) { this.malletDue = false; this.malletCyc = this.waves; return MALLET; }
+  if (this.daily) return this.dq();
   if (this.mode === 'demo' && this.runT > DEMO_SLOPPY - 1.5) {   // the clip's middle: big fill charms, and every DEMO_MATCH-th a twin
     this.fillI = (this.fillI || 0) + 1;
     if (this.fillI % DEMO_MATCH === 0 && !this.saves) { const m = this.demoMatch(); if (m) { this.matchB = m; return m.lv; } }
@@ -1988,11 +2099,12 @@ RN.release = function () {
     if (wv && !this.wave) {
       this.wave = wv; wv.end = this.drops + (demo ? DEMO_WAVE[2] : wv.mini ? MINI.len : WAVE_LEN); if (!wv.mini) this.waves++; this.dip = demo ? 0 : Math.max(0, Math.min(wv.mini ? ROPE_MAX + WAVE_DIP : WAVE_DIP, Math.floor((this.headroom() - wv.gap) / ROPE_STEP)));
       if (demo) this.demoSag(); else this.setRope();
-      this.next = this.pick(); this.events.push({ type: 'wave', k: wv.k, dip: this.dip });
+      if (!this.daily) this.next = this.pick();   // the day's queue already holds the rush's catch at these drops
+      this.events.push({ type: 'wave', k: wv.k, dip: this.dip, mini: !!wv.mini });
     } else if (this.wave && (demo ? this.drops >= this.wave.end : !wv)) {
       const up = this.dip > 0, mini = this.wave.mini; this.wave = null; this.dip = 0; this.setRope();
       if (!mini) { this.giveMallet(); this.calmTo = this.drops + CALM_LEN; }
-      this.events.push({ type: 'calm', up });
+      this.events.push({ type: 'calm', up, mini });
     } else if (demo && this.wave && !this.warned) this.demoSag();
   }
   return true;
@@ -2119,11 +2231,11 @@ RN.spawn = function (L, x, y, vx, vy, a, ch, how, aimed) {
       if (o.bt < this.runT - CHAIN_WIN || o.ch < ch) { o.bt = this.runT; o.ch = ch; }   // a merge it causes still counts as a chain
     }
   }
-  const mult = Math.min(5, ch) * (aimed ? AIM_MULT : 1), pts = PTS[L] * mult;
+  const lucky = L === this.lucky, mult = Math.min(5, ch) * (aimed ? AIM_MULT : 1) * (lucky ? 2 : 1), pts = PTS[L] * mult;
   this.score += pts; this.merges++; this.made[L]++; this.maxLv = Math.max(this.maxLv, L); this.bestChain = Math.max(this.bestChain, ch);
   if (aimed) this.aimed++;
   const first = !this.seen[L]; this.seen[L] = 1;
-  this.events.push({ type: how, lv: L, x, y, r: R, pts, ch, first, aimed: !!aimed });
+  this.events.push({ type: how, lv: L, x, y, r: R, pts, ch, first, aimed: !!aimed, lucky });
   // the top tier of feedback (bar 1.2.3, 1.2.5): big charms and chains of 4+ hold the action for a beat
   if (L >= 7) this.hitstop = Math.max(this.hitstop, [0.06, 0.09, 0.13][L - 7]);
   else if (ch >= 4) this.hitstop = Math.max(this.hitstop, 0.05);
@@ -2170,7 +2282,7 @@ RN.checkOver = function () {
       // RESCUE (play only): the cord's next charm is a twin of the one sticking out, or the mallet for a treasure ship
       // (a treasure ship's mallet is rationed like the others once a 鏡餅 has been offered: one per wave cycle)
       const lv = top.lv <= RESCUE_MAX ? top.lv : this.offered > 0 && this.malletCyc === this.waves ? -1 : MALLET;
-      if (this.mode === 'play' && top.lv < TOP && this.next !== MALLET && lv >= 0) { this.next = lv; if (lv === MALLET) this.malletCyc = this.waves; this.events.push({ type: 'rescue', lv }); }
+      if (this.mode === 'play' && top.lv < TOP && this.next !== MALLET && lv >= 0) { if (this.fromQ) { this.qi--; this.fromQ = false; } this.next = lv; if (lv === MALLET) this.malletCyc = this.waves; this.events.push({ type: 'rescue', lv }); }
     }
     if (this.warned) this.peakOver = Math.max(this.peakOver, this.over);
     if (this.over >= this.hold) this.kill(top);
@@ -2229,7 +2341,12 @@ const STRINGS = {
     ranks: ["見習い", "なかなか", "上手", "名人", "達人", "福まねき", "宝船の主", "福の神"], bookTitle: "縁起物 図鑑", unknown: "まだ 見つけていません", credit: "Made with Claude",
     names: ["福豆", "鈴", "梅", "独楽", "小判", "だるま", "招き猫", "鯛", "宝船", "鏡餅", "打ち出の小槌"],
     means: ["鬼をはらって 福をよぶ豆", "すんだ音で 神さまをよぶ", "寒さに負けず 一番に咲く花", "よく回る つまり うまく回る", "お金に こまらないように",
-      "七転び八起き 目を入れて願う", "手まねきで 客と福をよぶ", "めでたい の しるし", "宝をのせて 福がやって来る", "年神さまの いる場所", "ふれば 願いが かなう"]
+      "七転び八起き 目を入れて願う", "手まねきで 客と福をよぶ", "めでたい の しるし", "宝をのせて 福がやって来る", "年神さまの いる場所", "ふれば 願いが かなう"],
+    daily: "今日のお題", dailyL: ["今日の", "お題"], dailyHow: "今日のお題: {n}が ×2", luckyHit: "{n}は ×2!", dBest: "今日のベスト", dNew: "今日の新記録", streak: "{n}日つづけて", tomorrow: "あしたは{n}が ×2",
+    errs: "おつとめ", errs3: "3つのおつとめ", errDone: "おつとめ達成!", sealBook: "福よせ帳", nextCos: "あと{n}つの判で 新しい飾り", allCos: "飾りは ぜんぶそろいました", newCos: "新しい飾り: {n}", cosLock: "判{n}つで",
+    cosN: ["熊手の飾り", "ちょうちん", "鏡餅の敷き布", "巻物の色"], cosV: [["なし", "稲穂", "松", "千両箱"], ["赤", "金", "白", "藍"], ["紅白", "青海波", "麻の葉", "七宝"], ["藍", "朱", "若竹", "金茶"]],
+    e_mk: "{l}を{n}こ作る", e_ch: "{n}れんさを出す", e_drop: "{n}こ落とす", e_aim: "ねらいどおり {n}回", e_sc: "{n}点をとる", e_mal: "小槌を{n}回使う", e_wave: "福の波を{n}回のりきる", e_save: "あふれを{n}回こらえる",
+    e_off: "鏡餅を{n}回奉納", e_nowarn: "あふれずに{n}こ落とす", e_mkT: "あわせて{l}を{n}こ", e_mrgT: "あわせて{n}回合体", e_aimT: "あわせて ねらいどおり{n}回", e_offT: "あわせて鏡餅を{n}回奉納", e_day: "今日のお題を{n}日あそぶ", e_streak: "今日のお題を{n}日つづけて"
   },
   en: {
     title: "LUCKY HEAP", titleEn: "LUCKY HEAP", how: "Match two alike to merge them!", rule: "Keep charms below the rope", start: "TAP TO START", startClick: "CLICK TO START", lang: "日本語", book: "BOOK", close: "CLOSE",
@@ -2242,7 +2359,12 @@ const STRINGS = {
     ranks: ["Novice", "Not bad", "Skilled", "Master", "Expert", "Lucky one", "Captain", "Luck god"], bookTitle: "Book of Charms", unknown: "Not found yet", credit: "Made with Claude",
     names: ["Lucky bean", "Bell", "Plum flower", "Spinning top", "Gold coin", "Daruma", "Beckoning cat", "Sea bream", "Treasure ship", "Mirror mochi", "Lucky mallet"],
     means: ["Chases off demons, calls in luck", "Its clear ring calls the gods", "First to bloom through the cold", "It spins well, so life goes well", "May you never run short",
-      "Fall seven times, stand up eight", "Its paw beckons guests and luck", "The fish of celebration", "Brings the treasure of luck", "A seat for the New Year god", "Swing it and a wish comes true"]
+      "Fall seven times, stand up eight", "Its paw beckons guests and luck", "The fish of celebration", "Brings the treasure of luck", "A seat for the New Year god", "Swing it and a wish comes true"],
+    daily: "TODAY'S DRAW", dailyL: ["TODAY'S", "DRAW"], dailyHow: "Today: {n} scores x2", luckyHit: "{n} x2!", dBest: "TODAY'S BEST", dNew: "BEST TODAY", streak: "{n} days in a row", tomorrow: "Tomorrow: {n} x2",
+    errs: "ERRANDS", errs3: "3 ERRANDS", errDone: "ERRAND DONE!", sealBook: "SEALS", nextCos: "{n} more seals: a new prize", allCos: "Every prize is yours", newCos: "New prize: {n}", cosLock: "at {n} seals",
+    cosN: ["Kumade charm", "Lanterns", "Mochi cloth", "Scroll"], cosV: [["None", "Rice ears", "Pine", "Gold chest"], ["Red", "Gold", "White", "Indigo"], ["Red & white", "Waves", "Hemp leaf", "Rings"], ["Indigo", "Vermilion", "Bamboo", "Tea gold"]],
+    e_mk: "Make {l} x{n}", e_ch: "Make a {n} chain", e_drop: "Drop {n} charms", e_aim: "{n} on target", e_sc: "Score {n}", e_mal: "Use the mallet x{n}", e_wave: "Ride out a rush x{n}", e_save: "Save a spill x{n}",
+    e_off: "Offer a mochi x{n}", e_nowarn: "Drop {n} with no warning", e_mkT: "{l} x{n} in total", e_mrgT: "{n} merges in total", e_aimT: "{n} on target in total", e_offT: "Offer {n} mochi in total", e_day: "Play the draw on {n} days", e_streak: "The draw {n} days in a row"
   }
 };
 let lang = store.get("lang", null);
@@ -2253,7 +2375,7 @@ const nameOf = lv => S("names")[lv];
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
 const wrap = $("wrap"), cv = $("cv"), uiEl = $("ui"), ctx = cv.getContext("2d");
-const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), ovBook = $("ovBook"), btnPause = $("btnPause"), btnMute = $("btnMute");
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), ovBook = $("ovBook"), ovSeal = $("ovSeal"), btnPause = $("btnPause"), btnMute = $("btnMute");
 
 // ---------- KEEP: screen. Portrait shows the 360 x 640 scene with more fair around it; wide screens (PC portals)
 // keep the kumade at full height and move the HUD into the fair at the left and right (never plain side bars) ----------
@@ -2286,17 +2408,21 @@ function layout() {
   if (!V.wide) Object.assign(LY, {
     score: [180, 576, 1], scoreTop: false, next: [2, 86, 1], ema: [8, 19, 27.2, 0, 10, 1], pause: [298, 9], sound: [328, 9], lang: [6, 9],
     start: [180, 576, 1], book: [304, 590, 1], credit: [10, Math.min(V.y1 - 8, 632)], sign: [180 - 180 * tss, Math.max(-6, V.y0 + 2), tss],
-    retry: [180, 576, 1], toTitle: [308, 590, 1], bookR: [52, 590, 1], label: [180, 64], goal: null, hang: 0, win: [180, Math.max(V.y0 + 10, 56)]
+    retry: [180, 576, 1], toTitle: [308, 590, 1], bookR: [52, 590, 1], label: [180, 64], goal: null, hang: 0, win: [180, Math.max(V.y0 + 10, 56)],
+    daily: [310, 578, 1], errs: [180, 61, 1], res: [180, Math.max(V.y0 + 10, 56), V.ws]
   });
   else {
     const hs = V.hs, lx = -sw / 2, rx = 360 + sw / 2, ss = Math.min(1.4, (sw - 16) / 262), tg = Math.min(hs * 1.15, (sw - 12) / 156);
-    const signBot = 92 + 204 * ss, E = [rx - 75 * hs, 104, 30 * hs, 54 * hs, 5, hs * 1.15], ts2 = Math.min(hs, (sw - 12) / 92), y2 = 300 + 62 * tg + 16;
+    const signBot = 92 + 204 * ss, E = [rx - 75 * hs, 104, 30 * hs, 54 * hs, 5, hs * 1.15], ts2 = Math.min(hs, (sw - 12) / 92), y2 = 300 + 62 * tg + 16, eb = Math.min(hs, (sw - 16) / 272);
     Object.assign(LY, {
       score: [lx, 64, tg], scoreTop: true, next: [lx - 38 * hs * 1.2, 64 + 62 * tg + 18, hs * 1.2], ema: E,
       pause: [V.x1 - 8 - 60 * hs, V.y0 + 6], sound: [V.x1 - 8 - 28 * hs, V.y0 + 6], lang: [V.x0 + 8, V.y0 + 6],
       start: [lx, signBot + 24, tg], book: [rx, 470, Math.min(hs * 1.15, (sw - 12) / 82)], credit: [V.x0 + 10, V.y1 - 10], sign: [lx - 182 * ss, 92, ss],
       retry: [lx, 300, tg], toTitle: [lx, y2, ts2], bookR: [lx, y2 + 44 * ts2 + 10, ts2], label: [V.x1 - 12, V.y0 + 30],
-      goal: [rx, E[1] + 2 * E[3] + 6, hs], hang: 1, win: [180, 56]
+      goal: [rx, E[1] + 2 * E[3] + 6, hs], hang: 1, win: [180, 56], daily: [lx, signBot + 24 + 56 * tg + 12, tg],
+      // the errands' boards (right in play and on the title, left over the retry tag on the result) and the result board
+      // in the right side world, at a scale its 300 px fit (STYLE.md 7)
+      errs: [rx, E[1] + 2 * E[3] + 52, eb], errT: [rx, V.y0 + 64, eb], errR: [lx, V.y0 + 110, eb], res: [rx, V.y0 + 16, Math.min(V.ws, (sw - 12) / 300)]
     });
   }
   // ?demo=1 on a tall screen (the vertical video): every readout moves to the top band, clear of the caption and
@@ -2310,9 +2436,9 @@ function buildKit() {   // everything with lettering: rebuilt on resize and on a
   const st = STYLE, S0 = V.S, SH = S0 * V.hb, SW = S0 * V.ws;
   SPRS = sprites(st, S0);
   const ts = fz(13, V.hs);
-  KIT = sceneKit(st, S0, SPRS, { key: lang + V.hb.toFixed(2) + ts.toFixed(1), lang: S("lang"), next: S("next"), start: S(finePointer ? "startClick" : "start"), book: S("book"), toTitle: S("toTitle"), retry: S("retry"), ts,
-    sign: { ja: STRINGS.ja.title, sub: STRINGS.en.titleEn, how: S("how"), rule: S("rule"), ts: fz(13, LY.sign[2]) } }, V.hb, LY.sign[2]);
-  if (!KIT.bookP) { KIT.bookP = plaque(st, SH, "text", S("book"), ts); KIT.tagW = tagSprite(st, SH, 214, 50, "", 16); KIT.hand = fingerSprite(st, S0); }
+  KIT = sceneKit(st, S0, SPRS, { key: lang + V.hb.toFixed(2) + ts.toFixed(1) + COSM.join(""), lang: S("lang"), next: S("next"), start: S(finePointer ? "startClick" : "start"), book: S("book"), toTitle: S("toTitle"), retry: S("retry"), ts, lant: LANTC[COSM[1]],
+    sign: { ja: STRINGS.ja.title, sub: STRINGS.en.titleEn, how: S("how"), rule: S("rule"), ts: fz(13, LY.sign[2]), cloth: SCROLLC[COSM[3]] } }, V.hb, LY.sign[2]);
+  if (!KIT.bookP) { KIT.bookP = plaque(st, SH, "text", S("book"), ts); KIT.sealP = plaque(st, SH, "text", S("sealBook"), ts); KIT.dTag = tagSprite(st, SH, 86, 46, "", 16); KIT.tagW = tagSprite(st, SH, 214, 50, "", 16); KIT.hand = fingerSprite(st, S0); }
   // window tags (pause and book) are baked at the window scale
   if (!KIT.win || KIT.win.key !== lang + SW.toFixed(3)) {
     const t2 = Math.max(15, fz(13, V.ws));
@@ -2361,21 +2487,97 @@ function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop")
 const loud = () => run && run.mode !== "attract";   // the title's attract play keeps its sounds to itself
 const book = () => { const b = store.get("book", null); return Array.isArray(b) && b.length === 11 ? b : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; };
 let BOOK = book();
+const save = (k, v) => { if (!DEMO) store.set(k, v); };   // ?demo=1 never writes
+const num = (k, d) => Number(store.get(k, d)) || 0;
+
+// ---------- 今日のお題 (the daily draw): one heap and one order of charms per Japan-time date (dailyOf in the rules).
+// Saved: dDay (the JST day number last played), dBest (that day's best), dDays (days played), dStreak (days in a row),
+// dMax (the longest streak). A day counts when its first draw starts. ----------
+const dayNo = o => Math.floor((Date.now() + 9 * 3600e3) / 864e5) + (o || 0);
+const drawOf = o => dailyOf(new Date(dayNo(o) * 864e5).toISOString().slice(0, 10));
+const dBestNow = () => num("dDay", -9) === dayNo() ? num("dBest", 0) : 0;
+const dStreakNow = () => num("dDay", -9) >= dayNo(-1) ? num("dStreak", 0) : 0;
+function dayStart() {
+  const d = dayNo(), last = num("dDay", -9), s = last === d - 1 ? num("dStreak", 0) + 1 : 1;
+  if (d === last) return;
+  save("dDay", d); save("dBest", 0); save("dDays", num("dDays", 0) + 1); save("dStreak", s); save("dMax", Math.max(s, num("dMax", 0)));
+}
+
+// ---------- 3 つのおつとめ (three errands) and the 福よせ帳 (seal book) ----------
+// [kind, n, charm]. mk ch drop aim sc mal wave save off nowarn count inside one run; the T kinds and day count from
+// when the errand was drawn (tot keeps the totals: merges, on target, offered, then made per charm); streak is the
+// daily streak itself. Easy first (most first runs meet the 2 chain of the opening and 25 drops), then harder; after
+// the 40th, ERR_MORE comes round again and again, each lap half as long again.
+const ERR = [["ch", 2], ["drop", 25], ["mk", 3, 1], ["mk", 2, 3], ["aim", 2], ["sc", 1000], ["mk", 1, 5], ["mal", 1], ["wave", 1], ["day", 1],
+  ["mrgT", 100], ["sc", 3000], ["ch", 3], ["save", 1], ["mkT", 10, 4], ["mk", 1, 7], ["aim", 5], ["drop", 60], ["mk", 3, 5], ["ch", 4],
+  ["off", 1], ["nowarn", 50], ["sc", 8000], ["day", 3], ["aimT", 40], ["mk", 1, 8], ["mal", 2], ["save", 3], ["wave", 2], ["streak", 2],
+  ["mrgT", 600], ["ch", 5], ["offT", 3], ["sc", 20000], ["off", 2], ["drop", 150], ["aim", 15], ["streak", 3], ["ch", 6], ["sc", 45000]];
+const ERR_MORE = [["sc", 60000], ["off", 3], ["aim", 20], ["drop", 200], ["mal", 3], ["offT", 10], ["mrgT", 3000], ["day", 7]];
+const errDef = i => { if (i < ERR.length) return ERR[i]; const j = i - ERR.length, q = ERR_MORE[j % ERR_MORE.length]; return [q[0], Math.round(q[1] * (1 + 0.5 * Math.floor(j / ERR_MORE.length))), q[2]]; };
+const TOTI = { mrgT: 0, aimT: 1, offT: 2, mkT: 3 }, SEALK = "福寿吉宝鶴亀松竹梅春喜祝縁運招幸";
+let TOT = store.get("tot", null); if (!Array.isArray(TOT) || TOT.length !== 14) TOT = new Array(14).fill(0);
+let ERRS = (() => { const e = store.get("errs", null); return (Array.isArray(e) && e.length === 3 ? e : [[0, 0], [1, 0], [2, 0]]).map(q => ({ i: q[0] | 0, b: Number(q[1]) || 0, done: !!q[2], sn: q[3] | 0 })); })();
+let SEALS = num("seals", 0);
+function errVal(d) {
+  const R = run && run.mode === "play" && !run.c.fin ? run.R : null, c = R && run.c, k = d[0];
+  if (k === "day") return num("dDays", 0);
+  if (k === "streak") return dStreakNow();
+  if (k in TOTI) { const j = TOTI[k] + (d[2] || 0); return TOT[j] + (!R ? 0 : j === 0 ? R.merges : j === 1 ? R.aimed : j === 2 ? R.offered : R.made[j - 3]); }
+  if (!R) return 0;
+  return k === "mk" ? R.made[d[2]] : k === "ch" ? (R.merges ? R.bestChain : 0) : k === "drop" ? R.drops : k === "aim" ? R.aimed : k === "sc" ? R.score
+    : k === "off" ? R.offered : k === "nowarn" ? (c.warnAt == null ? R.drops : c.warnAt) : c[k] || 0;
+}
+const errText = d => { const t = S("e_" + d[0], d[1]).replace("{l}", d[2] != null ? nameOf(d[2]) : ""); return lang === "en" ? t.replace(/ x1$/, "").replace(" 1 days", " 1 day") : t; };
+const errRows = () => ERRS.map(s => { const d = errDef(s.i); return { t: errText(d), n: d[1], p: Math.min(d[1], Math.max(0, errVal(d) - s.b)), done: s.done, k: SEALK[s.sn % 16] }; });
+const errSave = () => save("errs", ERRS.map(s => [s.i, s.b, s.done ? 1 : 0, s.sn]));
+function errFinalize() {   // met errands make way for the next ones on the list (counts across runs start from now)
+  ERRS.forEach((s, k) => { if (!s.done) return; const n = Math.max(3, num("errN", 3)), d = errDef(n); ERRS[k] = { i: n, b: d[0] in TOTI || d[0] === "day" ? errVal(d) : 0, done: false, sn: 0 }; save("errN", n + 1); });
+  errSave();
+}
+// during play: an errand met is stamped at once (its seal is saved; the slot is refilled when the run ends)
+function errCheck() {
+  errRows().forEach((e, k) => {
+    if (e.done || e.p < e.n) return;
+    const s = ERRS[k]; s.done = true; s.sn = SEALS++; save("seals", SEALS); errSave();
+    const u = COS.find(c => c[0] === SEALS); if (u) { COSW[u[1]] = u[2]; save("cos", COSW); run.c.unlock = u; }
+    fx.errB = { k, t: T() }; fx.errI = k; sfx.stamp(); sfx.notice(); platform("happytime");
+  });
+}
+// a play run ends (its result, a quit or a restart): its counts join the totals and met errands are replaced
+function runEnd() {
+  const c = run && run.mode === "play" && run.c; if (!c || c.fin) return null;
+  errCheck(); const rows = errRows(), R = run.R;
+  TOT[0] += R.merges; TOT[1] += R.aimed; TOT[2] += R.offered; for (let l = 0; l < 11; l++) TOT[3 + l] += R.made[l];
+  c.fin = true; save("tot", TOT); errFinalize(); cosApply();
+  return rows;
+}
+// Decorations: every few seals one more (auto-worn when it comes; changed in the seal book): [seals, slot, kind].
+// Slots: 0 the kumade's charm, 1 the lanterns' colour, 2 the 鏡餅's cloth, 3 the title scroll's cloth. Never in the demo.
+const COS = [[2, 0, 1], [4, 1, 1], [6, 2, 1], [8, 3, 1], [11, 0, 2], [14, 1, 2], [17, 2, 2], [20, 3, 2], [24, 0, 3], [28, 1, 3], [32, 2, 3], [36, 3, 3]];
+const cosHave = (k, v) => !v || COS.some(c => c[1] === k && c[2] === v && SEALS >= c[0]);
+const COSW = (() => { const c = store.get("cos", null); return [0, 1, 2, 3].map(k => { const v = Array.isArray(c) ? c[k] | 0 : 0; return cosHave(k, v) ? v : 0; }); })();
+const LANTC = [null, { lantern: C.gold, lanternD: C.bambooD, lanternL: C.litL }, { lantern: C.paper, lanternD: C.paperD, lanternL: C.white }, { lantern: C.sky2, lanternD: C.far, lanternL: C.sky3 }];
+const SCROLLC = [null, [C.red, C.redL], [C.green, C.bambooL], [C.beanD, C.tag]];
+function cosApply() { if (DEMO) return; const ch = COSW.some((v, k) => COSM[k] !== v); COSW.forEach((v, k) => { COSM[k] = v; }); if (ch && KIT) resize(); }
 function newFx() {
   return { line: null, disp: 0, tagA: 0, tagV: 0, px: 180, pv: 0, sw: 0, swv: 0, ld: 1, ldV: 0, lift: 0, liftV: 0, held: false, pid: null, ema: [], bursts: [], rings: [],
     stamp: null, ship: null, snip: -1e9, bump: -1e9, shown: 0, passed: false, ropeVis: 0, lastDt: 0, acc: 0, rel: null, dip: 0, dipV: 0 };
 }
-function newRun(mode, seed) {
-  const warm = mode === "play" ? (runCount > 1 ? 0.25 : 0.5) : mode === "demo" ? 0.1 : 0.3;
-  // the very first run starts from the opening its hand hint was made for; later runs get one of all, from their seed
-  const first = mode === "play" && !(Number(store.get("runs", 0)) > 0);
-  const R = new Run(mode === "play" ? "play" : "demo", seed, { warm, opening: first ? 0 : null });
-  run = { mode, seed, R, offset: T(), holdAt: null, pauseClock: 0, startAt: T(), steps: 0, dead: null, result: null, newBook: [], spill0: 0, spillSteps: 0 };
+function newRun(mode, seed, daily) {
+  const play = mode === "play", warm = play ? (runCount > 1 ? 0.25 : 0.5) : mode === "demo" ? 0.1 : 0.3, dl = play && daily ? drawOf() : null;
+  if (play) hint.begin();
+  // the very first run starts from the opening its hand hint was made for, the cord right over it; later runs get one
+  // of all from their seed (or the day's heap), and the cord starts across the basket, so the opening chain takes an
+  // aimed drop (bar 1.6.2)
+  const R = new Run(play ? "play" : "demo", dl ? dl.seed : seed, { warm, opening: play && !num("runs", 0) ? 0 : null, far: play && !hint.active, daily: dl });
+  run = { mode, seed, R, offset: T(), holdAt: null, pauseClock: 0, startAt: T(), steps: 0, dead: null, result: null, newBook: [], spill0: 0, spillSteps: 0,
+    daily: dl, dayN: dayNo(), c: { mal: 0, save: 0, wave: 0, warnAt: null, fin: false, unlock: null } };
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null;
-  for (let i = 0; i < 10; i++) fx.ema.push({ on: mode === "play" ? !!BOOK[i] : !!R.seen[i], t: 1 });
-  if (mode === "play") { hint.begin(); R.auto = autopilot; if (autopilot) R.ai = false; }
+  for (let i = 0; i < 10; i++) fx.ema.push({ on: play ? !!BOOK[i] : !!R.seen[i], t: 1 });
+  if (play) { R.auto = autopilot; if (autopilot) R.ai = false; }
   musicLevel(mode === "attract" ? "title" : "play");
-  if (mode === "play" && !hint.active) { const g = goalNow(); if (g) say(goalText(g, true), 3); }
+  if (dl) say(S("dailyHow", nameOf(dl.lucky)), 3.2, "red");
+  else if (play && !hint.active) { const g = goalNow(); if (g) say(goalText(g, true), 3); }
 }
 const clockNow = () => {
   if (!run) return 0;
@@ -2425,6 +2627,8 @@ function onEvents(now) {
       if (e.lv === TOP) zoomPunch(e.x, e.y, 1.05, 480, now);
       if (e.ch >= 3) mus.kane = mus.i + 8;
       if (play && R.drops > 0) hint.success();
+      if (play && e.type === "mallet") run.c.mal++;
+      if (e.lucky && play && !fx.luckySaid) { fx.luckySaid = true; say(S("luckyHit", nameOf(e.lv)), 1.8, "red"); }
       if (play && !BOOK[e.lv]) {   // several firsts inside one chain share one readable line (bar 1.4.5)
         BOOK[e.lv] = 1; store.set("book", BOOK); run.newBook.push(e.lv);
         const l = fx.line, k = l && l.newK && T() - l.t < 1500 ? l.newK + 1 : 1;
@@ -2455,18 +2659,18 @@ function onEvents(now) {
     else if (e.type === "ship") { fx.ship = { x: e.x, y: e.y, r: e.r, t: 0 }; if (loud()) sfx.cheer(1.1); if (R.offered === 0 && !R.malletIn) say(S("ship"), 2.4, "red"); }
     else if (e.type === "shipMallet") say(S("shipMallet"), 2.6, "red");
     else if (e.type === "malletShip") say(S("malletShip"), 2.6, "red");
-    else if (e.type === "warn") { const b = R.lastOffender; stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, "", b ? b.r : 0); if (loud()) sfx.warn(); }
-    else if (e.type === "safe") { if (e.near > 0.25) { stamp(S("safe"), e.x, R.rimY - 20, true, S("left", e.left.toFixed(1)), 24); if (loud()) sfx.safe(); } }
+    else if (e.type === "warn") { const b = R.lastOffender; if (play && run.c.warnAt == null) run.c.warnAt = R.drops; stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, "", b ? b.r : 0); if (loud()) sfx.warn(); }
+    else if (e.type === "safe") { if (play) run.c.save++; if (e.near > 0.25) { stamp(S("safe"), e.x, R.rimY - 20, true, S("left", e.left.toFixed(1)), 24); if (loud()) sfx.safe(); } }
     else if (e.type === "offer") { say(S("offer"), 2, "red"); if (loud()) { sfx.offer(); sfx.cheer(1); } }
     else if (e.type === "ropeUp") { say(S(e.wave ? "ropeBack" : "ropeUp"), 2.6, "red"); if (loud()) sfx.ropeUp(); }
     else if (e.type === "wave") { say(S("wave"), 2.8, "red"); if (loud()) sfx.wave(); }
-    else if (e.type === "calm") { say(S(e.up ? "calmUp" : "calm"), 2.4, e.up ? "red" : "ink"); if (loud()) { if (e.up) sfx.ropeUp(0); else sfx.notice(); } }
+    else if (e.type === "calm") { if (play && !e.mini) run.c.wave++; say(S(e.up ? "calmUp" : "calm"), 2.4, e.up ? "red" : "ink"); if (loud()) { if (e.up) sfx.ropeUp(0); else sfx.notice(); } }
     else if (e.type === "rescue") say(S(e.lv === MALLET ? "rescueMallet" : "rescue", nameOf(e.lv)), 2.6, "red");
   }
   R.events.length = 0;
   // passing the best mid-run: its own sound, a notice, and the portal's happy moment (never in the demo)
   if (play && !fx.passed) {
-    if (fx.best0 == null) fx.best0 = Number(store.get("best", 0)) || 0;   // read once per run, not every frame
+    if (fx.best0 == null) fx.best0 = run.daily ? dBestNow() : num("best", 0);   // read once per run (the day's best in the draw)
     const best = fx.best0;
     if (best > 0 && R.score > best) { fx.passed = true; say(S("passBest"), 2.4, "red"); sfx.best(); platform("happytime"); }
   }
@@ -2526,12 +2730,12 @@ const sfx = {
     }
   },
   merge(lv, ch, tier) { // a plucked note. A chain climbs one step of the scale per link from the note it started on (bar 1.3.6)
-    if (!audioOn()) return; const w = at(), q = vary(20, 0.1);
+    if (!audioOn()) return; const w = at(), q = vary(20, 0.1), b = onBeat(w);   // the knock on the hit, the notes on the tune's next half step (bar 1.3)
     if (!(ch >= 2)) mus.chain0 = Math.min(6, lv);
     const d = Math.min(13, ch >= 2 ? mus.chain0 + ch - 1 : Math.min(6, lv)), f = pz(d) * q.f;
-    pluck(f, w, 0.3 * q.g); tone("triangle", 240 * q.f, 110, 0.1, 0.22 * q.g, w, null, 0.002, 700); hiss("highpass", 4200, 1, 0.035, 0.07, w);
-    if (tier >= 2) { pluck(pz(d + 2) * q.f, w + 0.07, 0.14); kane(pz(d + 5) * q.f, w + 0.07, 0.04); }
-    else if (lv <= 3) pluck(f * 2, w + 0.01, 0.08);   // an octave on top so a small merge tops the drop on a phone
+    pluck(f, b, 0.3 * q.g); tone("triangle", 240 * q.f, 110, 0.1, 0.22 * q.g, w, null, 0.002, 700); hiss("highpass", 4200, 1, 0.035, 0.07, w);
+    if (tier >= 2) { pluck(pz(d + 2) * q.f, b + 0.07, 0.14); kane(pz(d + 5) * q.f, b + 0.07, 0.04); }
+    else if (lv <= 3) pluck(f * 2, b + 0.01, 0.08);   // an octave on top so a small merge tops the drop on a phone
   },
   big(lv, ch) { // taiko and a chord under the merge's note, for the big ones and long chains
     if (!audioOn()) return; const w = at(), q = vary(20, 0.06), b = Math.min(10, Math.max(lv, 4 + ch) - 2);
@@ -2606,7 +2810,9 @@ const MEL_A2 = MEL_A.slice(0, 16).concat([2, -1, 3, 2, 1, -1, 2, 3, 4, -1, 3, 2,
 const SONG = [MEL_A, MEL_A, MEL_B, MEL_A2], STEP = 0.2;
 const KOTO = [0, -1, 2, -1, 4, -1, 2, 3, 0, -1, 2, -1, 4, 5, 4, 2], KOTO_B = [3, -1, 5, -1, 4, -1, 2, 3, 2, -1, 0, -1, 2, 3, 2, 0], KOTO_D = [5, 4, 5, 4, 5, 4, 3, 4];
 const MUSV = { title: 0.42, play: 0.55, bed: 0.38, duck: 0.12, off: 0 };
-const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1, kane: -1, hushUntil: 0, chain0: 0 };
+const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1, kane: -1, hushUntil: 0, chain0: 0, st: 0 };
+// the first half step of the music's grid at or after w (w itself when no music plays)
+const onBeat = w => { if (!mus.bus || !mus.st || AU.offline || mus.level === "off") return w; const h = mus.st / 2; return mus.next - Math.floor((mus.next - w) / h) * h; };
 function musicLevel(lv) {
   mus.level = lv;
   if (!mus.bus || !AU.ctx) return;
@@ -2667,7 +2873,7 @@ function musicStep() {
   if (mus.level === "off") { mus.next = c.currentTime + 0.05; return; }
   if (mus.next < c.currentTime) mus.next = c.currentTime + 0.02;
   const R = run && run.R, live = !!R && !R.dead, high = live ? R.snap().top < 330 : false, warm = R ? R.merges > 0 || run.mode !== "play" : false;
-  const step = STEP * Math.pow(0.975, Math.min(8, live ? R.phase : 0)) * (live && R.wave ? 0.94 : 1), bells = high || (!!R && R.maxLv >= 8);
+  const step = mus.st = STEP * Math.pow(0.975, Math.min(8, live ? R.phase : 0)) * (live && R.wave ? 0.94 : 1), bells = high || (!!R && R.maxLv >= 8);
   while (mus.next < c.currentTime + 0.15) {
     const i = mus.i++, w = mus.next, full = mus.level === "play" && i >= mus.drop, bed = mus.level === "bed";
     const lay = mus.level === "title" || bed ? 1 : !full ? 0 : warm ? (bells ? 3 : 2) : 1;
@@ -2693,21 +2899,23 @@ function die(now) {
 const SPILL_AT = 650, SPILL_END = 2250;   // ms after the failure: the basket lets go, the demo card shows
 
 // ---------- KEEP: result screen. Steps in order (count-up, records, NEW BEST stamp, goal), skippable by tap ----------
-const RES = { head: 120, count: 320, countDur: 700, rows: 1100, rank: 1250, book: 1400, best: 1600, goal: 1850 };
-function makeResult(now) {
-  const R = run.R, play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0;
-  return { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, rank: rankOf(R.score), showRank: play && runs >= 1,
-    big: R.maxLv, offered: R.offered, chain: R.bestChain, book: play ? run.newBook.filter(l => l < 10).slice(-1)[0] : undefined, goal: play ? goalNow(R.score, R.bestChain, runs < 1) : null,
-    ticks: 0, rankDone: false, stamped: false };
+const RES = { head: 120, count: 320, countDur: 700, rows: 1100, rank: 1250, book: 1400, best: 1600, goal: 1850, errs: 2150 };
+// the draw's result: the day's best (NEW BEST only when the all-time best falls too), the streak and tomorrow's charm
+function makeResult(now, errs) {
+  const R = run.R, play = run.mode === "play", dl = play && run.daily, all = num("best", 0), best = dl ? dBestNow() : all, runs = num("runs", 0);
+  return { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, allBest: R.score > all, rank: rankOf(R.score), showRank: play && runs >= 1,
+    big: R.maxLv, offered: R.offered, chain: R.bestChain, book: play ? run.newBook.filter(l => l < 10).slice(-1)[0] : undefined, goal: play && !dl ? goalNow(R.score, R.bestChain, runs < 1) : null,
+    daily: !!dl, streak: dStreakNow(), tom: dl ? drawOf(1).lucky : 0, errs, unlock: play && run.c.unlock, ticks: 0, rankDone: false, stamped: false };
 }
 const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
 function resultStep(now) {
   const r = run.result, age = resAge(r, now);
   if (age > RES.count && age < RES.count + RES.countDur) { const k = Math.floor((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over") sfx.count(k); } }
   if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
+  if (r.errs) r.errs.forEach((e, j) => { if (e.done && !e.snd && age > RES.errs + j * 320) { e.snd = true; if (state === "over") sfx.stamp(); } });
   if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
-    const p = winPt(0, r.bestY || 160);
+    const p = { x: LY.res[0], y: LY.res[1] + (r.bestY || 160) * LY.res[2] };
     for (let i = 0; i < 18; i++) { const a = i / 18 * TAU; addPart({ x: p.x, y: p.y, vx: Math.cos(a) * 160, vy: Math.sin(a) * 160 - 60, g: 380, life: 0, max: 0.7, s: 3, rot: a, vr: 8, col: [PAL.red, PAL.gold, PAL.paper][i % 3], kind: i % 2 }); }
   }
 }
@@ -2744,7 +2952,7 @@ function fxStep(dt) {
 }
 // Overlay transitions (bar 1.8.1): windows slide and fade in over 180 ms and out over 150 ms; the title sign drops in
 // and lifts away. TR[name] = { open, t }; shown(name) is how far it is in (0..1).
-const TR = { title: { open: !DEMO, t: -1e9 }, pause: { open: false, t: -1e9 }, book: { open: false, t: -1e9 } };
+const TR = { title: { open: !DEMO, t: -1e9 }, pause: { open: false, t: -1e9 }, book: { open: false, t: -1e9 }, seal: { open: false, t: -1e9 } };
 const trSet = (name, open) => { if (TR[name].open !== open) TR[name] = { open, t: T() }; };
 const shown = name => { const o = TR[name], k = (T() - o.t) / (o.open ? 200 : 150); return o.open ? easeOut(k) : 1 - clamp(k, 0, 1); };
 
@@ -2758,7 +2966,6 @@ function setWorld(x, sh, z) {
   x.setTransform(S0 * zs, 0, 0, S0 * zs, S0 * (zx * (1 - zs) + sh.x - V.x0), S0 * (zy * (1 - zs) + sh.y - V.y0));
 }
 const setUI = x => x.setTransform(V.S, 0, 0, V.S, -V.x0 * V.S, -V.y0 * V.S);
-const winPt = (lx, ly) => ({ x: LY.win[0] + lx * V.ws, y: LY.win[1] + ly * V.ws });
 const tagCord = b => (b.w - 6) / 4;   // the two cords of a tag sprite sit this far either side of its centre
 function drawCharm(x, lv, px, py, a, sc, b) {
   const s = SPRS, N = s.N[lv] / s.S;
@@ -3013,7 +3220,7 @@ function drawHUD(x, ts) {
   // news or the best; the number hops a little when it changes (bar 1.8.1)
   if (!isOver()) {   // the result board carries the score, so the tag steps aside (no two numbers at once)
     const P = LY.score, best = Number(store.get("best", 0)) || 0, L = newsNow(), tall = !V.wide && LY.scoreTop;
-    const l2 = L ? L.text : !demo && best > 0 ? S("best") + " " + best : "";
+    const db = run.daily ? dBestNow() : 0, l2 = L ? L.text : run.daily ? (db > 0 ? S("dBest") + " " + db : S("daily")) : !demo && best > 0 ? S("best") + " " + best : "";
     let s2 = P[2], fs = fz(13, s2);
     x.font = "700 " + fs + "px " + fontOf(l2);
     const tw = l2 ? x.measureText(l2).width : 0, wideTag = tw > 136 && !tall, b = wideTag ? k.tagW : k.tag;
@@ -3027,6 +3234,7 @@ function drawHUD(x, ts) {
     if (l2) tx(x, l2, 0, 48, fs, L && L.col === "red" ? p.redD : p.ink, {});
     x.restore();
   }
+  if (run.mode === "play" && !isOver()) drawErrHUD(x);
 }
 // a hanging tag at P = [centre x, top y, scale]; cordTop (logical y) draws its cords up to what it hangs from
 function tagAt(x, b, P, rot, pz, cordTop) {
@@ -3035,17 +3243,27 @@ function tagAt(x, b, P, rot, pz, cordTop) {
   if (cordTop != null) for (const m of [-1, 1]) STYLE.line(x, pPoly([[m * tagCord(b), (cordTop - P[1]) / sc], [m * tagCord(b), 2]], true), 1.1, PAL.cord);
   putB(x, b, -b.w / 2, 0); x.restore();
 }
-const bookX = () => LY.lang[0] + (KIT.lang.w + 6) * V.hs;
+const bookX = () => LY.lang[0] + (KIT.lang.w + 6) * V.hs, sealX = () => bookX() + (KIT.bookP.w + 6) * V.hs;
 // the title: the scroll drops in from the top pole and lifts away when a run starts (a = how far it is in)
 function drawTitle(x, ts, a) {
   const k = KIT, p = PAL, G = LY.sign, rm = Juice.reduce, sway = rm ? 0 : Math.sin(ts * 1.1) * 0.012, up = (1 - a) * (230 * G[2] + G[1] - V.y0 + 20);
   x.save(); x.translate(G[0], G[1] - up); x.scale(G[2], G[2]); putB(x, k.sign, 0, 0); x.restore();
   x.save(); x.globalAlpha = a;
   tagAt(x, k.start, [LY.start[0], LY.start[1] + (1 - a) * 40, LY.start[2]], fx.tagA + sway, 1 + (rm ? 0 : Math.sin(ts * 3.4) * 0.025), V.wide ? G[1] - up + 204 * G[2] : null);
+  // today's draw: a second tag beside the start tag (phone) or under it (wide), its two lines lettered on the plank
+  { const P = LY.daily, b = k.dTag, sc = P[2], L = S("dailyL"), fs = Math.max(15, fz(13, sc));
+    x.save(); x.translate(P[0], P[1] + (1 - a) * 40); x.rotate(fx.tagA * 0.7 - sway); x.scale(sc, sc);
+    if (V.wide) for (const m of [-1, 1]) STYLE.line(x, pPoly([[m * tagCord(b), (LY.start[1] + 50 * LY.start[2] - P[1]) / sc], [m * tagCord(b), 2]], true), 1.1, p.cord);
+    putB(x, b, -b.w / 2, 0); tx(x, L[0], 0, 31 - fs * 0.56, fs, p.ink, { deep: p.tagD }); tx(x, L[1], 0, 31 + fs * 0.6, fs, p.ink, { deep: p.tagD }); x.restore(); }
   const hs = V.hs;
-  for (const [b, X] of [[k.lang, LY.lang[0]], [k.bookP, bookX()], [AU.muted ? k.mute : k.sound, LY.sound[0]]]) {
-    x.save(); x.translate(X, LY.lang[1]); x.scale(hs, hs); if (V.wide) STYLE.line(x, pPoly([[b.w / 2, (V.y0 - LY.lang[1]) / hs], [b.w / 2, 1]], true), 0.9, p.ink); putB(x, b, 0, 0); x.restore();
+  for (const [b, X] of [[k.lang, LY.lang[0]], [k.bookP, bookX()], [k.sealP, sealX()], [AU.muted ? k.mute : k.sound, LY.sound[0]]]) {
+    x.save(); x.translate(X, LY.lang[1]); x.scale(hs, hs); if (V.wide) STYLE.line(x, pPoly([[b.w / 2, (V.y0 - LY.lang[1]) / hs], [b.w / 2, 1]], true), 0.9, p.ink); putB(x, b, 0, 0);
+    if (b === k.sealP && SEALS > num("sealSeen", 0)) { const d = pCirc(b.w - 2, 6, 4.5); STYLE.fill(x, d, p.red); STYLE.edge(x, d, 0.7); }   // new seals wait in the book
+    x.restore();
   }
+  // the three errands: a slip hung under the scroll (phone) or a board in the right side world (wide)
+  const yb = G[1] - up + 206 * G[2];
+  if (V.wide) errBoard(x, LY.errT[0], LY.errT[1], LY.errT[2], errRows(), S("errs3"), V.y0); else errBoard(x, 180, yb + 12, 1, errRows(), S("errs3"), yb);
   // the credit, small at the lower left: on one line when it clears the start tag, under the tag on a tall screen,
   // else as two short lines beside it (bar 1.8.5: it never touches the tag)
   const cs = fz(13), cr = S("credit"), cw = textW(cr, cs), tagL = LY.start[0] - k.start.w / 2 * LY.start[2] * 1.03, tagB = LY.start[1] + k.start.h * LY.start[2];
@@ -3093,24 +3311,62 @@ function drawBook(x, a) {
   putB(x, KIT.win.close, -KIT.win.close.w / 2, g.h + 2);
   x.restore();
 }
-// the result: a paper scroll hung from the top pole. In order: the cause, the score counting up (a tap skips it),
-// the best and the gap to it, the rank, the biggest charm made, a new book entry, then the NEW BEST stamp
-// pressed last with its own sound, and one concrete next goal (bar 1.6.1, 1.8.2).
+// The 福よせ帳 (seal book): washi pages of red seals, one per errand met (the page that holds the newest); seals not
+// seen yet are pressed in one by one when it opens, each with a thud. Under them the four decorations: a tap on a
+// row changes to the next one earned; a row with none earned yet says how many seals open it.
+const SEALW = { w: 316, g: 28, top: 58, rows: 212, rh: 30 }, sealH = () => SEALW.rows + 4 * SEALW.rh + 12;
+let SB = { t0: 0, from: 0, snd: 0 };
+function drawSeal(x, a) {
+  const p = PAL, st = STYLE, G = SEALW, g = G.g, sm = fz(13, V.ws), n0 = Math.floor(Math.max(0, SEALS - 1) / 40) * 40, now = T();
+  dim(x, 0.45 * a);
+  x.save(); winIn(x, a, bookTop());
+  windowBox(x, G.w, sealH(), S("sealBook"));
+  const pg = pRR(-g * 5 - 4, G.top - 4, g * 10 + 8, g * 4 + 8, 0); st.fill(x, pg, p.pane); st.edge(x, pg, 0.7);
+  for (let i = 0; i < 40; i++) {
+    const n = n0 + i, X = -g * 4.5 + (i % 10) * g, Y = G.top + g / 2 + Math.floor(i / 10) * g, t = n >= SB.from ? now - SB.t0 - 380 - (n - SB.from) * 360 : 999;
+    if (n >= SEALS || t < 0) { x.save(); x.setLineDash([2, 3]); x.strokeStyle = p.paperD; x.lineWidth = 1; x.strokeRect(X - 10, Y - 10, 20, 20); x.restore(); continue; }
+    if (t < 400 && n > SB.snd) { SB.snd = n; sfx.stamp(); }
+    const k = clamp(t / 130, 0, 1), s = 1 + 0.8 * (1 - easeOut(k));
+    if (t < 380) arcRing(x, X, Y, 12 + t / 18, 1, 2 * (1 - t / 380), p.red, false);
+    x.save(); x.translate(X, Y); x.rotate(((n * 7) % 5 - 2) * 0.04); x.scale(s, s);
+    const q = pRR(-11, -11, 22, 22, 2); st.fill(x, q, p.red); st.edge(x, q, 0.9); tx(x, SEALK[n % 16], 0, 1, 14, p.paper, {}); x.restore();
+  }
+  const nx = COS.find(c => c[0] > SEALS);
+  tx(x, nx ? S("nextCos", nx[0] - SEALS) : S("allCos"), 0, G.top + g * 4 + 20, sm, p.redD, {});
+  for (let k = 0; k < 4; k++) {
+    const Y = G.rows + k * G.rh + G.rh / 2, any = COS.some(c => c[1] === k && SEALS >= c[0]), lock = COS.find(c => c[1] === k);
+    if (k) st.line(x, pPoly([[-138, Y - G.rh / 2], [138, Y - G.rh / 2]], true), 0.5, p.paperD);
+    tx(x, S("cosN")[k], -138, Y, sm, p.plank, { align: "left" });
+    tx(x, any ? S("cosV")[k][COSW[k]] : S("cosLock", lock[0]), any ? 124 : 138, Y, any ? 15 : sm, any ? p.ink : p.bambooD, { align: "right" });
+    if (any) { const ar = pPoly([[130, Y - 5], [137, Y], [130, Y + 5]]); st.fill(x, ar, p.red); }
+  }
+  putB(x, KIT.win.close, -KIT.win.close.w / 2, sealH() + 2);
+  x.restore();
+}
+function cosNext(k) {   // the seal book's row k: the next decoration earned in that slot
+  for (let v = COSW[k] + 1; v <= COSW[k] + 4; v++) if (cosHave(k, v % 4)) { COSW[k] = v % 4; break; }
+  save("cos", COSW); cosApply(); sfx.ui();
+}
+// the result: a paper scroll hung from the top pole (in the right side world on a wide screen, STYLE.md 7). In order:
+// the cause, the score counting up (a tap skips it), the best and the gap to it, the rank, the biggest charm made, a
+// new book entry, then the NEW BEST stamp pressed last with its own sound, one concrete next goal (the draw: the
+// streak and tomorrow's charm) and the errands, each one met pressed with its seal (bar 1.6.1, 1.8.2).
 function drawResult(x, now) {
-  const r = run.result, age = resAge(r, now), p = PAL, play = state === "over", W = LY.win, sm = fz(13, V.ws);
+  const r = run.result, age = resAge(r, now), p = PAL, play = state === "over", W = LY.res, bs = W[2], sm = fz(13, bs);
   if (age < RES.head) return;
-  const rows = [];
+  const rows = [], eh = fz(13, bs) * 5.8 + 6;
   rows.push(["cause", 46]); rows.push(["score", 52]);
   if (play) rows.push(["best", 44]);
   if (r.showRank) rows.push(["rank", 38]);
   if (r.big > 0) rows.push(["big", 58]);
   if (play && (r.offered > 0 || r.chain >= 2)) rows.push(["stats", 26]);   // the brag line, never in the demo
   if (r.book != null) rows.push(["book", 62]);
-  if (r.goal) rows.push(["goal", 54]);
+  if (r.goal) rows.push(["goal", 54]); else if (r.daily) rows.push(["tom", 54]);
+  if (r.errs && !V.wide) rows.push(["errs", eh]);
   const H = 22 + rows.reduce((a, q) => a + q[1], 0) + 10, drop = Math.min(1, (age - RES.head) / 220);
-  x.save(); x.translate(W[0], W[1] - (1 - easeOut(drop)) * 30); x.scale(V.ws, V.ws); x.globalAlpha = Math.min(1, drop * 1.5);
+  x.save(); x.translate(W[0], W[1] - (1 - easeOut(drop)) * 30); x.scale(bs, bs); x.globalAlpha = Math.min(1, drop * 1.5);
   const top = (V.wide ? V.y0 : 12) - W[1];
-  for (const m of [-1, 1]) STYLE.line(x, pPoly([[m * 130, top / V.ws], [m * 130, 0]], true), 1, p.ink);
+  for (const m of [-1, 1]) STYLE.line(x, pPoly([[m * 130, top / bs], [m * 130, 0]], true), 1, p.ink);
   const paper = pRR(-140, 4, 280, H - 8, 0); STYLE.fill(x, paper, p.paper); STYLE.edge(x, paper, 1);
   for (const yy of [-4, H - 4]) { const rod = pRR(-150, yy, 300, 8, 3.5); STYLE.fill(x, rod, p.plank); STYLE.edge(x, rod, 1); }
   let y = 22;
@@ -3128,12 +3384,12 @@ function drawResult(x, now) {
       r.bestY = c;
       if (r.newBest) {
         if (age > RES.best) {
-          const k = clamp((age - RES.best) / 140, 0, 1), sz = 1 + 0.5 * (1 - easeOut(k));
+          const k = clamp((age - RES.best) / 140, 0, 1), sz = 1 + 0.5 * (1 - easeOut(k)), t = S(r.daily && !r.allBest ? "dNew" : "newBest"), w = Math.max(124, textW(t, 20) + 24);
           x.save(); x.translate(0, c); x.rotate(-0.08); x.scale(sz, sz);
-          const st = pRR(-62, -17, 124, 34, 2); STYLE.fill(x, st, p.red); STYLE.edge(x, st, 1); tx(x, S("newBest"), 0, 1, 20, p.paper, {});
+          const st = pRR(-w / 2, -17, w, 34, 2); STYLE.fill(x, st, p.red); STYLE.edge(x, st, 1); tx(x, t, 0, 1, 20, p.paper, {});
           x.restore();
         }
-      } else if (age > RES.rows) tx(x, S("best") + " " + r.best + (lang === "ja" ? "（" + S("toGo", r.best - r.score) + "）" : "  (" + S("toGo", r.best - r.score) + ")"), 0, c, 16, p.ink, {});
+      } else if (age > RES.rows) tx(x, S(r.daily ? "dBest" : "best") + " " + r.best + (lang === "ja" ? "（" + S("toGo", r.best - r.score) + "）" : "  (" + S("toGo", r.best - r.score) + ")"), 0, c, 16, p.ink, {});
     } else if (kind === "rank" && age > RES.rank) {
       tx(x, S("rank"), -40, c, sm, p.plank, { align: "right" });
       const st = pRR(-30, c - 14, 104, 28, 2); STYLE.fill(x, st, p.red); tx(x, S("ranks")[r.rank], 22, c + 1, 17, p.paper, {});
@@ -3142,7 +3398,7 @@ function drawResult(x, now) {
       icon(x, r.big, -14 - nameW(x, nameOf(r.big)) / 2, c + 12, 28, false);
       tx(x, nameOf(r.big), 6, c + 13, 17, p.ink, {});
     } else if (kind === "stats" && age > RES.rows) {
-      tx(x, S("stats").replace("{o}", r.offered).replace("{c}", r.chain), 0, c, fz(14, V.ws), p.ink, {});
+      tx(x, S("stats").replace("{o}", r.offered).replace("{c}", r.chain), 0, c, fz(14, bs), p.ink, {});
     } else if (kind === "book" && age > RES.book) {
       tx(x, S("entered"), 0, c - 20, sm, p.red, {});
       icon(x, r.book, -14 - nameW(x, nameOf(r.book)) / 2, c + 2, 26, false);
@@ -3151,10 +3407,70 @@ function drawResult(x, now) {
     } else if (kind === "goal" && age > RES.goal) {
       tx(x, S("nextGoal"), 0, c - 12, sm, p.red, {});
       tx(x, goalText(r.goal, false), 0, c + 12, 17, p.ink, {});
-    }
+    } else if (kind === "tom" && age > RES.goal) {
+      tx(x, S("streak", r.streak), 0, c - 12, sm, p.red, {});
+      icon(x, r.tom, -16 - textW(S("tomorrow", nameOf(r.tom)), 16) / 2, c + 12, 22, false);
+      tx(x, S("tomorrow", nameOf(r.tom)), 0, c + 12, 16, p.ink, {});
+    } else if (kind === "errs") errList(x, r.errs, errHead(r), 0, y, bs, age);
     y += hgt;
   }
   x.restore();
+  if (r.errs && V.wide) errBoard(x, LY.errR[0], LY.errR[1], LY.errR[2], r.errs, errHead(r), V.y0, age);
+}
+// ---------- the errands on paper: one line is a box (red with a tick once met), the words and the count; on the
+// result a met one gets its red seal pressed at the end of its line (age: ms since the errands' turn) ----------
+function errLine(x, e, X, Y, w, fs, age, nb) {
+  const p = PAL, st = STYLE, done = e.done && !(age < 0), b = pRR(X, Y - fs * 0.42, fs * 0.84, fs * 0.84, 1);
+  if (nb) X -= fs * 1.2; else st.fill(x, b, done ? p.red : p.white), st.edge(x, b, 0.8);
+  if (done && !nb) { x.save(); x.strokeStyle = p.paper; x.lineWidth = 1.6; x.lineCap = "round"; x.beginPath(); x.moveTo(X + fs * 0.2, Y); x.lineTo(X + fs * 0.38, Y + fs * 0.18); x.lineTo(X + fs * 0.66, Y - fs * 0.2); x.stroke(); x.restore(); }
+  tx(x, e.t, X + fs * 1.2, Y + 1, fs, done ? p.plank : p.ink, { align: "left" });
+  if (!done) tx(x, (e.done ? e.n : e.p) + "/" + e.n, X + w, Y + 1, fs, p.redD, { align: "right" });
+  else if (age != null) {
+    const k = clamp(age / 140, 0, 1), s = 1 + 0.7 * (1 - easeOut(k)), z = fs * 1.55;
+    x.save(); x.translate(X + w - z * 0.55, Y); x.rotate(-0.12); x.scale(s, s);
+    const q = pRR(-z / 2, -z / 2, z, z, 2); st.fill(x, q, p.red); st.edge(x, q, 1); x.strokeStyle = p.paper; x.lineWidth = 0.9; x.strokeRect(-z / 2 + 2.5, -z / 2 + 2.5, z - 5, z - 5);
+    tx(x, e.k, 0, 1, fs, p.paper, {}); x.restore();
+  }
+}
+const errHead = r => r.unlock ? S("newCos", S("cosV")[r.unlock[1]][r.unlock[2]]) : S("errs");
+// the header and three lines, top at y, centred on cx (inside a transform scaled by sc)
+function errList(x, rows, head, cx, y, sc, age) {
+  const fs = fz(13, sc), lh = fs * 1.45, w = 252;
+  tx(x, head, cx, y + lh / 2 + 3, fs, PAL.red, {});
+  rows.forEach((e, j) => errLine(x, e, cx - w / 2, y + lh * (j + 1.5) + 3, w, fs, age == null ? undefined : age - RES.errs - j * 320));
+}
+// a paper board of the errands hung on two cords from cordTop (title, wide play, wide result); X centre, Y top
+function errBoard(x, X, Y, sc, rows, head, cordTop, age) {
+  const p = PAL, fs = fz(13, sc), h = fs * 5.8 + 12;
+  x.save(); x.translate(X, Y); x.scale(sc, sc);
+  for (const m of [-1, 1]) STYLE.line(x, pPoly([[m * 112, (cordTop - Y) / sc], [m * 112, 2]], true), 1.1, p.cord);
+  const pa = pRR(-136, 0, 272, h, 0); STYLE.fill(x, pa, p.paper); STYLE.shade(x, pa, p.paperD, 1.5, 1.5); STYLE.edge(x, pa, 1);
+  errList(x, rows, head, 0, 3, sc, age);
+  x.restore();
+}
+// play: a board under the goal tag (wide) or one line between the ema row and the straw rope (phone) with the errand
+// that moved last and three boxes for the three; a met errand hangs a red slip with its seal there for 2.6 s
+function drawErrHUD(x) {
+  const rows = errRows(), P = LY.errs, p = PAL, st = STYLE, B = fx.errB, bt = B ? (T() - B.t) / 1000 : 9, fs = fz(13, P[2]);
+  if (!fx.errP) fx.errP = rows.map(e => e.p);
+  rows.forEach((e, k) => { if (e.p !== fx.errP[k]) { fx.errI = k; fx.errP[k] = e.p; } });
+  if (V.wide) errBoard(x, P[0], P[1], P[2], rows, S("errs"), LY.ema[1] + LY.ema[3] - 8 * LY.ema[5]);
+  else {
+    let i = fx.errI != null && !(rows[fx.errI].done && bt > 2.6) ? fx.errI : rows.findIndex(e => !e.done); if (i < 0) i = fx.errI || 0;
+    const e = rows[i], pr = e.done ? 0 : textW(e.p + "/" + e.n, fs) + 8, w = fs * 3.9 + textW(e.t, fs) + pr + 10, X = 180 - w / 2, Y = P[1];
+    const slip = pRR(X, Y - fs * 0.78, w, fs * 1.56, 1); st.fill(x, slip, p.paper); st.edge(x, slip, 0.9);
+    rows.forEach((r, k) => { const b = pRR(X + 5 + k * fs * 0.62, Y - fs * 0.3, fs * 0.5, fs * 0.6, 1); st.fill(x, b, r.done ? p.red : k === i ? p.tag : p.white); st.edge(x, b, 0.6); });
+    errLine(x, e, X + 5 + fs * 2, Y, w - fs * 2 - 10, fs, undefined, true);
+  }
+  if (bt < 2.6) {   // the slip pops in like a seal, then fades
+    const e = rows[B.k], k = clamp(bt / 0.14, 0, 1), sz = 1 + 0.4 * (1 - easeOut(k)), w = Math.max(textW(S("errDone"), fs), textW(e.t, fs)) + fs * 3.6;
+    x.save(); x.globalAlpha = bt > 2.3 ? (2.6 - bt) / 0.3 : 1; x.translate(P[0], V.wide ? P[1] + fs * 1.6 * P[2] : P[1] - 2); x.scale(sz * P[2], sz * P[2]); x.rotate(-0.03);
+    const q = pRR(-w / 2, -fs * 1.3, w, fs * 2.6, 2); st.fill(x, q, p.red); st.edge(x, q, 1.1);
+    const sb = pRR(-w / 2 + fs * 0.4, -fs * 0.9, fs * 1.8, fs * 1.8, 2); st.fill(x, sb, p.paper); st.edge(x, sb, 0.8);
+    tx(x, e.k, -w / 2 + fs * 1.3, 1, fs * 1.1, p.red, {});
+    tx(x, S("errDone"), fs * 1.1, -fs * 0.55, fs, p.paper, {}); tx(x, e.t, fs * 1.1, fs * 0.62, fs, p.paper, {});
+    x.restore();
+  }
 }
 const nameW = (x, s) => { x.font = "700 17px " + fontOf(s); return x.measureText(s).width; };
 // ?demo=1: a small bilingual title instead of any tool, BEST or button
@@ -3216,6 +3532,7 @@ function draw(now) {
     if (state === "over" && ba < 0.5 && resAge(run.result, now) > RES.head + 260) { tagAt(x, k.retry, LY.retry, fx.tagA, 1, V.wide ? V.y0 : null); tagAt(x, k.small2, LY.toTitle, 0, 1, V.wide ? LY.retry[1] + 56 * LY.retry[2] : null); tagAt(x, k.book, LY.bookR, 0, 1, V.wide ? LY.toTitle[1] + 44 * LY.toTitle[2] : null); }
   }
   if (ba > 0) drawBook(x, ba);
+  const sa = shown("seal"); if (sa > 0) drawSeal(x, sa);
   if (state === "demo" || state === "demo-dying") drawDemoLabel(x);   // hidden while the result card is up
   // 4. washi grain over the whole frame, in screen space
   x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = grainP; x.fillRect(0, 0, cv.width, cv.height);
@@ -3244,6 +3561,10 @@ function layoutUI() {
   placeL($("btnAnew"), [wx(-64, W.restart.w), pt + PAUSE.row2 * ws, W.restart.w * ws, W.restart.h * ws], 2);
   placeL($("btnQuit"), [wx(64, W.quit.w), pt + PAUSE.row2 * ws, W.quit.w * ws, W.quit.h * ws], 2);
   placeL($("btnBookClose"), [wx(0, W.close.w), bookTop() + (BOOKG().h + 2) * ws, W.close.w * ws, W.close.h * ws], 2);
+  placeL($("btnDaily"), tagRect(k.dTag, LY.daily), 2);
+  placeL($("btnSeal"), [sealX(), LY.lang[1], k.sealP.w * hs, 28 * hs], 3, 4);
+  placeL($("btnSealClose"), [wx(0, W.close.w), bookTop() + (sealH() + 2) * ws, W.close.w * ws, W.close.h * ws], 2);
+  for (let i = 0; i < 4; i++) placeL($("btnCos" + i), [wx(0, 284), bookTop() + (SEALW.rows + i * SEALW.rh) * ws, 284 * ws, SEALW.rh * ws]);
 }
 function resize() {
   layout();
@@ -3265,22 +3586,25 @@ function applyLang() {
 function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
 
 // ---------- KEEP: flow ----------
-function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; ovBook.hidden = true; bookOpen = false; trSet("book", false); }
+function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; ovBook.hidden = true; ovSeal.hidden = true; bookOpen = false; trSet("book", false); trSet("seal", false); }
 const newSeed = () => (Math.random() * 4294967296) >>> 0;
 function startAI(mode, seed) { state = mode === "demo" ? "demo" : "title"; newRun(mode, seed == null ? newSeed() : seed); btnPause.hidden = true; }
 const nextDemoSeed = () => DEMO_SEEDS[demoNo++ % DEMO_SEEDS.length];
-function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); trSet("title", true); trSet("pause", false); }
-function startPlay() {
+function toTitle() { runEnd(); pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); trSet("title", true); trSet("pause", false); }
+function startPlay(daily) {
   if (auInit()) auResume();
-  sfx.ui(); hideAll(); trSet("title", false); trSet("pause", false);
+  sfx.ui(); hideAll(); trSet("title", false); trSet("pause", false); keys.clear();
   state = "play"; runCount++;
-  newRun("play", newSeed());
+  if (daily) dayStart();
+  newRun("play", newSeed(), !!daily);
   btnPause.hidden = false;
   pfStart();
 }
 function showOver(now) {
-  state = "over"; run.result = makeResult(now); musicLevel("bed");
-  if (run.result.newBest) store.set("best", run.R.score);
+  const errs = runEnd(); state = "over"; run.result = makeResult(now, errs); musicLevel("bed");
+  const sc = run.R.score;
+  if (sc > num("best", 0)) store.set("best", sc);
+  if (run.daily && num("dDay", -9) === run.dayN && sc > num("dBest", 0)) store.set("dBest", sc);
   if (run.R.bestChain > (Number(store.get("chain", 0)) || 0)) store.set("chain", run.R.bestChain);
   store.set("runs", (Number(store.get("runs", 0)) || 0) + 1);
   ovOver.hidden = false; overShownAt = T(); btnPause.hidden = true;
@@ -3302,15 +3626,21 @@ function resumeGame() {
   musicLevel("play"); trSet("pause", false);
   pfStart();
 }
-// the book of charms opens from the title and from the result, and closes back to where it came from
-function openBook() { if (bookOpen || !(isTitle() || state === "over")) return; ovTitle.hidden = true; ovOver.hidden = true; ovBook.hidden = false; bookOpen = true; trSet("book", true); sfx.ui(); }
-function closeBook() { if (!bookOpen) return; bookOpen = false; ovBook.hidden = true; trSet("book", false); if (state === "over") ovOver.hidden = false; else ovTitle.hidden = DEMO; sfx.ui(); }
+// the book of charms opens from the title and from the result, the seal book from the title; each closes back to
+// where it came from
+function openBook(k) {
+  k = k === "seal" ? k : "book";
+  if (bookOpen || !(isTitle() || state === "over")) return;
+  ovTitle.hidden = true; ovOver.hidden = true; (k === "seal" ? ovSeal : ovBook).hidden = false; bookOpen = k; trSet(k, true); sfx.ui();
+  if (k === "seal") { const f = num("sealSeen", 0); SB = { t0: T(), from: f, snd: f - 1 }; save("sealSeen", SEALS); }
+}
+function closeBook() { if (!bookOpen) return; trSet(bookOpen, false); bookOpen = false; ovBook.hidden = ovSeal.hidden = true; if (state === "over") ovOver.hidden = false; else ovTitle.hidden = DEMO; sfx.ui(); }
 function holdClock() { if (run && run.holdAt == null && (state === "title" || state === "demo")) run.holdAt = T(); }
 function releaseClock() { if (run && run.holdAt != null) { run.offset += T() - run.holdAt; run.holdAt = null; } }
 function onHide() { if (state === "play") pauseGame(); else holdClock(); }
 function onShow() { releaseClock(); lastNow = performance.now(); }
 const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
-function retry() { if (state === "over" && retryReady()) startPlay(); }
+function retry() { if (state === "over" && retryReady()) startPlay(run.daily); }
 
 // ---------- KEEP: input. Hold anywhere to grab the cord and slide to aim; let go to drop (keys: arrows/A D, Space) ----------
 // The grab, the aim and the guide show on the frame after pointerdown; the drop happens on release.
@@ -3341,6 +3671,10 @@ cv.addEventListener("lostpointercapture", letGo(false));
 ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
 ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
 ovBook.addEventListener("click", () => closeBook());
+ovSeal.addEventListener("click", e => { if (e.target === ovSeal || e.target.id === "btnSealClose") closeBook(); });
+for (let i = 0; i < 4; i++) $("btnCos" + i).addEventListener("click", e => { e.stopPropagation(); cosNext(i); });
+$("btnDaily").addEventListener("click", e => { e.stopPropagation(); startPlay(true); });
+$("btnSeal").addEventListener("click", e => { e.stopPropagation(); openBook("seal"); });
 // inside the lockout a press only skips the result animation; after it, one press starts the next run (bar 1.5.4)
 ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (retryReady()) retry(); else skipResult(T()); });
 $("btnLang").addEventListener("click", e => { e.stopPropagation(); lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
@@ -3348,7 +3682,7 @@ $("btnBook").addEventListener("click", e => { e.stopPropagation(); openBook(); }
 btnMute.addEventListener("click", e => { e.stopPropagation(); if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
 btnPause.addEventListener("click", e => { e.stopPropagation(); pauseGame(); btnPause.blur(); });
 $("btnResume").addEventListener("click", e => { e.stopPropagation(); resumeGame(); });
-$("btnAnew").addEventListener("click", e => { e.stopPropagation(); pfStop(); startPlay(); });
+$("btnAnew").addEventListener("click", e => { e.stopPropagation(); pfStop(); runEnd(); startPlay(run.daily); });
 $("btnQuit").addEventListener("click", e => { e.stopPropagation(); toTitle(); });
 $("btnRetry").addEventListener("click", e => { e.stopPropagation(); retry(); });
 $("btnToTitle").addEventListener("click", e => { e.stopPropagation(); if (retryReady()) toTitle(); });
@@ -3357,14 +3691,16 @@ const keys = new Set(), KL = ["ArrowLeft", "a", "A"], KR = ["ArrowRight", "d", "
 function setDir() { if (state === "play" && run) run.R.kdir = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); }
 document.addEventListener("keydown", e => {
   if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
-  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar";
+  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar", fe = document.activeElement;
   if (ok || k.startsWith("Arrow")) e.preventDefault();
+  // a button reached with Tab: Enter or Space presses it
+  if (ok && !e.repeat && fe && fe.tagName === "BUTTON" && fe.offsetParent && fe.matches(":focus-visible")) { fe.click(); return; }
   if (KL.includes(k)) { keys.add("L"); setDir(); }
   if (KR.includes(k)) { keys.add("R"); setDir(); }
   if (e.repeat) return;
   if (k === "m" || k === "M") { if (auInit()) auResume(); setMute(!AU.muted); return; }
   if (bookOpen) { if (ok || k === "Escape") closeBook(); return; }
-  if (isTitle()) { if (ok) startPlay(); }
+  if (isTitle()) { if (ok) startPlay(); else if (k === "d" || k === "D") startPlay(true); }
   else if (state === "play") { if (k === "Escape" || k === "p" || k === "P") pauseGame(); else if (ok || k === "ArrowDown" || k === "s" || k === "S") dropNow(); }
   else if (state === "paused") { if (ok || k === "Escape" || k === "p" || k === "P") resumeGame(); }
   else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") toTitle(); }
@@ -3387,6 +3723,7 @@ function update(now, dt) {
     // a long stall drops the lost time; the demo keeps it (up to 4 s) and catches up over the next frames
     if (run.steps < target && !R.dead && (!demo || target - run.steps > 480)) run.offset += (target - run.steps) / 0.12;
     if (R.dead && !run.dead) die(now);
+    if (state === "play" && n) errCheck();
   }
   if (isDying()) {
     const el = now - run.dead.at;
@@ -3448,6 +3785,7 @@ window.__game = {
 };
 
 // ---------- boot ----------
+if (!DEMO) { ERRS.forEach(s => { if (s.done) SEALS = Math.max(SEALS, s.sn + 1); }); errFinalize(); cosApply(); }   // an errand met in a run that never ended
 resize();
 applyLang();
 AU.muted = !!store.get("mute", false); setMute(AU.muted);
