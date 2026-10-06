@@ -144,7 +144,7 @@ function useStyle(id) { ST = STYLES[id] || STYLES.B; PAL = PALS[ST.id]; SPR.clea
 const TEXT_MIN = 14;
 const L = { K: 1, dpr: 1, kc: 1, W: 360, H: 640, x0: 0, y0: 0, u: 1, wide: false };
 function artResize(cv, cssW, cssH, cw, ch, sideMin) {
-  const dpr = L.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = L.dpr = Math.min(L.cap || 2, window.devicePixelRatio || 1); // L.cap: a game may draw a slow device at a lower ratio
   const dw = Math.max(2, Math.round(cssW * dpr)), dh = Math.max(2, Math.round(cssH * dpr)), K = Math.min(dw / cw, dh / ch);
   if (K !== L.K) SPR.clear();
   cv.width = dw; cv.height = dh;
@@ -648,7 +648,7 @@ const T_ARRIVE = 650, T_OPEN = 220, T_BELL = 1500, T_BELL_EARLY = 700, T_CLOSE =
 const KIND = { 4: "q", 8: "r", 11: "o", 14: "q", 15: "o", 16: "r", 19: "o", 22: "q", 23: "o", 24: "r" };
 const kindOf = n => !run || run.daily || run.mode === "demo" || n > LAST ? "" : run.pass && run.pass.includes(n) ? "x" : KIND[n] || "";
 const openSide = n => (n >> 2) & 1; // a one-door stop: the door that opens (11 and 19 the left, 15 and 23 the right)
-const PASS_MS = 1500, PASS_PTS = 40; // an express pass: the train runs through in 1.5 s, a small bonus keeps the score moving
+const PASS_MS = 1000, PASS_PTS = 40; // an express pass: the train runs through in 1 s, a small bonus keeps the score moving
 // Peak hour (bar 1.5.2): from 25 s into a run the queues grow, up to half a unit a beat past the line's own pace by 70 s,
 // so a strong player's run rises to an end near a minute and a half instead of levelling off for minutes
 const PEAK_AT = 25000, PEAK_LEN = 45000, PEAK_UPB = 0.5;
@@ -760,11 +760,12 @@ const DEMO_STATIONS = [
 const DEMO_LOOP = 26800, DEMO_LAG = 1200; // the clip's wall-clock length; the most of its clock a stalled recorder may slow
 const RANKS = [0, 400, 1200, 2500, 4500, 7000, 10000, 14000, 20000, 28000, 38000, 50000]; // the top four keep a strong player's seal moving (bar 1.6.2)
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
-// ranks 5 and up also come from the stamp book: [station reached, stars, 3-star stations]. Scores level off once runs
+// ranks 4 and up also come from the stamp book: [station reached, stars, 3-star stations]. Scores level off once runs
 // start late, so a player keeps climbing by reaching further and filling the book. The third star is a stop of PERFECT
-// heaves only, so the 3-star count is the slow, skilled part, and the top rank is the full 3-star book: a steady player
-// climbs a rank every few runs and the ladder lasts several sessions (bar 1.6.2)
-const RANK_MILE = { 5: [9, 20, 1], 6: [13, 28, 3], 7: [15, 36, 6], 8: [17, 44, 10], 9: [21, 54, 15], 10: [24, 64, 20], 11: [24, 72, 24] };
+// heaves only, so the 3-star count is the slow, skilled part from rank 6 on (4 and 5 are in reach of a normal player),
+// and the top rank is the full 3-star book: a steady player climbs a rank every few runs and the ladder lasts several
+// sessions (bar 1.6.2)
+const RANK_MILE = { 4: [9, 16, 0], 5: [9, 20, 0], 6: [13, 28, 3], 7: [15, 36, 6], 8: [17, 44, 10], 9: [21, 54, 15], 10: [24, 64, 20], 11: [24, 72, 24] };
 // [stars (negative: streak days), slot (gloves, badge, stripe), colour code]. Codes are what the save holds (eq).
 const REWARDS = [[4, 0, "y"], [8, 1, "h"], [14, 2, "s"], [20, 0, "s"], [28, 1, "y"], [36, 2, "a"], [50, 0, "r"], [64, 2, "y"], [-2, 1, "g"], [-7, 2, "g"]];
 const EQ0 = "wql"; // the default gloves, badge and stripe
@@ -776,15 +777,15 @@ const chainMult = n => n >= 30 ? 3 : n >= 20 ? 2 : n >= 10 ? 1.5 : 1;
 const STRINGS = {
   ja: {
     title: "押し屋ラッシュ", reading: "おしや らっしゅ", prevSt: "おしあい", nextSt: "へしあい",
-    how1: "リズムに合わせてタップ!", how2: "まにあわない人は押さない", howW: "リズムに合わせて|タップ!|まにあわない人は|押さない", how1K: "リズムに合わせてスペース!", howWK: "リズムに合わせて|スペースかクリック!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
+    how1: "リズムに合わせてタップ!", how2: "まにあわない人は押さない", howW: "リズムに合わせて|タップ!|まにあわない人は|押さない", how1K: "リズムに合わせてスペースかクリック!", howWK: "リズムに合わせて|スペースかクリック!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
-    perfect: "ドンピシャ!", boardP: "ドンピシャ乗車!", good: "よし!", bad: "ぐえっ", board: "スポン!", giri: "ギリギリ!", clang: "ゴン!", clangSub: "よしは半分",
+    perfect: "ドンピシャ!", boardP: "ドンピシャ乗車!", good: "よし!", bad: "ぐえっ", early: "はやい", late: "おそい", board: "スポン!", giri: "ギリギリ!", clang: "ゴン!", clangSub: "よしは半分",
     pinch: "はさまった!", pop: "パリーン!", complain: "苦情5件!", allAboard: "全員乗車!", left: "乗り残し {n}人", term: "終点 到着!", hold: "まった!",
     nCase: "かたい荷物|よしは半分だけ", nSumo: "おすもうさん|何回も押す", nExpress: "急行|テンポアップ", nRapid: "快速区間|テンポアップ",
     nRunner: "かけこみ乗車|ベルの間に来る", nFaster: "ラッシュの山|もっと速く", nCrack: "200%から|ミスで窓にヒビ", nBoss: "大ラッシュ!|人の波とおすもう",
     nQuick: "ちょい停車|すぐドアが閉まる", nRush: "終点ラッシュ|乗る人が2倍", quick: "ちょい停車", rush: "終点ラッシュ",
     nOne: "片側ドア|開くのは1つだけ", nPeak: "ラッシュの山|列がのびる", passBy: "急行は通過", pass: "通過!", healed: "苦情1件 とりけし",
-    nTwo: "ドアが2つ|左右をタップ", nTwoK: "ドアが2つ|←→キーで左右をえらぶ", nPair: "ふたり組|まとめて押す", nSurge: "人の波|まとめて来る", wave: "人の波!", boss: "大ラッシュ 突破!",
+    nTwo: "ドアが2つ|左右をタップ", nTwoK: "ドアが2つ|←→か左右をクリック", nPair: "ふたり組|まとめて押す", nSurge: "人の波|まとめて来る", wave: "人の波!", boss: "大ラッシュ 突破!",
     nWait: "まにあわない人は|押さずに待つ", wait: "まって", pinchTeach: "半分で閉まると はさまる", pinchFree: "今回はセーフ",
     station: "{n}駅目", chain: "せーの ×{n}", chainUp: "せーの {n}連!", chainOff: "せーの 途切れた", rate: "乗車率", complaints: "苦情", gloves: "軍手", warn: "あと{n}件",
     tiers: ["まあまあ", "満員", "超満員!!", "限界突破!!!"],
@@ -804,15 +805,15 @@ const STRINGS = {
   },
   en: {
     title: "OSHIYA RUSH", reading: "OSHIYA RUSH", gloss: "TRAIN PUSHER", prevSt: "PUSH", nextSt: "SHOVE",
-    how1: "TAP ON THE BEAT TO HEAVE!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP ON THE BEAT|TO HEAVE!|DON'T PUSH WHO|CAN'T MAKE IT", how1K: "PRESS SPACE ON THE BEAT!", howWK: "SPACE OR CLICK|ON THE BEAT!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
+    how1: "TAP ON THE BEAT TO HEAVE!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP ON THE BEAT|TO HEAVE!|DON'T PUSH WHO|CAN'T MAKE IT", how1K: "SPACE OR CLICK ON THE BEAT!", howWK: "SPACE OR CLICK|ON THE BEAT!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
-    perfect: "PERFECT!", boardP: "PERFECT IN!", good: "GOOD", bad: "OOF", board: "IN!", giri: "JUST IN!", clang: "CLANG!", clangSub: "GOOD = HALF",
+    perfect: "PERFECT!", boardP: "PERFECT IN!", good: "GOOD", bad: "OOF", early: "EARLY", late: "LATE", board: "IN!", giri: "JUST IN!", clang: "CLANG!", clangSub: "GOOD = HALF",
     pinch: "PINCHED!", pop: "SMASH!", complain: "5 GRIPES!", allAboard: "ALL ABOARD!", left: "{n} LEFT BEHIND", term: "END OF LINE!", hold: "HOLD IT!",
     nCase: "HARD LUGGAGE|GOOD MOVES IT HALF", nSumo: "SUMO|MANY HEAVES", nExpress: "EXPRESS|FASTER BEAT", nRapid: "RAPID SECTION|FASTER BEAT",
     nRunner: "LATE RUNNERS|AT THE BELL", nFaster: "PEAK RUSH|FASTER", nCrack: "FROM 200%|MISSES CRACK", nBoss: "BIG RUSH!|SURGE AND SUMO",
     nQuick: "QUICK STOP|DOORS SHUT FAST", nRush: "LAST-STOP RUSH|TWICE THE CROWD", quick: "QUICK STOP", rush: "LAST-STOP RUSH",
     nOne: "ONE DOOR|ONLY ONE OPENS", nPeak: "PEAK HOUR|LONGER QUEUES", passBy: "EXPRESS PASSES", pass: "EXPRESS!", healed: "1 GRIPE TAKEN BACK",
-    nTwo: "TWO DOORS|TAP LEFT OR RIGHT", nTwoK: "TWO DOORS|← → PICKS THE DOOR", nPair: "PAIRS|ONE PUSH FOR TWO", nSurge: "CROWD SURGE|MANY AT ONCE", wave: "SURGE!", boss: "BIG RUSH CLEARED!",
+    nTwo: "TWO DOORS|TAP LEFT OR RIGHT", nTwoK: "TWO DOORS|← → OR CLICK A SIDE", nPair: "PAIRS|ONE PUSH FOR TWO", nSurge: "CROWD SURGE|MANY AT ONCE", wave: "SURGE!", boss: "BIG RUSH CLEARED!",
     nWait: "CAN'T MAKE IT?|DON'T PUSH", wait: "WAIT", pinchTeach: "HALF IN = PINCHED", pinchFree: "FREE THIS TIME",
     station: "STATION {n}", chain: "HEAVE x{n}", chainUp: "{n} IN A ROW!", chainOff: "HEAVES BROKEN", rate: "LOAD", complaints: "GRIPES", gloves: "LIVES", warn: "{n} MORE",
     tiers: ["SO-SO", "PACKED", "JAMMED!!", "OVER LIMIT!!!"],
@@ -971,7 +972,7 @@ function newStation(n, t, atPlatform) {
   run.st = st;
   setTempo(def.beat, t);
   if (atPlatform) st.doors.forEach((d, i) => { stepUp(t, i); st.doors[i].state = "ready"; });
-  if (pass) { run.hist[n] = -1; notice(null, stLabel(st) + "|" + S("passBy")); if (loud()) sfx.pass(); }
+  if (pass) { run.hist[n] = -1; notice(null, S("passBy")); if (loud()) sfx.pass(); } // one part: the pass is over before a second part would show
   else if (def.note && run.mode === "play") notice(def.note, def.note === "nDaily" ? S("nDaily") + featNames(run.feat, "|") : null, false, def.note === "nQuick" || def.note === "nRush" || def.note === "nOne");
   else if (!atPlatform && run.mode !== "attract") notice(null, stLabel(st) + (def.tw >= 0 ? "|" + S("feat")[def.tw] : ""));
   if (!pass && run.mode === "play" && !run.peakNoted && !run.daily && run.c >= PEAK_AT) { run.peakNoted = true; notice("nPeak"); } // the queues start to grow
@@ -1062,7 +1063,7 @@ function press(tc, side) {
   if (loud()) musicDuck(0.5, 0.1);
   if (tier === "bad") {
     breakChain(now); st.bads++; lineFault(st); r.d = Math.max(0, r.d - 1); run.coolUntil = tc + STAGGER;
-    call("bad", "paperD", now); if (loud()) sfx.bad();
+    call("bad", "paperD", now, S(off < 0 ? "early" : "late"), true); if (loud()) sfx.bad(); // which way the press missed (bar 1.4.7)
     burst(x + 12, y + 8, 5, 100, { col: "paperD", g: 280, kind: "chip", s: 2 });
     if (st.R >= CRACK_R) crack(tc, now);
     return;
@@ -1083,7 +1084,7 @@ function press(tc, side) {
   } else run.chain >>= 1;                           // a GOOD halves the chain: only a run of PERFECTs climbs (bar 1.6.4)
   if (r.d >= r.need) { boardRider(r, tc, now, tier); return; }
   if (tier === "perfect") { call("perfect", "gold", now); if (loud()) sfx.perfect(run.chain); sparkRing(x, y + 8, 8, "goldL"); burst(x, y, 6, 160, { col: "paper", s: 1.6 }); fx.kickT = now; }
-  else { call("good", "paper", now); if (loud()) sfx.good(); burst(x, FEET_DOOR - 4, 4, 80, { col: "paperD", g: 400, s: 1.6 }); }
+  else { call("good", "paper", now, S(off < 0 ? "early" : "late"), true); if (loud()) sfx.good(); burst(x, FEET_DOOR - 4, 4, 80, { col: "paperD", g: 400, s: 1.6 }); }
 }
 function breakChain(now) {
   if (run.chain >= 10) { fx.chainT = now; fx.chainKey = "chainOff"; if (loud()) sfx.chainOff(); }
@@ -1131,7 +1132,7 @@ function popWindow(tc, now) {
   loseLife("pop", tc, now, wx, wy);
 }
 function loseLife(reason, tc, now, x, y) {
-  run.lives--; fx.lostT = now; breakChain(now);
+  run.lives--; fx.lostT = now; breakChain(now); run.st.lost = true; // this stop's gripes now stop at 4: its departure never takes a second glove
   if (run.lives >= 0 && fx.gl[run.lives]) fx.gl[run.lives].v += 9;
   if (run.lives <= 0) { kill(reason, tc, now, x, y); return; }
   addTrauma(0.7); hitstop(0.12); zoomPunch(x, y, 1.05, 380, now);
@@ -1189,7 +1190,7 @@ function depart(c) {
   if (tier >= 2) { burst(DX, 300, 14 + tier * 6, 240, { col: tier === 3 ? "redL" : "gold", kind: "chip", s: 2.6 }); if (play && tier === 3 && !term) platform("happytime"); }
   if (st.left) {
     run.complaints += st.left; fx.compT = now;
-    if (st.forgiven) run.complaints = Math.min(4, run.complaints); // "free this time" really is free: no glove from the same departure
+    if (st.forgiven || st.lost) run.complaints = Math.min(4, run.complaints); // "free this time" really is free, and a pinch or a smash is the stop's one glove
     if (run.complaints >= 5) { call("complain", "red", now); loseLife("complain", c, now, 330, 100); if (run.dead) return; }
   }
 }
@@ -1208,7 +1209,7 @@ function simStep(c) {
     case "pinch": if (c - st.phAt >= T_PINCH) depart(c); break;
     case "depart": if (c - st.phAt >= departMs(st.n)) { const out = st.queue.slice(0, 4); newStation(run.n + 1, c, false); run.st.out = out; } break;
     case "pass": // the express runs through: a small bonus as it clears the platform, then the next stop
-      if (!st.paid && c - st.phAt >= PASS_MS * 0.45) { st.paid = true; run.score += PASS_PTS; fx.scoreT = T(); fx.sv += 0.6; call("pass", "gold", T(), "+" + PASS_PTS); }
+      if (!st.paid && c - st.phAt >= 200) { st.paid = true; run.score += PASS_PTS; fx.scoreT = T(); fx.sv += 0.6; call("pass", "gold", T(), "+" + PASS_PTS); }
       if (c - st.phAt >= PASS_MS) newStation(run.n + 1, c, false);
       break;
   }
@@ -1287,7 +1288,7 @@ function kill(reason, tc, now, x, y) {
 }
 
 // ---------- KEEP: one judgement slot and one notice line (never stacked popups) ----------
-function call(key, col, now, sub) { fx.call = { key, col, t: now, sub: sub || "" }; }
+function call(key, col, now, sub, inl) { fx.call = { key, col, t: now, sub: sub || "", inl: !!inl }; } // inl: the sub rides the word's line
 const noteGap = () => run && run.first ? 15000 : 9000; // the first run spaces its new rules wider (bar 1.7.2)
 // q: show it now; ann: a station announcement (a quick stop, a rush) shows now and leaves the spacing of new rules alone
 function notice(key, text, q, ann) {
@@ -1367,9 +1368,9 @@ const sfx = {
   doorOpen() { if (!audioOn()) return; const w = now0(); hiss("highpass", 2600, 0.8, 0.32, 0.45, w, null, 1300); },
   pass() { // the express runs through: a rush of air, the rail joints, a two-note horn that drops as it goes by
     if (!audioOn()) return; const w = now0(), q = lv(30, 0.06, 1);
-    hiss("bandpass", 600, 0.7, 1.3, 0.5 * q.g, w, null, 1700); hiss("highpass", 3200, 0.8, 0.8, 0.16 * q.g, w + 0.3, null, 1600);
-    for (let i = 0; i < 6; i++) thump(95 + (i & 1) * 20, 0.06, (0.2 - i * 0.02) * q.g, w + 0.25 + i * 0.15, 900);
-    for (const [f, d] of [[pz(9), 0], [pz(11), 0]]) { tone("triangle", f * q.f, f * q.f * 0.94, 0.42, 0.13 * q.g, w + 0.18 + d, null, 0.02, 2600); tone("triangle", f * q.f * 0.89, f * q.f * 0.86, 0.3, 0.1 * q.g, w + 0.62 + d, null, 0.02, 2200); }
+    hiss("bandpass", 600, 0.7, 0.95, 0.5 * q.g, w, null, 1700); hiss("highpass", 3200, 0.8, 0.6, 0.16 * q.g, w + 0.22, null, 1600);
+    for (let i = 0; i < 6; i++) thump(95 + (i & 1) * 20, 0.06, (0.2 - i * 0.02) * q.g, w + 0.18 + i * 0.11, 900);
+    for (const [f, d] of [[pz(9), 0], [pz(11), 0]]) { tone("triangle", f * q.f, f * q.f * 0.94, 0.36, 0.13 * q.g, w + 0.14 + d, null, 0.02, 2600); tone("triangle", f * q.f * 0.89, f * q.f * 0.86, 0.26, 0.1 * q.g, w + 0.46 + d, null, 0.02, 2200); }
   },
   doorClose() { if (!audioOn()) return; const w = now0(), q = lv(30, 0.08, 0.7); bellNote(pz(9) * q.f, w, 0.2 * q.g); bellNote(pz(5) * q.f, w + 0.2, 0.2 * q.g); hiss("highpass", 2600, 0.8, 0.45, 0.1, w + 0.05, null, 1100); },
   bell(at, step, alt) {
@@ -2657,17 +2658,19 @@ const callLife = cl => BIG.includes(cl.key) ? (cl.sub && cl.key === "pinch" ? 22
 function callOn(now) {
   const cl = fx.call; if (!cl || now - fx.keyT < 1100) return null; // the demo's key-art beat stays free of text
   if (now - cl.t > callLife(cl)) return null;
-  if (!BIG.includes(cl.key) && fx.stamp && now - fx.stamp.t > 100 && now - fx.stamp.t < 1700) return null; // the station stamp owns the slot while it shows
+  if (!BIG.includes(cl.key) && cl.key !== "pass" && fx.stamp && now - fx.stamp.t > 100 && now - fx.stamp.t < 1700) return null; // the station stamp owns the slot while it shows (an express pass is its reward and takes it)
   return cl;
 }
+const callRaw = () => 320 - (320 - (LED_Y - 16)) * fx.dz;         // the HUD hangs in the side world; the call rides the camera's lean
+const callTop = () => vTop() + 0.6 * 32 * L.u + 18;                // ...but a deep lean on a short wide screen never pushes it off the top
 function callY() {
-  if (L.wide) return 320 - (320 - (LED_Y - 16)) * fx.dz;         // the HUD hangs in the side world; the call rides the camera's lean
+  if (L.wide) return Math.max(callRaw(), callTop());
   const top = vTop() + 26 + 120 * hudS(), bot = LED_Y + 4;      // under the route board, above the digits
   return bot - top >= 38 * L.u ? (top + bot) / 2 : LED_Y + 18;
 }
-const subInline = cl => /^\+/.test(cl.sub);
+const subInline = cl => cl.inl || /^\+/.test(cl.sub);
 const stampOn = now => { const s = fx.stamp, st = run.st; return !!s && now - s.t >= 120 && now - s.t <= 1700 && (st.ph === "depart" || st.ph === "arrive" || st.ph === "pass"); };
-const ledHidden = now => { const cl = callOn(now); return stampOn(now) || (!!cl && (callY() > LED_Y || (!!cl.sub && !subInline(cl)))); };
+const ledHidden = now => { const cl = callOn(now); return stampOn(now) || (!!cl && (callY() > LED_Y || (L.wide && callRaw() < callTop()) || (!!cl.sub && !subInline(cl)))); };
 function drawCall(x, now) {
   const cl = callOn(now); if (!cl) { if (fx.call && now - fx.call.t > callLife(fx.call)) fx.call = null; return; }
   const age = Math.max(0, now - cl.t), big = BIG.includes(cl.key), life = callLife(cl);
@@ -2689,7 +2692,7 @@ function drawStamp(x, now) {
   const s = fx.stamp; if (!s) return;
   const age = now - s.t, st = run.st;
   if (age > 1700 || (st.ph !== "depart" && st.ph !== "arrive" && st.ph !== "pass")) { if (age > 400) fx.stamp = null; return; }
-  if (age < 120 || (fx.call && now - fx.call.t < 1200 && BIG.includes(fx.call.key))) return;
+  if (age < 120 || (fx.call && now - fx.call.t < 1200 && (BIG.includes(fx.call.key) || fx.call.key === "pass"))) return;
   const t = s.tier, lab = S("tiers")[t], land = 1 + 0.5 * (1 - easeOut((age - 120) / 140));
   at(x, 180, 168, L.u, 0, () => {
     put(x, slipSpr(212, 96), 0, 0);
@@ -2733,7 +2736,7 @@ function hangTag(x, e, l1, l2, mark) { // a two-line wooden tag; on a wide scree
     if (L.wide) cords(x, [[-e.w * 0.3, -12], [e.w * 0.3, -12]], (beamB() - e.y) / e.s);
     tagBtn(x, 0, 0, e.w, e.h, "", 14);
     text(x, l1, 0, l2 ? 21 : e.h / 2 + 2, 17, "ink", { deep: "tagD" });
-    if (l2) text(x, l2, 0, 42, 14, "redD", {});
+    if (l2) text(x, l2, 0, 42, 14, "redD", { max: e.w - 16 });
     if (mark) seal(x, e.w / 2 - 8, 0, mark, 999, 14);
   });
 }
@@ -2764,8 +2767,8 @@ function drawTitle(x, now) {
     if (L.wide) bestPlank(x, sideX(1), vTop() + 70, hudS());
     else { const l = UI.lang.cx + UI.lang.w * u / 2 + 4, r = UI.mute.cx - UI.mute.w * u / 2 - 4; bestPlank(x, (l + r) / 2, vTop() + 21, u, r - l); } // centred between the plaques, never under them
     const done = days().includes(today().day);
+    hangTag(x, UI.book, S("book"), "★" + starSum(1, LAST) + "/72", null); // first: on a wide screen its cords pass behind the daily tag
     hangTag(x, UI.daily, S("daily"), featNames(dailyFeat(today().ymd), "+"), done ? S("todayDone") : S("todayNew"));
-    hangTag(x, UI.book, S("book"), "★" + starSum(1, LAST) + "/72", null);
     if (starts().length > 1) fromPlank(x, UI.from);
   }
   const st = UI.start;
@@ -2808,10 +2811,15 @@ function drawBook(x, now) {
         const n = p * 8 + i + 1, cx = (i & 1) ? 73 : -73, cy = 60 + (i >> 1) * rh, w = 140, h = rh - 6;
         x.setLineDash([3, 3]); ST.line(x, pCut(cx - w / 2, cy, w, h, 4), 0.9, "paneL"); x.setLineDash([]);
         if (num("maxSt") < n) { text(x, "?", cx, cy + h / 2, 24, "paneL", { f: ST.title }); continue; }
-        text(x, stName(n), cx - w / 2 + 8, cy + 15, 16, "paneT", { a: "left" });
-        for (let j = 0; j < 3; j++) star(x, cx - w / 2 + 15 + j * 17, cy + h - 15, j < starAt(n));
-        if (CHECK.includes(n)) startFlag(x, cx + 2, cy + h - 12, canStart(n)); // a start station
-        put(x, stampSpr(n), cx + w / 2 - 29, cy + h - 26, -0.25 + 0.4 * h01(n));
+        // short rows (a wide screen): a smaller stamp set low in the corner (its rim may cross the dashes, like a real one),
+        // and a name ends where the ring would meet it
+        const k = h < 71 ? clamp((h - 6) / 60, 0.7, 0.87) : 1, scx = cx + w / 2 - (k < 1 ? 26 * k : 29), scy = cy + h - (k < 1 ? 18 * k : 26), rr = 22 * k, dy = scy - (cy + 21);
+        const room = dy >= rr ? w - 16 : scx - Math.sqrt(rr * rr - dy * dy) - 4 - (cx - w / 2 + 8);
+        text(x, stName(n), cx - w / 2 + 8, cy + 15, 16, "paneT", { a: "left", max: Math.min(w - 16, room) });
+        const sy = cy + Math.max(h - 15, 31); // a very short row (a phone held sideways) keeps the stars under the name
+        for (let j = 0; j < 3; j++) star(x, cx - w / 2 + 15 + j * 17, sy, j < starAt(n));
+        if (CHECK.includes(n)) startFlag(x, cx + 2, sy + 3, canStart(n)); // a start station
+        put(x, stampSpr(n), scx, scy, -0.25 + 0.4 * h01(n), k, k);
       }
     } else {
       text(x, S("streak", streak()) + "   " + S("stamped", days().length), 0, 68, 16, "paneT", {});
@@ -2887,7 +2895,7 @@ function gotTag(x, w) {
 }
 function goalLine(x, r, g, gy, now, i) {
   const age = now - r.at - RES.goal - i * 120; if (age < 0) return null;
-  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go", "sg"].includes(g.kind), pad = plate ? 6 : 0, tw = textW(x, g.t, 17), w = tw + 46 + pad + (go ? 18 : 0), fit = Math.max(TEXT_MIN / 17, Math.min(1, 288 / w)), s = Math.min((plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit, 320 / w); // a long line shrinks inside the board (bar 1.8.5), never under the text minimum (bar 1.4.4)
+  const go = ["st", "home", "go"].includes(g.kind), plate = !["goal", "day", "home", "go", "sg"].includes(g.kind), pad = plate ? 6 : 0, tw = textW(x, g.t, 17), w = tw + 46 + pad + (go ? 18 : 0), fit = Math.max(TEXT_MIN / 17, Math.min(1, 288 / w, 144 / (w / 2 + 18))), s = Math.min((plate && age < 160 ? 1 + 0.4 * (1 - easeOut(age / 160)) : 1) * fit, 320 / w); // a long line shrinks inside the board, its pointing hand clear of the frame (bar 1.8.5), never under the text minimum (bar 1.4.4)
   at(x, 0, gy, s, plate ? (i % 2 ? 0.02 : -0.025) : 0, () => { // a GOT line hangs a little askew, like a tag tied on by hand
     if (plate) gotTag(x, w);
     const x0 = -w / 2 + 22 + pad;
@@ -2920,7 +2928,8 @@ function drawOver(x, now) {
     if (rows > 2) { if (run.daily) row("rTmr", r.tmr, RY(216), 17); else row("rChain", r.maxChain, RY(216)); }
     if (rows > 3 && play && (r.newBest || r.best > 0 || r.fromBest)) { const by = RY(246); // no "BEST 0 / 0 TO GO" on a first record; a first run from a start shows its record
       const full = run.daily ? S("rDaily") : r.rowLate ? S("rBestFrom", null, stName(r.from)) : S("rBest");
-      if (r.newBest) { text(x, full, -134, by, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, by, S("newBest"), age - RES.best, 18); }
+      dots(by); // the leader goes under the row, the seal included
+      if (r.newBest) { text(x, full, -134, by, 17, "paneT", { a: "left", w: 700 }); if (age > RES.best) seal(x, 84, by + (L.wide ? 0 : 3), S("newBest"), age - RES.best, L.wide ? 18 : 15); } // the packed phone board: a smaller seal between the value above and the goal tag below
       else if (r.fromBest) { // a quiet row: this start's best moved, no seal and no happytime
         const fits = l => textW(x, l, 17, { w: 700 }) + textW(x, String(r.score), 20, { f: ST.title, w: 900 }) + textW(x, S("upd"), 17) + 30 <= 268;
         const lb = [full, S("fromOf", null, stName(r.from))].find(fits) || S("rBest"); // bar 1.4.5: label and number never touch
@@ -2936,7 +2945,6 @@ function drawOver(x, now) {
         text(x, lb, -134, by, 17, "paneT", { a: "left", w: 700 }); text(x, bs, -134 + textW(x, lb, 17, { w: 700 }) + 12, by, 20, "paneS", { a: "left", f: ST.title, w: 900 });
         text(x, d, 134, by, 17, "paneS", { a: "right" });
       }
-      dots(by);
     }
     if (play && age > RES.goal) r.lines.forEach((g, i) => {
       const gy = RY(288 + i * 30), w = goalLine(x, r, g, gy, now, i);
@@ -3017,7 +3025,7 @@ function makeResult(now) {
   const best = run.daily ? (num("dDay") === today().day ? num("dBest") : 0) : late && !beatAll ? own : all;
   const reason = run.dead.reason, cause = S(reason === "pinch" ? "cPinch" : reason === "pop" ? "cPop" : "cComplain");
   // a run from a late start is measured against the best from that start; the seal is the career rank (the demo shows its own score's)
-  const rank = play && !run.daily ? careerRank(Math.max(num("best"), run.score)) : rankOf(run.score);
+  const rank = play ? careerRank(run.daily ? null : Math.max(num("best"), run.score)) : rankOf(run.score); // the daily shows the career seal, never a lower one
   return { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0 && (run.daily || !late || beatAll), fromBest: play && late && !beatAll && run.score > own && run.score > 0, rowLate: late && !beatAll, rank, rankUp: play && !run.daily && rank > run.rank0, showRank: !play || num("runs") >= 1, late,
     cause, ticks: 0, rankDone: false, rankAt: 0, stamped: false, bestAt: null, lines: [], boarded: run.boarded, n: run.n, from: run.from, hist: run.hist.slice(), maxChain: run.maxChain };
 }
@@ -3321,14 +3329,17 @@ function step(now, dt) {
 }
 let lastNow = performance.now();
 // a slow device (real frames under about 36 fps for a few seconds) drops two pure looks for the session: the paper
-// grain and the wide screen's lean (bar 1.10.5). Never in ?demo=1, so a recording keeps one look from end to end
-const LITE = { on: false, ema: 16.7, n: 0 };
+// grain and the wide screen's lean (bar 1.10.5). From the next title or result screen it also draws at a device pixel
+// ratio of 1.5, which costs about a third less per frame; the rebuild stalls there, never in play.
+// Never in ?demo=1, so a recording keeps one look from end to end
+const LITE = { on: false, ema: 16.7, n: 0, dpr: false };
 function frame() {
   requestAnimationFrame(frame);
   if (manual) return;
   let now = performance.now(); if (now < lastNow) now = lastNow;
   const raw = now - lastNow, prev = lastNow; lastNow = now;
   if (!LITE.on && !DEMO && raw < 250) { LITE.ema += (raw - LITE.ema) * 0.05; LITE.n = LITE.ema > 28 ? LITE.n + 1 : 0; if (LITE.n > 120) LITE.on = true; }
+  if (LITE.on && !LITE.dpr && (isTitle() || isOver())) { LITE.dpr = true; if ((window.devicePixelRatio || 1) > 1.5) { L.cap = 1.5; resize(); lastNow = performance.now(); } }
   if (raw > 300 && state === "play") pauseGame(prev); // a long stall must not count as time the player had
   if (raw > 250 && run && run.ai && run.holdAt == null && !isDying() && !isOver()) { // the AI never teleports ...
     const k = run.mode === "demo" ? clamp(DEMO_LAG - run.lag, 0, raw - 16) : raw - 16; // ... but the demo keeps near the wall clock
@@ -3370,7 +3381,7 @@ window.__game = {
 resize();
 applyLang();
 AU.muted = !!store.get("mute", false); setMute(AU.muted);
-if (DEMO) { hideAll(); btnMute.hidden = true; btnPause.hidden = true; if (auInit()) { AU.sfx.gain.value = 1.0; AU.music.gain.value = 1.0; } startAI("demo"); } // sfx a little louder for Shorts, short of pumping the compressor
+if (DEMO) { AU.vol = 1.0; hideAll(); btnMute.hidden = true; btnPause.hidden = true; if (auInit()) { AU.sfx.gain.value = 1.0; AU.music.gain.value = 1.0; } startAI("demo"); } // louder for Shorts (about -17 LUFS, true peak under -1.5 dB); the compressor holds the peaks
 else toTitle();
 requestAnimationFrame(frame);
 })();
