@@ -777,9 +777,9 @@ const chainMult = n => n >= 30 ? 3 : n >= 20 ? 2 : n >= 10 ? 1.5 : 1;
 const STRINGS = {
   ja: {
     title: "押し屋ラッシュ", reading: "おしや らっしゅ", prevSt: "おしあい", nextSt: "へしあい",
-    how1: "リズムに合わせてタップ!", how2: "まにあわない人は押さない", howW: "リズムに合わせて|タップ!|まにあわない人は|押さない", how1K: "リズムに合わせてスペースかクリック!", howWK: "リズムに合わせて|スペースかクリック!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
+    how1: "輪が重なったらタップ!", how2: "まにあわない人は押さない", howW: "輪が重なったら|タップ!|まにあわない人は|押さない", how1K: "輪が重なったらスペースかクリック!", howWK: "輪が重なったら|スペースかクリック!|まにあわない人は|押さない", start: "スタート", cont: "つづきから",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
-    perfect: "ドンピシャ!", boardP: "ドンピシャ乗車!", good: "よし!", bad: "ぐえっ", early: "はやい", late: "おそい", board: "スポン!", giri: "ギリギリ!", clang: "ゴン!", clangSub: "よしは半分",
+    perfect: "ドンピシャ!", boardP: "ドンピシャ乗車!", good: "よし!", bad: "ミス!", tPerfect: "2マス進む", tGood: "1マス進む", tBad: "1マスもどる", tBad0: "進まない", tHalf: "半マス進む", early: "はやい", late: "おそい", board: "スポン!", giri: "ギリギリ!", clang: "ゴン!", clangSub: "よしは半分",
     pinch: "はさまった!", pop: "パリーン!", complain: "苦情5件!", allAboard: "全員乗車!", left: "乗り残し {n}人", term: "終点 到着!", hold: "まった!",
     nCase: "かたい荷物|よしは半分だけ", nSumo: "おすもうさん|何回も押す", nExpress: "急行|テンポアップ", nRapid: "快速区間|テンポアップ",
     nRunner: "かけこみ乗車|ベルの間に来る", nFaster: "ラッシュの山|もっと速く", nCrack: "200%から|ミスで窓にヒビ", nBoss: "大ラッシュ!|人の波とおすもう",
@@ -805,9 +805,9 @@ const STRINGS = {
   },
   en: {
     title: "OSHIYA RUSH", reading: "OSHIYA RUSH", gloss: "TRAIN PUSHER", prevSt: "PUSH", nextSt: "SHOVE",
-    how1: "TAP ON THE BEAT TO HEAVE!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP ON THE BEAT|TO HEAVE!|DON'T PUSH WHO|CAN'T MAKE IT", how1K: "SPACE OR CLICK ON THE BEAT!", howWK: "SPACE OR CLICK|ON THE BEAT!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
+    how1: "TAP WHEN THE RINGS MEET!", how2: "DON'T PUSH WHO CAN'T MAKE IT", howW: "TAP WHEN|THE RINGS MEET!|DON'T PUSH WHO|CAN'T MAKE IT", how1K: "RINGS MEET? SPACE OR CLICK!", howWK: "RINGS MEET?|SPACE OR CLICK!|DON'T PUSH WHO|CAN'T MAKE IT", start: "START", cont: "CONTINUE",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
-    perfect: "PERFECT!", boardP: "PERFECT IN!", good: "GOOD", bad: "OOF", early: "EARLY", late: "LATE", board: "IN!", giri: "JUST IN!", clang: "CLANG!", clangSub: "GOOD = HALF",
+    perfect: "PERFECT!", boardP: "PERFECT IN!", good: "GOOD!", bad: "MISS!", tPerfect: "2 STEPS IN", tGood: "1 STEP IN", tBad: "1 STEP BACK", tBad0: "NO STEP", tHalf: "HALF A STEP", early: "EARLY", late: "LATE", board: "IN!", giri: "JUST IN!", clang: "CLANG!", clangSub: "GOOD = HALF",
     pinch: "PINCHED!", pop: "SMASH!", complain: "5 GRIPES!", allAboard: "ALL ABOARD!", left: "{n} LEFT BEHIND", term: "END OF LINE!", hold: "HOLD IT!",
     nCase: "HARD LUGGAGE|GOOD MOVES IT HALF", nSumo: "SUMO|MANY HEAVES", nExpress: "EXPRESS|FASTER BEAT", nRapid: "RAPID SECTION|FASTER BEAT",
     nRunner: "LATE RUNNERS|AT THE BELL", nFaster: "PEAK RUSH|FASTER", nCrack: "FROM 200%|MISSES CRACK", nBoss: "BIG RUSH!|SURGE AND SUMO",
@@ -920,7 +920,8 @@ function newRun(mode, seed, opt) {
     offset: T(), holdAt: null, pauseClock: 0, startAt: T(), c: 0, lag: 0,
     score: 0, lives: mode === "demo" ? 2 : 3, chain: 0, maxChain: 0, boarded: 0, stars: 0, perfects: 0, star3: 0, n: 0, hist: [],
     complaints: 0, ids: 0, coolUntil: -1e9, grid: null, st: null, dead: null, result: null, starts0: mode === "play" ? starts() : [], rw0: mode === "play" ? REWARDS.filter(hasRw) : [], rank0: mode === "play" ? careerRank() : 0,
-    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false, lf: [0, 0, 0], seals: "", pass: [], peakNoted: false
+    aiAt: null, aiBeat: -1e9, aiSide: 0, clears: 0, clean: true, crackNoted: false, pinchTaught: false, waitNoted: false, lf: [0, 0, 0], seals: "", pass: [], peakNoted: false,
+    teach: mode === "play" && num("runs") < 2, taught: {}
   };
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
   planPasses(); newStation(run.from, 0, true);
@@ -1062,8 +1063,9 @@ function press(tc, side) {
   fx.heaveTier = tier; fx.jostleT = now;
   if (loud()) musicDuck(0.5, 0.1);
   if (tier === "bad") {
-    breakChain(now); st.bads++; lineFault(st); r.d = Math.max(0, r.d - 1); run.coolUntil = tc + STAGGER;
-    call("bad", "paperD", now, S(off < 0 ? "early" : "late"), true); if (loud()) sfx.bad(); // which way the press missed (bar 1.4.7)
+    judge("bad", i, r, now, S(off < 0 ? "early" : "late"), r.d > 0 ? "" : "tBad0"); // which way the press missed (bar 1.4.7)
+    breakChain(now); st.bads++; lineFault(st); if (r.d > 0) pipMark(r, now, -1); r.d = Math.max(0, r.d - 1); run.coolUntil = tc + STAGGER;
+    if (loud()) sfx.bad();
     burst(x + 12, y + 8, 5, 100, { col: "paperD", g: 280, kind: "chip", s: 2 });
     if (st.R >= CRACK_R) crack(tc, now);
     return;
@@ -1071,11 +1073,12 @@ function press(tc, side) {
   run.coolUntil = tc + COOL;
   if (tier === "good") { lineFault(st); st.goods++; }
   if (tier === "good" && r.type === "c" && !r.half) { // hard luggage gives half to a GOOD: two GOODs move it one step (bar 1.4.3)
-    r.half = true; call("clang", "mist", now, S("clangSub")); if (loud()) sfx.clang();
+    judge("good", i, r, now, S(off < 0 ? "early" : "late"), "tHalf"); r.half = true; pipMark(r, now, 1); call("clang", "mist", now, S("clangSub")); if (loud()) sfx.clang();
     burst(x - 16, y + 16, 6, 140, { col: "gold", kind: "spark", s: 2 });
     return;
   }
   if (tier === "good" && r.half) r.half = false;
+  judge(tier, i, r, now, tier === "good" ? S(off < 0 ? "early" : "late") : ""); pipMark(r, now, 1);
   r.d += tier === "perfect" ? 2 : 1;
   if (tier === "perfect") {
     run.chain++; run.maxChain = Math.max(run.maxChain, run.chain); r.perf++; run.perfects++; if (run.mode === "play") hint.success();
@@ -1083,8 +1086,8 @@ function press(tc, side) {
     if (run.chain % 10 === 0) { fx.chainT = now; fx.chainKey = "chainUp"; fx.chainN = run.chain; fx.sv += 1.2; if (loud()) sfx.chainUp(run.chain / 10); }
   } else run.chain >>= 1;                           // a GOOD halves the chain: only a run of PERFECTs climbs (bar 1.6.4)
   if (r.d >= r.need) { boardRider(r, tc, now, tier); return; }
-  if (tier === "perfect") { call("perfect", "gold", now); if (loud()) sfx.perfect(run.chain); sparkRing(x, y + 8, 8, "goldL"); burst(x, y, 6, 160, { col: "paper", s: 1.6 }); fx.kickT = now; }
-  else { call("good", "paper", now, S(off < 0 ? "early" : "late"), true); if (loud()) sfx.good(); burst(x, FEET_DOOR - 4, 4, 80, { col: "paperD", g: 400, s: 1.6 }); }
+  if (tier === "perfect") { if (loud()) sfx.perfect(run.chain); sparkRing(x, y + 8, 8, "goldL"); burst(x, y, 6, 160, { col: "paper", s: 1.6 }); fx.kickT = now; }
+  else { if (loud()) sfx.good(); burst(x, FEET_DOOR - 4, 4, 80, { col: "paperD", g: 400, s: 1.6 }); }
 }
 function breakChain(now) {
   if (run.chain >= 10) { fx.chainT = now; fx.chainKey = "chainOff"; if (loud()) sfx.chainOff(); }
@@ -1334,10 +1337,12 @@ const sfx = {
     voice(210 * q.f, 178, 0.22, 1.1 * q.g, 720, 1250, w); voice(183 * q.f, 157, 0.22, 0.95 * q.g, 460, 2000, w + 0.05); // about 80 cents above GOOD
     hiss("bandpass", 2800, 4, 0.015, 0.75 * q.g, w); tone("square", 1400 * q.f, 1150 * q.f, 0.018, 0.08 * q.g, w, null, 0.001, 3000); // a bright wooden clack
     tone("triangle", pz(d) * q.f, pz(d) * q.f, 0.16, 0.2 * q.g, w + 0.02); hiss("highpass", 5000, 1, 0.05, 0.09 * q.g, w); // the chime climbs with the chain
+    tone("sine", 1568, 1568, 0.26, 0.09 * q.g, w + 0.01); tone("sine", 2349, 2349, 0.18, 0.045 * q.g, w + 0.01); // a bell only a PERFECT rings
   },
   bad() {
     if (!audioOn()) return; const w = now0(), q = lv(45, 0.1, 2);
-    tone("sine", 260 * q.f, 420 * q.f, 0.07, 0.24 * q.g, w); tone("triangle", 520 * q.f, 840 * q.f, 0.05, 0.17 * q.g, w); tone("sine", 420 * q.f, 170, 0.16, 0.09 * q.g, w + 0.07);
+    tone("sawtooth", 330 * q.f, 185 * q.f, 0.2, 0.14 * q.g, w, null, 0.004, 2400); tone("square", 220 * q.f, 139 * q.f, 0.2, 0.085 * q.g, w, null, 0.004, 1800); // a buzz falling: wrong, pitched where a phone speaker plays it
+    thump(90, 0.1, 0.2 * q.g, w, 500);
     voice(300 * q.f, 180, 0.22, 0.4 * q.g, 520, 950, w + 0.02); voice(230 * q.f, 160, 0.2, 0.3 * q.g, 600, 1500, w + 0.09); hiss("lowpass", 700, 1, 0.08, 0.12 * q.g, w, null, 200);
   },
   clang() { if (!audioOn()) return; const w = now0(), q = lv(30, 0.1, 1.6); tone("square", 520 * q.f, 500 * q.f, 0.26, 0.15 * q.g, w, null, 0.002, 3200); tone("square", 785 * q.f, 770 * q.f, 0.2, 0.115 * q.g, w, null, 0.002, 3200); hiss("highpass", 3500, 1, 0.05, 0.35 * q.g, w); thump(160, 0.08, 0.31 * q.g, w, 900); },
@@ -2319,16 +2324,22 @@ function drawRider(x, r, X, feet, walk, squash) { // squash: -1..1, a spring val
   return feet - headTop(r.type) * (1 - 0.07 * (squash || 0));
 }
 // heaves left to board: a paper tag of pips over the rider (orange for hard luggage, grey when it is too late)
-function pips(x, r, X, Y, late) {
-  const n = r.need, w = n * 11 + 8, u = L.u, lug = r.type === "c";
-  put(x, bake("pp" + n + r.d + (r.half ? 1 : 0) + (late ? 1 : 0) + (lug ? 1 : 0) + "/" + u.toFixed(2), w * u + 6, 16 * u + 6, w * u / 2 + 3, 8 * u + 3, x => { x.scale(u, u);
-    shape(x, pc("pipT" + n, () => pCut(-w / 2, -8, w, 16, 3)), late ? "grey" : lug ? "orange" : "paper", 1.1);
+function pips(x, r, X, Y, late, now) {
+  const n = r.need, w = n * 13 + 8, u = L.u, lug = r.type === "c";
+  const spr = bake("pp" + n + r.d + (r.half ? 1 : 0) + (late ? 1 : 0) + (lug ? 1 : 0) + "/" + u.toFixed(2), w * u + 6, 20 * u + 6, w * u / 2 + 3, 10 * u + 3, x => { x.scale(u, u);
+    shape(x, pc("pipT" + n, () => pCut(-w / 2, -10, w, 20, 3)), late ? "grey" : lug ? "orange" : "paper", 1.1);
     for (let i = 0; i < n; i++) {
-      const X0 = -w / 2 + 5 + i * 11, p = pc("pip" + n + "/" + i, () => pCut(X0, -4.5, 8, 9, 2));
-      if (i < r.d) shape(x, p, "red", 0.8);
-      else { if (i === r.d && r.half) { x.fillStyle = C("red"); x.fill(pc("pipH" + n + "/" + i, () => pCut(X0, -4.5, 4, 9, 1))); } ST.line(x, p, 0.8, late ? "greyD" : "ink"); } // a GOOD on luggage: half a pip
+      const X0 = -w / 2 + 5 + i * 13, p = pc("pip" + n + "/" + i, () => pCut(X0, -5.5, 10, 11, 2));
+      if (i < r.d) shape(x, p, "gold", 0.9); // pushed in so far: gold, the colour of a good heave
+      else { if (i === r.d && r.half) { x.fillStyle = C("gold"); x.fill(pc("pipH" + n + "/" + i, () => pCut(X0, -5.5, 5, 11, 1))); } ST.line(x, p, 0.9, late ? "greyD" : "ink"); } // a GOOD on luggage: half a pip
     }
-  }), X, Y);
+  });
+  const age = r.pipT == null ? 1e9 : now - r.pipT, red = reduceMotion ? 0.3 : 1;
+  const s = r.pipDir > 0 ? 1 + 0.28 * red * wob(age / 260, 12, 4) : 1, dx = r.pipDir < 0 ? 3 * red * wob(age / 300, 34, 5) : 0;
+  put(x, spr, X + dx, Y, 0, s, s);
+  if (r.pipDir < 0 && age < 380 && r.pipAt >= 0) { // the pip a MISS took back flashes red
+    x.globalAlpha = 1 - age / 380; shape(x, pCut(X + dx + (-w / 2 + 5 + r.pipAt * 13) * u, Y - 5.5 * u, 10 * u, 11 * u, 2), "red", 0.9); x.globalAlpha = 1;
+  }
 }
 const palm = (x, X, Y) => shape(x, pSmooth([[X - 5, Y + 6], [X - 6.5, Y - 1], [X - 5.6, Y - 6], [X - 3.4, Y - 2], [X - 2.4, Y - 8.6], [X - 0.4, Y - 8.6], [X + 0.2, Y - 2.6], [X + 1.6, Y - 8], [X + 3.6, Y - 7.4], [X + 3.6, Y - 1.4], [X + 6.2, Y - 4], [X + 7.4, Y - 3], [X + 5, Y + 3.6], [X + 2.6, Y + 6.4]]), "paper", 0.8);
 function waitTag(x, X, Y) { // a stop palm and "wait" over a rider who cannot make it: leaving him costs less
@@ -2412,9 +2423,9 @@ function drawPeople(x, now, c) {
     const step = e.walk && (fl(now / 110) & 1), squash = hit ? ws * (fx.heaveTier === "perfect" ? 1 : 0.5) : 0;
     const top = drawRider(x, e.r, e.x, e.y + jolt - (step ? 2 : 0), !!step, squash);
     if (e.door && pushPhase(st.ph) && !isDying() && !key) {
-      const late = tooLate(e.r); pips(x, e.r, e.x, top - 14, late); e.r.pipY = top - 14;
+      const late = tooLate(e.r); pips(x, e.r, e.x, top - 16, late, now); e.r.pipY = top - 16;
       if (late) { fx.waitOn = true; waitTag(x, e.x, top - 42 - (beatPhase(c) < 0.15 ? 2 : 0)); }
-      else if (st.ph !== "board" && e.r.d > 0 && (fl(now / 120) & 1)) mark(x, e.x + ((e.r.need * 11 + 8) / 2 + 9) * L.u, top - 16);
+      else if (st.ph !== "board" && e.r.d > 0 && (fl(now / 120) & 1)) mark(x, e.x + ((e.r.need * 13 + 8) / 2 + 9) * L.u, top - 18);
     }
     if (!e.door && st.ph === "depart" && st.left && !e.r.wasPinched && st.queue.indexOf(e.r) < st.left + pinN && (fl(now / 150) & 1)) mark(x, e.x + 2, top - 16); // each one left is a complaint
   }
@@ -2503,25 +2514,74 @@ function drawOut(x, now) { // last station's left-behind walk off, each one a co
   st.out.forEach((r, i) => { const s = queueSlot(i), X = s.x - k * 180 - i * 8, top = drawRider(x, r, X, s.y, !!(fl(now / 110) & 1), false); if (i < 3) mark(x, X + 10, top - 14); });
 }
 function drawHit(x, now) { const h = fx.hit; if (h && now - h.t < 160) { const k = (now - h.t) / 160; shape(x, pStar(h.x, h.y, 26 * (0.7 + 0.5 * k), 9, 8, 0.2), "paper", 1.4); } }
-// approach rings close on the rider at the door on each beat
+// approach rings flow in to a gold target on the rider at the door. Each ring takes two beats: it fades in from outside
+// on one beat and meets the target on the next, so one ring is always closing and the next is already on its way (no
+// jump back on the beat), and the target thickens on every beat
+const CUE_R = 15, CUE_SPAN = 30;
+const ringP = q => { const h = Math.round(q * 2); return pc("ring" + h, () => pEll(0, 0, h / 2, h / 2)); }; // half-px steps
+const cueY = (st, r) => FEET_DOOR - 40 - 12 * r.d / r.need;
 function drawCue(x, c, now) {
   const st = run.st;
   if (!pushPhase(st.ph) || run.dead || state === "paused") return;
-  const ph = beatPhase(c), k = 1 - ph, rad = 10 + 42 * k;
+  const ph = beatPhase(c), k = 1 - ph;
   st.doors.forEach((r, i) => {
     if (!r) return;
-    const p = doorX(st, i), y = FEET_DOOR - 40 - 12 * r.d / r.need, late = tooLate(r), dim = st.two && i !== fx.auto;
-    const ring = q => { const h = Math.round(q * 2); return pc("ring" + h, () => pEll(0, 0, h / 2, h / 2)); }; // half-px steps
-    const rr = reduceMotion ? 10 + 42 * Math.ceil(k * 4) / 4 : rad; // reduced motion: the ring closes in four still steps
+    const p = doorX(st, i), y = cueY(st, r), late = tooLate(r), dim = st.two && i !== fx.auto, judged = fx.judge && fx.judge.di === i && now - fx.judge.t < JUDGE_MS;
     x.translate(p, y);
     if (dim) x.setLineDash([4, 5]); // the other door of two: a dashed ring, so the pushed door reads by shape (bar 1.4.6)
-    cordLine(x, ring(9), 2.6, late ? "grey" : dim ? "paperD" : ph > 0.85 || ph < 0.1 ? "gold" : "goldL", 0.9);
-    if (rr > 13) cordLine(x, ring(rr), 2.2, late ? "grey" : dim ? "paperD" : k < 0.25 ? "gold" : "paper", 0.8);
+    const pulse = reduceMotion || dim || late ? 0 : Math.max(0, 1 - ph / 0.14);
+    cordLine(x, ringP(CUE_R + 1.5 * pulse), 4 + 2 * pulse, late ? "grey" : dim ? "paperD" : "gold", 1.1);
+    if (reduceMotion) { const rr = CUE_R + CUE_SPAN * Math.ceil(k * 4) / 4; if (rr > CUE_R + 3) cordLine(x, ringP(rr), 3, late ? "grey" : dim ? "paperD" : "paper", 1); } // reduced motion: four still steps
+    else {
+      const rn = CUE_R + CUE_SPAN * k; // the ring that meets the target on the next beat
+      if (rn > CUE_R + 2.5) cordLine(x, ringP(rn), dim ? 2.2 : 3, late ? "grey" : dim ? "paperD" : k < 0.22 ? "gold" : "paper", dim ? 0.8 : 1);
+      if (!dim && !late) { x.globalAlpha = smooth(ph); cordLine(x, ringP(rn + CUE_SPAN), 2.2 + 0.8 * ph, "paper", 0.8 + 0.2 * ph); x.globalAlpha = 1; } // the next one, fading in
+    }
     if (dim) x.setLineDash([]);
     x.translate(-p, -y);
-    if (st.two && !dim && !late) { const ty = Math.min(y - 68, (r.pipY || 1e9) - 8 * L.u - 7) - (reduceMotion ? 0 : 3 * Math.abs(Math.sin(now / 180))); shape(x, pPoly([[p - 13, ty - 17], [p + 13, ty - 17], [p, ty]]), "gold", 1.6); } // an inked arrow over the door a centre tap or Space pushes (big enough to read at 360)
-    if (state === "play" && hint.active && !dim) drawTapHint(x, p + 8, y + 46, clamp(Math.min(ph, 1 - ph) * 3.2, 0, 1));
+    if (st.two && !dim && !late && !judged) { const ty = Math.min(y - 68, (r.pipY || 1e9) - 10 * L.u - 7) - (reduceMotion ? 0 : 3 * Math.abs(Math.sin(now / 180))); shape(x, pPoly([[p - 13, ty - 17], [p + 13, ty - 17], [p, ty]]), "gold", 1.6); } // an inked arrow over the door a centre tap or Space pushes (big enough to read at 360)
+    if (state === "play" && hint.active && !dim) hand(x, p, y + CUE_R + 5 + 12 * clamp(Math.min(ph, 1 - ph) * 3.2, 0, 1), 0); // a first run: a finger pokes at the target on the beat
   });
+}
+// the verdict of one heave, drawn where the eye already is: a mark on the target ring and a word over the rider's head,
+// gold for PERFECT, green for GOOD and red for MISS (bar 1.4.1). Early or late rides beside the word (bar 1.4.7); the
+// first two runs also say what the heave did to the rider's pips
+const JUDGE_MS = 560, JCOL = { perfect: "gold", good: "leaf", bad: "red" }, JTEACH = { perfect: "tPerfect", good: "tGood", bad: "tBad" };
+function judge(tier, di, r, now, sub, tk) { // tk: a teach line that fits this heave better than the tier's own
+  const st = run.st, n = run.teach ? run.taught[tier] = (run.taught[tier] || 0) + 1 : 9;
+  fx.judge = { tier, di, t: now, x: doorX(st, di), y: cueY(st, r), wy: r.pipY || cueY(st, r) - 66, r, sub: sub || "", teach: n <= 3 ? S(tk || JTEACH[tier]) : "" };
+}
+function pipMark(r, now, dir) { r.pipT = now; r.pipDir = dir; r.pipAt = r.d - 1; }
+function drawJudge(x, now) {
+  const j = fx.judge; if (!j) return;
+  const age = now - j.t, life = j.teach ? 1150 : JUDGE_MS; if (age > life) { fx.judge = null; return; }
+  const col = JCOL[j.tier], fade = age > life - 150 ? (life - age) / 150 : 1, red = reduceMotion ? 0.3 : 1;
+  x.globalAlpha = fade;
+  if (age < 420) { // the mark on the target
+    const k = easeOut(age / 420);
+    x.translate(j.x, j.y);
+    if (j.tier === "bad") {
+      const d = 11 * (1 + 0.3 * red * (1 - easeOut(age / 120))), sx = 2.5 * red * wob(age / 280, 34, 5);
+      x.globalAlpha = fade * (1 - k * 0.6);
+      cordLine(x, pLine(sx - d, -d, sx + d, d), 4.5, "red", 1.1); cordLine(x, pLine(sx - d, d, sx + d, -d), 4.5, "red", 1.1);
+    } else {
+      cordLine(x, ringP(CUE_R + (j.tier === "perfect" ? 24 : 14) * k), (j.tier === "perfect" ? 5 : 4) * (1 - k) + 1.2, col, 0.9);
+      if (j.tier === "perfect" && age < 180) { x.globalAlpha = fade * (1 - age / 180); x.fillStyle = C("goldL"); x.fill(ringP(CUE_R - 1)); }
+    }
+    x.translate(-j.x, -j.y); x.globalAlpha = fade;
+  }
+  const w = S(j.tier), rise = 5 * red * easeOut(age / 200), sc = age < 140 ? lerp(0.75, 1, easeBack(age / 140)) : 1;
+  // a WAIT tag can turn on over the rider while the word shows: the word eases up over it and the teach line goes
+  const late = run.st.doors[j.di] === j.r && tooLate(j.r), tgt = late ? 56 : j.teach ? 48 : 28;
+  j.off = j.off == null ? tgt : tgt + (j.off - tgt) * Math.exp(-Math.max(0, now - j.ot) / 40); j.ot = now; // by time, not per frame
+  const wy = j.wy - j.off - rise;
+  at(x, j.x, wy, sc, 0, () => {
+    const ww = textW(x, w, 21, { f: ST.title, w: 900 }), sw = j.sub ? textW(x, j.sub, 15, { w: 800 }) + 6 : 0;
+    text(x, w, -sw / 2, 0, 21, col, { f: ST.title, w: 900, ol: "ink", ow: 0.26 });
+    if (j.sub) text(x, j.sub, -sw / 2 + ww / 2 + 6, 1, 15, "paper", { a: "left", ol: "ink", ow: 0.3 });
+    if (j.teach && !late) text(x, j.teach, 0, 21, 15, "paper", { ol: "ink", ow: 0.3 });
+  });
+  x.globalAlpha = 1;
 }
 
 // ---------- GAME-SPECIFIC: the HUD, title, stamp book, pause and result: things that hang in the station ----------
@@ -2998,7 +3058,7 @@ function draw(now) {
   doorLight(xs, c);
   drawTrain(xs, c, now);
   drawCushion(xs, now); drawExtras(xs, c, now); drawPigeons(xs, c, now); drawOut(xs, now); drawPeople(xs, now, c);
-  drawHit(xs, now); drawCue(xs, c, now);
+  drawHit(xs, now); drawCue(xs, c, now); drawJudge(xs, now);
   if (!isOver() && book < 0) partsDraw(xs);
   putInk(xs, FG, sh.x, sh.y, z0);
   if (lean) {

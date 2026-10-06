@@ -5,8 +5,8 @@
   "title_en": "Oshiya Rush",
   "tagline_ja": "朝のラッシュ。せーので押して、ドアが閉まる前に全員乗せよう。",
   "tagline_en": "Rush hour. Heave on the beat and get everyone aboard before the doors shut.",
-  "how_to_play_ja": "輪がちぢんで乗客に重なる拍に合わせてタップすると、押し屋が押しこみます。半分で閉まるとドアにはさまるので、「まって」が出た人は押さずに見送りましょう。3 本の路線を星を集めながら進み、毎日かわる「今日のダイヤ」でスタンプをためましょう。",
-  "how_to_play_en": "Tap on the beat, when the shrinking ring meets the commuter, and the oshiya heaves them in. Half-pushed commuters get caught in the doors, so leave anyone marked WAIT on the platform. Collect stars along three lines and stamp a new daily timetable every day.",
+  "how_to_play_ja": "流れてくる輪が乗客の金の輪に重なったときにタップすると、押し屋が押しこみます（ドンピシャは 2 マス、よしは 1 マス進み、ミスは 1 マスもどる）。半分で閉まるとドアにはさまるので、「まって」が出た人は押さずに見送りましょう。3 本の路線で星を集め、毎日かわる「今日のダイヤ」でスタンプをためましょう。",
+  "how_to_play_en": "Tap when the incoming ring meets the gold ring on a commuter and the oshiya heaves them in (PERFECT moves them 2 steps, GOOD 1 step, a MISS 1 step back). Half-pushed commuters get caught in the doors, so leave anyone marked WAIT on the platform. Collect stars along three lines and stamp a new daily timetable every day.",
   "controls": [
     "tap/click on the beat to heave",
     "space/enter to heave",
