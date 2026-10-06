@@ -62,7 +62,7 @@ const PALS = {
     pane: "#f4e9d0", paneL: "#dbc8a2", paneT: "#1c1a24", paneS: "#a8301f",
     red: "#dc4128", redD: "#9a2820", redL: "#f08a6a", gold: "#e9b740", goldD: "#a6772a", goldL: "#f8df93", orange: "#e8729a", indigo: "#2c4f8f",
     sky0: "#5b8ccc", sky1: "#73a0d6", sky2: "#93b8e0", sky3: "#bdd3e8", mist: "#f2e8d2", far: "#9fb0cf", mid: "#203c6e",
-    ground: "#b6aa90", groundL: "#d0c6ab", poolA: "#a9825d", poolB: "#c49b6f", lit: "#f9d27e", warm: "#2d6741", shadeK: "#1b1530", hlK: "#fff8e6",
+    ground: "#b6aa90", groundL: "#d0c6ab", poolA: "#a9825d", poolB: "#c49b6f", lit: "#f9d27e", warm: "#ffd790", shadeK: "#1b1530", hlK: "#fff8e6",
     pine: "#4b8b55"
   },
   A: { // 「つやつや細工」: a dusk in real materials (lacquer, brass, glaze) under one light
@@ -656,10 +656,13 @@ function phaseAt(sec) {
 // notched discs, then a second teeter that goes wrong (slow-motion collapse) near 17 s.
 const DEMO_SKIP = 8000;            // the demo starts at the 8 s row of the phase table
 const DEMO_FEED = "LLWGLILNLWGLNILWLNGILW";
-const DEMO_SCRIPT = [{ at: 7000, act: "push" }, { at: 13500, act: "push", fail: true }];
-const RANKS = [0, 30, 70, 130, 210, 320];
+const DEMO_SCRIPT = [{ at: 6000, act: "push" }, { at: 13000, act: "push", fail: true }];
+// The rank ladder spans the real score range (saves pay well, so good runs reach the hundreds), and the wish daruma's
+// looks are spread along it: an eye at 1st dan, both eyes at 3rd dan, an indigo headband at 5th dan, gold at the top
+const RANKS = [0, 30, 90, 200, 400, 700, 1100, 1600];
+const R_EYE1 = 1, R_EYE2 = 3, R_BAND = 5, R_GOLD = 7;
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
-const eyesOf = best => best >= RANKS[3] ? 2 : best >= RANKS[1] ? 1 : 0; // a daruma gets its eyes painted as you rank up
+const eyesOf = best => best >= RANKS[R_EYE2] ? 2 : best >= RANKS[R_EYE1] ? 1 : 0; // a daruma gets its eyes painted as you rank up
 const AI_SIGMA = 8, AI_SLIP = 0.05;  // __game.autoplay: power error (one sigma) and a sometimes-wrong side
 
 // ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
@@ -675,11 +678,11 @@ const STRINGS = {
     gustL: "← 風", gustR: "風 →", risk: "ぐらぐら ×{n}", streak: "れんぞく {n}", hintRel: "帯で はなす",
     over: "たおれた!", rsLate: "まにあわず", rsWrong: "反対からたたいた", rsWeak: "力がたりない", rsStrong: "力が強すぎた", rsStuck: "きれこみの反対側",
     tip1: "かたむいた側から たたく", tip2: "まん中なら たおれにくい", tip3: "きれこみの側から たたく", tipEarly: "帯の少し手前で はなす", tipLong: "もう少し長く おす",
-    tipSaveWeak: "あぶない!でも 帯まで おしつづける", tipSaveLate: "あぶない!は すぐ 傾いた側を おす", again: "もう一度 引く!", keyL: "← A", keyR: "D →",
+    tipSaveWeak: "あぶない!でも 帯まで おしつづける", tipSaveLate: "あぶない!は すぐ 傾いた側を おす", tipSaveSoon: "あぶない!では 早めに はなす", again: "もう一度 引く!", keyL: "← A", keyR: "D →",
     rKnock: "落とした数", rPerf: "スコーン", rStreak: "れんぞく", rStrong: "つよすぎ", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
     g_rank: "{n}点で 次の段", g_streak: "スコーン {n}れんぞく", g_save: "ギリギリで立てなおす", g_gold: "金のだんを落とす", g_risk: "×3で落とす",
     eye1: "左目が入った!", eye2: "両目が入った!", band4: "はちまきが 藍になった!", gold5: "金だるまに なった!",
-    ranks: ["みならい", "初段", "二段", "三段", "師範", "名人"], best: "ベスト", space: "SPACE", credit: "Made with Claude"
+    ranks: ["みならい", "初段", "二段", "三段", "四段", "五段", "師範", "名人"], best: "ベスト", space: "SPACE", credit: "Made with Claude"
   },
   en: {
     title: "DARUMA KNOCK", start: "PLAY", how1: "HOLD, LET GO IN THE BAND", how2: "HIT FROM THE LEANING SIDE",
@@ -692,11 +695,11 @@ const STRINGS = {
     gustL: "< WIND", gustR: "WIND >", risk: "WOBBLY x{n}", streak: "STREAK {n}", hintRel: "LET GO IN THE BAND",
     over: "TOPPLED!", rsLate: "TOO LATE", rsWrong: "WRONG SIDE", rsWeak: "TOO WEAK", rsStrong: "TOO HARD", rsStuck: "NOTCH SIDE!",
     tip1: "HIT FROM THE LEANING SIDE", tip2: "A CENTRED TOWER IS STEADIER", tip3: "HIT FROM THE NOTCH SIDE", tipEarly: "LET GO JUST BEFORE THE BAND", tipLong: "HOLD A LITTLE LONGER",
-    tipSaveWeak: "WHOA! KEEP HOLDING TO THE BAND", tipSaveLate: "WHOA! HOLD THE LEANING SIDE", again: "PULL AGAIN!", keyL: "← A", keyR: "D →",
+    tipSaveWeak: "WHOA! KEEP HOLDING TO THE BAND", tipSaveLate: "WHOA! HOLD THE LEANING SIDE", tipSaveSoon: "LET GO SOONER ON THE EDGE", again: "PULL AGAIN!", keyL: "← A", keyR: "D →",
     rKnock: "DISCS", rPerf: "PERFECT", rStreak: "STREAK", rStrong: "TOO HARD", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
     g_rank: "{n} FOR NEXT RANK", g_streak: "{n} PERFECTS IN A ROW", g_save: "SAVE A TEETER", g_gold: "KNOCK A GOLD DISC", g_risk: "KNOCK AT x3",
     eye1: "THE DARUMA GOT AN EYE!", eye2: "BOTH EYES PAINTED!", band4: "AN INDIGO HEADBAND!", gold5: "A GOLDEN DARUMA!",
-    ranks: ["NOVICE", "1ST DAN", "2ND DAN", "3RD DAN", "MASTER", "LEGEND"], best: "BEST", space: "SPACE", credit: "Made with Claude"
+    ranks: ["NOVICE", "1ST DAN", "2ND DAN", "3RD DAN", "4TH DAN", "5TH DAN", "MASTER", "LEGEND"], best: "BEST", space: "SPACE", credit: "Made with Claude"
   }
 };
 let lang = store.get("lang", null);
@@ -726,7 +729,7 @@ const bestOf = () => Number(store.get("best", 0)) || 0, runsOf = () => Number(st
 function newFx() {
   return { vt: 0, hitT: -1e9, hitSide: 1, hitTier: "", hitP: 0, band: null, call: null, note: null, scoreT: -1e9, disp: 0,
     dropT: -1e9, slideFrom: 1, flyers: [], bodies: null, clacks: 0, bonkT: -1e9, stuckT: -1e9, saveT: -1e9, bigT: -1e9, bigX: 0, bigY: 0,
-    rollT: -1e9, pressT: -1e9, pauseT: 0, swapT: -1e9, teeterT: -1e9, sa: 0, sv: 0, petal: 0, twinkle: 0, push: 0, pose: null, dropK: 0.12, hopK: 20 };
+    rollT: -1e9, pressT: -1e9, pushT: -1e9, pushFrom: 0, pushDir: 1, pushLen: 0, pushTier: "", swingFrame: false, pauseT: 0, swapT: -1e9, teeterT: -1e9, sa: 0, sv: 0, petal: 0, twinkle: 0, push: 0, pose: null, dropK: 0.12, hopK: 20 };
 }
 function newRun(mode, seed) {
   const play = mode === "play", best = bestOf();
@@ -737,11 +740,12 @@ function newRun(mode, seed) {
     pw: 0, pdir: 1, charging: false, side: 1, lastSide: 1, busy: 0, teeter: null, dead: null, result: null, beat: 0, creakAt: 0,
     score: 0, knocked: 0, perfects: 0, streak: 0, maxStreak: 0, golds: 0, saves: 0, risk3: 0, phase: -1, seen: { L: true }, seenKinds: false,
     aiAt: null, aiTarget: 50, aiSide: 1, aiAlt: 1, aiMode: "normal", failNext: false, inBandC: -1e9, lastHitC: 0, nWeak: 0, nStrong: 0,
-    // every run gets one gentle push toward a saveable teeter: the first run of a session about 14 s in (after the
-    // player has met x2 and x3), a retry 12 to 17 s in (the seed picks when), so the middle of a run is never flat
-    tut: mode === "play" ? { dir: 0, until: 0, at: runCount <= 1 ? 14000 : 12000 + seed % 5000, first: runCount <= 1 } : null,
+    // every run gets one gentle push toward a saveable teeter: the first run of a session 9 s in (so the climax shows
+    // in the first 10 s or so, with a wide, long save window), a retry 12 to 17 s in (the seed picks when), so the
+    // middle of a run is never flat. The title's attract play gets one too, so the title shows a save within 5 s.
+    tut: mode === "play" ? { dir: 0, until: 0, at: runCount <= 1 ? 9000 : 12000 + seed % 5000, first: runCount <= 1 } : mode === "attract" ? { dir: 0, until: 0, at: 1900, first: true } : null,
     script: mode === "demo" ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : [],
-    eyes: mode === "demo" ? 2 : eyesOf(best), goldBody: mode !== "demo" && best >= RANKS[5], band: mode !== "demo" && best >= RANKS[4] // 師範: an indigo headband
+    eyes: mode === "demo" ? 2 : eyesOf(best), goldBody: mode !== "demo" && best >= RANKS[R_GOLD], band: mode !== "demo" && best >= RANKS[R_BAND] // 五段: an indigo headband
   };
   run.c0 = run.c; run.lastHitC = run.c;
   run.windDir = run.rnd() < 0.5 ? -1 : 1; run.windNext = run.c + 6000 + run.rnd() * 3000;
@@ -813,7 +817,7 @@ function simStep() {
   if (!grace) { // waiting is never free: the longer since the last strike, the harder the draft leans the tower
     const idle = r.c - r.lastHitC - 1600; if (idle > 0) w += lean * Math.min(0.14, idle * 0.00007);
   }
-  if (r.tut && !grace && r.mode === "play" && r.c - r.c0 >= r.tut.at) { // a short push, so the first save comes early
+  if (r.tut && !grace && r.mode !== "demo" && r.c - r.c0 >= r.tut.at) { // a short push, so the first save comes early
     if (!r.tut.until) { r.tut.dir = lean; r.tut.until = r.c + 2200; }
     if (r.c < r.tut.until) w += r.tut.dir * 0.42; else r.tut = null;
   }
@@ -827,7 +831,7 @@ function simStep() {
 function startTeeter(side) {
   const r = run, now = T();
   const easy = r.tut && r.tut.until ? (r.tut.first ? 2 : 1) : 0; r.tut = null; // 2: the session's first, 1: a retry's
-  r.teeter = { side, at: r.c, until: r.c + TEETER_MS * (easy === 2 ? 1.5 : easy ? 1.2 : 1), easy }; r.L = side; r.wob = 0; r.wobV = 0; r.beat = 0;
+  r.teeter = { side, at: r.c, until: r.c + TEETER_MS * (easy === 2 ? 1.5 : easy ? 1.2 : 1), easy }; r.cancelled = false; r.L = side; r.wob = 0; r.wobV = 0; r.beat = 0;
   if (r.ai || autopilot) { r.charging = false; r.aiAt = null; } // the AI takes its hands off and aims again
   else if ((r.charging || input.want) && r.side !== side) { // a swing held from the wrong side moves over with a fresh pull,
     r.side = side; input.side = side; fx.swapT = fx.vt;     // shown on the ruler (PULL AGAIN): a press made just before the tip never dooms the run
@@ -835,7 +839,7 @@ function startTeeter(side) {
   }
   fx.teeterT = now; call("teeter", "goldL", now);
   if (loud()) sfx.teeter();
-  musicLevel("teeter");
+  if (loud()) musicLevel("teeter"); // the title keeps its own soft level under the attract play
 }
 function beginCharge(side) { const r = run; r.charging = true; r.pw = 0; r.pdir = 1; r.side = side; r.inBandC = -1e9; r.swapAt = null; if (loud()) sfx.grip(); }
 // the late window in game ms (game time runs at half speed on the edge, so the real-time window stays the same)
@@ -847,7 +851,7 @@ const SWAP_GRACE = 250; // real ms after the swap above in which a release is a 
 function release() {
   const r = run; if (!r || !r.charging || r.dead) return;
   r.charging = false; input.latched = false;
-  if (r.swapAt != null && T() - r.swapAt < SWAP_GRACE && !r.ai && !autopilot) { r.swapAt = null; fx.swapT = fx.vt; return; } // the finger was still on the old plan
+  if (r.swapAt != null && T() - r.swapAt < SWAP_GRACE && !r.ai && !autopilot) { r.swapAt = null; fx.swapT = fx.vt; r.cancelled = true; return; } // the finger was still on the old plan
   r.swapAt = null;
   strike(r.pw, r.side, r.c - r.inBandC <= lateMs());
 }
@@ -859,7 +863,7 @@ function strike(p, s, late) {
   const miss = Math.max(1, Math.ceil(Math.abs(off) - b.hw)), near = tier === "strong" && p - b.hi <= lateUnits() + NEAR_UNITS;
   if (tier === "strong") r.nStrong++; else if (tier === "weak") r.nWeak++;
   r.busy = BUSY_MS; r.lastSide = s; r.lastHitC = r.c;
-  Object.assign(fx, { hitT: fx.vt, hitSide: s, hitTier: tier, hitP: p, band: b });
+  Object.assign(fx, { hitT: fx.vt, hitSide: s, hitTier: tier, hitP: p, band: b, swingFrame: true });
   const hx = MID - s * (DW / 2 + 2), hy = STAND_Y - DH / 2;
   if (r.teeter) { // the last chance: a clean knock from the leaning side saves it, anything else brings it down
     if ((tier === "perfect" || tier === "good") && s === r.teeter.side) { knock(d, tier, s, 0, now, hx, hy); save(tier, now, hx, hy); }
@@ -871,6 +875,7 @@ function strike(p, s, late) {
   const hard = tier === "strong" && !near, over = Math.max(0, p - b.hi - lateUnits() - NEAR_UNITS);
   const push = (hard ? Math.min(0.95, PUSH.strong + over * 0.025) : PUSH[near ? "good" : tier]) * (phaseNow().grace && r.mode === "play" ? 0.5 : 1);
   r.L -= s * push; r.wobV -= s * push * (hard ? 6 : 3);
+  Object.assign(fx, { pushT: fx.vt, pushFrom: t0, pushDir: -s, pushLen: push, pushTier: near ? "close" : tier }); // shown as an arrow under the lean gauge
   const zone = Math.abs(t0) >= ZONE[1] ? 2 : Math.abs(t0) >= ZONE[0] ? 1 : 0;
   if (tier === "perfect" || tier === "good" || tier === "strong") knock(d, tier, s, zone, now, hx, hy, near);
   else strikeFx(tier, s, now, hx, hy, miss, d);
@@ -940,10 +945,10 @@ function save(tier, now, hx, hy) {
   call("save", "gold", now, "+" + pts);
   addTrauma(0.75); hitstop(0.12); zoomPunch(MID, STAND_Y - 130, 1.06, 380, now);
   burst(MID, STAND_Y - 210, 22, 280, { col: "gold", kind: "chip", s: 3.2 }); burst(MID, STAND_Y - 210, 7, 320, { kind: "star", col: "goldL", s: 3.2 });
-  if (loud()) sfx.save();
-  musicLevel("play");
+  if (loud()) sfx.save(r.saves);
+  if (loud()) musicLevel("play");
   if (r.mode === "play") platform("happytime");
-  if (r.mode === "demo") r.aiMode = "normal";
+  if (r.mode === "demo") { r.aiMode = "normal"; r.nearHold = true; } // the clip lets SAVED! read before the next swing
 }
 
 // ---------- KEEP: AI for attract, ?demo=1 and __game.autoplay. Same strike rules as the player ----------
@@ -957,6 +962,7 @@ function aiStep() {
 }
 function aiDelay() { // a human-like pause before each swing
   const r = run, u = r.rAI();
+  if (r.nearHold) { r.nearHold = false; return 900; } // the demo lets its near miss (CLOSE! 5 OVER) and its save read before the next swing
   if (r.teeter) return r.mode === "demo" ? 60 : 110 + u * 160;
   return r.mode === "demo" ? 110 + u * 120 : r.mode === "attract" ? 260 + u * 320 : 150 + u * 230;
 }
@@ -970,7 +976,7 @@ function aiPlan() {
   else if (r.mode === "demo" && r.aiMode === "push") { // reckless on purpose: lean it into x2 / x3
     const want = r.L >= 0 ? -1 : 1;
     if (d.kind === "N" && d.side !== want) { side = d.side; target = b.c; }
-    else if (r.aiNear && b.hi + lateUnits() + NEAR_UNITS <= 99.5) { r.aiNear = 0; side = want; target = b.hi + lateUnits() + NEAR_UNITS - 1; } // an honest near miss on camera (a heavy disc's band sits too near the end: wait for the next)
+    else if (r.aiNear && b.hi + lateUnits() + NEAR_UNITS <= 99.5) { r.aiNear = 0; r.nearHold = true; side = want; target = b.hi + lateUnits() + NEAR_UNITS - 1; } // an honest near miss on camera (a heavy disc's band sits too near the end: wait for the next)
     else { side = want; target = Math.abs(r.L) < 0.2 ? b.hi + lateUnits() + NEAR_UNITS + 2 : b.c + b.hw * 0.7; }
   }
   r.aiSide = side; r.aiTarget = clamp(target, 2, 99.5);
@@ -984,13 +990,15 @@ function demoScript() {
 const FAIL_CALL = { strong: "fStrong", weak: "fWeak", wrong: "fWrong", late: "fLate", stuck: "fStuck" };
 function collapse(reason) {
   const r = run, now = T(), side = r.teeter ? r.teeter.side : (r.L + r.wob >= 0 ? 1 : -1);
+  // out of time while already on the right side (holding it, or a release that was cancelled): the tip says let go sooner
+  r.lateHeld = reason === "late" && !!r.teeter && (r.cancelled || ((r.charging || input.want) && r.side === r.teeter.side));
   r.teeter = null; r.charging = false;
   r.dead = { reason, side, at: now, c: r.c, band: fx.band, p: fx.hitP, struck: fx.vt - fx.hitT < 400 };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (r.mode === "play") { pfStop(); hint.runEnded((now - r.startAt) / 1000); }
   call(FAIL_CALL[reason] || "fLate", "redL", now, S(side < 0 ? "tipL" : "tipR")); // the cause, with the lean under it
   if (loud()) sfx.tip();
-  musicLevel("duck");
+  if (loud()) musicLevel("duck");
 }
 function crumble() { // the frozen tower comes apart: discs tumble toward the lean, the daruma bonks on the boards
   const r = run, side = r.dead.side, P = towerPose(T()), ca = Math.cos(P.rock), sa = Math.sin(P.rock);
@@ -1034,8 +1042,8 @@ const sfx = {
   enter() { if (!audioOn()) return; const w = now0(), q = vary(10, 0.05); tone("sine", 1568 * q.f, 1568 * q.f, 0.07, 0.15 * q.g, w); tone("triangle", 2350 * q.f, 2350 * q.f, 0.05, 0.06, w + 0.01); }, // the needle just entered the band
   grip() { if (!audioOn()) return; const w = now0(), q = vary(50, 0.1); hiss("bandpass", 1300 * q.f, 3, 0.06, 0.26 * q.g, w); tone("triangle", 310 * q.f, 350 * q.f, 0.08, 0.16 * q.g, w); }, // the mallet is gripped
   close(n) { if (!audioOn()) return; const w = now0(), q = vary(40, 0.1), d = 10 - clamp(n || 3, 1, 5); // a wood scrape and two rising notes that stop short of home; closer is higher
-    hiss("bandpass", 1600 * q.f, 2, 0.13, 0.26 * q.g, w, null, 700); tone("triangle", 600 * q.f, 420, 0.1, 0.22 * q.g, w);
-    tone("triangle", pz(d), pz(d), 0.12, 0.14, w + 0.06); tone("triangle", pz(d + 2), pz(d + 2) * 0.98, 0.16, 0.13, w + 0.14); },
+    hiss("bandpass", 1600 * q.f, 2, 0.13, 0.37 * q.g, w, null, 700); tone("triangle", 600 * q.f, 420, 0.1, 0.31 * q.g, w);
+    tone("triangle", pz(d), pz(d), 0.12, 0.2, w + 0.06); tone("triangle", pz(d + 2), pz(d + 2) * 0.98, 0.16, 0.18, w + 0.14); },
   clack(i, y) { if (!audioOn()) return; const w = now0(), q = vary(30, 0.1), f = (520 + i * 70) * q.f; // one landing disc in the collapse
     hiss("bandpass", 1900 * q.f, 4, 0.04, 0.5 * q.g, w); tone("triangle", f, f * 0.8, 0.09, 0.4 * q.g, w); tone("sine", 220 * q.f, 120, 0.07, 0.2, w); },
   knock(perfect, streak) { // the wood "kon": a noise transient, the disc's ring and a body thump
@@ -1058,9 +1066,9 @@ const sfx = {
   heart(i) { if (!audioOn()) return; const w = now0(); // the beat, a wooden tok on top, and a tension note that climbs beat by beat
     tone("sine", 72 + i * 5, 42, 0.18, 0.18 + i * 0.02, w); hiss("bandpass", 950, 4, 0.04, 0.22 + i * 0.02, w); tone("triangle", 720, 520, 0.05, 0.14, w);
     const f = 500 * Math.pow(2, i / 8); tone("triangle", f, f * 1.02, 0.3, 0.07 + i * 0.012, w + 0.02, null, 0.03, 1800); },
-  save() { if (!audioOn()) return; const w = now0();
+  save(n) { if (!audioOn()) return; const w = now0(), up = clamp((n || 1) - 1, 0, 5); // each save of a run starts a step higher
     tone("sine", 110, 45, 0.5, 0.24, w); hiss("bandpass", 1200, 1, 0.25, 0.32, w, null, 300);
-    [0, 2, 4, 5, 7].forEach((n, i) => tone("triangle", pz(n + 5), pz(n + 5), 0.42, 0.26, w + 0.05 + i * 0.06)); hiss("highpass", 5000, 1, 0.3, 0.08, w + 0.3); },
+    [0, 2, 4, 5, 7].forEach((d, i) => tone("triangle", pz(d + 5 + up), pz(d + 5 + up), 0.42, 0.26, w + 0.05 + i * 0.06)); hiss("highpass", 5000, 1, 0.3, 0.08, w + 0.3); },
   gold() { if (!audioOn()) return; const w = now0(), q = vary(20, 0.06);
     tone("sine", 110 * q.f, 40, 0.4, 0.22, w); [7, 9, 10, 12].forEach((n, i) => tone("triangle", pz(n) * q.f, pz(n) * q.f, 0.6, 0.3, w + 0.03 + i * 0.05));
     for (let i = 0; i < 6; i++) tone("sine", 1800 + i * 240, 1860 + i * 240, 0.1, 0.03, w + 0.25 + i * 0.04); },
@@ -1068,9 +1076,10 @@ const sfx = {
   tip() { if (!audioOn()) return; const w = now0(); hiss("bandpass", 1500, 2, 0.12, 0.27, w); tone("triangle", 1200, 600, 0.14, 0.13, w); // the crack
     tone("triangle", 1500, 700, 0.1, 0.24, w); hiss("bandpass", 900, 2, 0.07, 0.24, w + 0.01); // a wood split as loud as a knock
     tone("sawtooth", 210, 90, 0.45, 0.1, w, null, 0.02, 1200); tone("sine", 95, 40, 0.5, 0.2, w + 0.05); },
-  crash() { if (!audioOn()) return; const w = now0();
-    for (let i = 0; i < 7; i++) { const q = vary(60, 0.1); hiss("bandpass", (1500 + (i % 3) * 700) * q.f, 3, 0.06, 0.22 * q.g, w + i * 0.07); tone("triangle", (620 - i * 40) * q.f, (560 - i * 40) * q.f, 0.1, 0.11, w + i * 0.07); }
-    tone("sine", 80, 35, 0.6, 0.22, w); },
+  crash() { if (!audioOn()) return; const w = now0(); // the tower comes down: seven clacks over a wooden rumble that a phone can play
+    for (let i = 0; i < 7; i++) { const q = vary(60, 0.1); hiss("bandpass", (1500 + (i % 3) * 700) * q.f, 3, 0.06, 0.31 * q.g, w + i * 0.07); tone("triangle", (620 - i * 40) * q.f, (560 - i * 40) * q.f, 0.1, 0.16, w + i * 0.07); }
+    hiss("bandpass", 460, 1.4, 0.55, 0.42, w, null, 300); tone("triangle", 330, 180, 0.4, 0.2, w + 0.02);
+    tone("sine", 80, 35, 0.6, 0.26, w); },
   bonk() { if (!audioOn()) return; const w = now0(), q = vary(30, 0.08); tone("sine", 430 * q.f, 160, 0.16, 0.28 * q.g, w); hiss("bandpass", 1200, 1, 0.06, 0.28, w); tone("triangle", 860 * q.f, 400, 0.08, 0.16, w); tone("sine", pz(7), pz(7), 0.1, 0.09, w + 0.12); tone("sine", pz(9), pz(9), 0.1, 0.07, w + 0.2);
     tone("sine", 92, 48, 0.32, 0.21, w); tone("triangle", 184, 120, 0.14, 0.1, w); }, // a low taiko "don" under the bonk
   wind() { if (!audioOn()) return; const w = now0(); hiss("bandpass", 500, 0.8, 1.3, 0.13, w, null, 1400); hiss("bandpass", 900, 1, 0.9, 0.06, w + 0.3, null, 400); },
@@ -1141,10 +1150,10 @@ function musicStep() {
     }
     if (lay >= 0 && j % 8 === 6) hiss("bandpass", 2600, 3, 0.03, 0.06, w, mus.bus);
     if (lay === 0 && j % 4 === 0 && mel[j] >= 0) tone("triangle", pz(m) * 2, pz(m) * 2 * 0.995, 0.3, 0.13, w, mus.bus, 0.002); // a koto pluck from the start
-    if (lay >= 1 && m >= 0 && (mus.level !== "bed" || i % 2 === 0)) { tone("triangle", pz(m), pz(m) * 0.997, 0.45, 0.13, w, mus.bus, 0.002); tone("sine", pz(m) * 2, pz(m) * 2, 0.18, 0.035, w, mus.bus, 0.002); }
+    if (lay >= 1 && m >= 0 && (mus.level !== "bed" || i % 2 === 0)) { tone("triangle", pz(m), pz(m) * 0.997, 0.45, 0.17, w, mus.bus, 0.002); tone("sine", pz(m) * 2, pz(m) * 2, 0.2, 0.06, w, mus.bus, 0.002); }
     if (lay >= 2 && mus.level === "play") { // a second koto a third above, and a small kane bell on the off-beats
-      if (m >= 0) tone("triangle", pz(m + 2) * 2, pz(m + 2) * 2 * 0.996, 0.36, 0.1, w + 0.01, mus.bus, 0.002);
-      if (j % 4 === 2) { tone("triangle", 1175, 1168, 0.16, 0.07, w, mus.bus, 0.002); tone("sine", 2940, 2930, 0.08, 0.03, w, mus.bus, 0.002); }
+      if (m >= 0) tone("triangle", pz(m + 2) * 2, pz(m + 2) * 2 * 0.996, 0.36, 0.14, w + 0.01, mus.bus, 0.002);
+      if (j % 4 === 2) { tone("triangle", 1175, 1168, 0.16, 0.1, w, mus.bus, 0.002); tone("sine", 2940, 2930, 0.08, 0.045, w, mus.bus, 0.002); }
     }
     if ((lay >= 2 || (lay >= 0 && mus.level === "play" && run && run.phase >= 3)) && i % 2 === 1) { hiss("bandpass", 3600, 3, 0.03, 0.12, w, mus.bus); tone("triangle", 660, 600, 0.04, 0.08, w, mus.bus, 0.002); } // shime-daiko, from the gust phase on
     if (lay >= 3 && j % 4 === 0 && m >= 0) flute(pz(m + 5), w, st * 3, 0.08);
@@ -1154,7 +1163,7 @@ function musicStep() {
 }
 
 // ---------- KEEP: result screen. Steps in order (count-up, rank seal, rows, NEW BEST, goal), skippable by tap ----------
-const RES = { wait: 150, drop: 260, head: 220, cause: 300, count: 400, countDur: 600, rank: 1000, rows: 900, best: 1150, goal: 1300 };
+const RES = { wait: 150, drop: 260, cause: 260, count: 400, countDur: 600, rank: 1000, rows: 900, best: 1150, goal: 1300 };
 function makeResult(now) {
   const play = run.mode === "play", best = bestOf(), runs = runsOf(), d = run.dead;
   const cause = S(d.reason === "late" ? "rsLate" : d.reason === "wrong" ? "rsWrong" : d.reason === "weak" ? "rsWeak" : d.reason === "strong" ? "rsStrong" : d.reason === "stuck" ? "rsStuck" : "rsLate");
@@ -1164,8 +1173,8 @@ function makeResult(now) {
     ticks: 0, rankDone: false, stamped: false, goal: null, eye: "" };
   if (play) { // painting the daruma's eyes is the long goal: one eye at 1st dan, both at 3rd dan, gold at the top rank
     if (eyesOf(nb) > eyesOf(best)) r.eye = eyesOf(nb) === 2 ? "eye2" : "eye1";
-    else if (nb >= RANKS[5] && best < RANKS[5]) r.eye = "gold5";
-    else if (nb >= RANKS[4] && best < RANKS[4]) r.eye = "band4";
+    else if (nb >= RANKS[R_GOLD] && best < RANKS[R_GOLD]) r.eye = "gold5";
+    else if (nb >= RANKS[R_BAND] && best < RANKS[R_BAND]) r.eye = "band4";
   }
   const next = RANKS.find(t => t > run.score), pool = [
     next ? { k: "g_rank", n: next } : null, { k: "g_streak", n: Math.max(5, run.maxStreak + 2) }, run.saves ? null : { k: "g_save" }, run.golds ? null : { k: "g_gold" }, run.risk3 ? null : { k: "g_risk" }
@@ -1177,7 +1186,7 @@ function tipFor(reason, runs) { // the tip answers what actually went wrong in t
   const r = run, hard = r.nStrong, soft = r.nWeak;
   if (reason === "stuck") return S("tip3");             // the cause itself first, so the tip never contradicts it
   if (reason === "wrong") return S("tip1");
-  if (reason === "late") return S("tipSaveLate");       // every collapse comes from a teeter: the tip is about the save
+  if (reason === "late") return S(r.lateHeld ? "tipSaveSoon" : "tipSaveLate"); // every collapse comes from a teeter: the tip is about the save
   if (reason === "strong") return S("tipEarly");
   if (reason === "weak") return soft > 3 && soft > hard ? S("tipLong") : S("tipSaveWeak"); // a habit, or only the last-chance strike
   if (hard >= 3 && hard >= soft) return S("tipEarly");   // then the run's habit
@@ -1230,17 +1239,30 @@ function layoutUI() {
 // kept in a short list and dropped at the start of each run, so a long session never piles up pictures.
 const ROT_N = 32, ROT = [];
 const turnOff = (a, ox, oy) => [ox * Math.cos(a) + oy * Math.sin(a), -ox * Math.sin(a) + oy * Math.cos(a)]; // a screen offset seen from a frame turned by a
-function rotSpr(key, w, h, a, art) {
-  const st = TAU / ROT_N, i0 = Math.round(a / st), i = ((i0 % ROT_N) + ROT_N) % ROT_N, k = key + "@" + i;
+function rotSpr(key, w, h, a, art, coarse) { // coarse: every other step (tumbling pieces), sharing the same pictures
+  const n = coarse ? ROT_N / 2 : ROT_N, st = TAU / n, i0 = Math.round(a / st), i = (((i0 % n) + n) % n) * (coarse ? 2 : 1), k = key + "@" + i;
   let b = SPR.get(k);
   if (!b) {
-    const ang = i * st, c = Math.abs(Math.cos(ang)), s = Math.abs(Math.sin(ang)), bw = c * w + s * h + 10, bh = s * w + c * h + 10;
+    const ang = i * TAU / ROT_N, c = Math.abs(Math.cos(ang)), s = Math.abs(Math.sin(ang)), bw = c * w + s * h + 10, bh = s * w + c * h + 10;
     b = bake(k, bw, bh, bw / 2, bh / 2, q => { q.rotate(ang); art(q, ang); });
     if (i) { ROT.push(k); if (ROT.length > 150) SPR.delete(ROT.shift()); }
   }
   return [b, a - i0 * st];
 }
-function putRot(x, key, w, h, art, X, Y, a, sx, sy) { const [b, rest] = rotSpr(key, w, h, a || 0, art); put(x, b, X, Y, rest, sx, sy); }
+// The crumble tumbles every disc through all its turns at once. Those pictures (coarse steps) and the daruma's
+// lit turns are made a couple per frame while the tower teeters or holds its tipping pose, so the collapse itself
+// draws from the cache instead of baking dozens of pictures in its first frames.
+let warmI = 0;
+function warmCrumble(n) {
+  const r = run; if (!r || fx.bodies) return;
+  for (let tries = 0; n > 0 && tries < 16 * (NSTACK + 1); tries++) {
+    const j = warmI % (NSTACK + 1), step = fl(warmI / (NSTACK + 1)) % 16; warmI++;
+    if (j === NSTACK) { const hs = headSpr(r.goldBody, 0, !!r.band); for (const li of [step * 2, step * 2 + 1]) if (!hs.f[li]) { hs.f[li] = litFrame(hs, li * TAU / LIT_STEPS); n--; } continue; }
+    const d = r.stack[j]; if (!d || SPR.has(discKey(d) + "@" + step * 2)) continue;
+    rotSpr(discKey(d), DW + 6, DH + 8, step * TAU / 16, discArt(d), true); n--;
+  }
+}
+function putRot(x, key, w, h, art, X, Y, a, sx, sy, coarse) { const [b, rest] = rotSpr(key, w, h, a || 0, art, coarse); put(x, b, X, Y, rest, sx, sy); }
 function trimSprites() { for (const k of ROT) SPR.delete(k); ROT.length = 0; }
 const hh = (i, k) => (hash1(i * 7919 + k * 104729) + 1) / 2; // 0..1, the same for the same (i, k): stable scenery
 
@@ -1253,7 +1275,7 @@ function slab(w, h, r, notch) {
   if (notch < 0) { p.lineTo(-w, 6.5); p.lineTo(-w + 9, 0); p.lineTo(-w, -6.5); }
   p.closePath(); return p;
 }
-const LACQ = [["red", "redD", "gold"], ["indigo", "mid", "paper"], ["pine", "warm", "goldL"]];
+const LACQ = [["red", "redD", "gold"], ["indigo", "mid", "paper"], ["pine", "mid", "goldL"]]; // green lacquer takes the cool indigo shade, like a print
 const discKey = d => "d" + d.kind + (d.kind === "L" || d.kind === "N" ? d.v + "" + d.pat : "") + (d.kind === "N" ? d.side : "");
 function discArt(d) { // the kind shows by shape and pattern, never by colour alone
   return (x, ang) => {
@@ -1277,7 +1299,7 @@ function discArt(d) { // the kind shows by shape and pattern, never by colour al
     const [ox, oy] = turnOff(ang, 2.2, 5.5); ST.shade(x, p, sc, ox, oy); ST.edge(x, p, 1.8);
   };
 }
-function putDisc(x, d, X, Y, a, sx, sy) { putRot(x, discKey(d), DW + 6, DH + 8, discArt(d), X, Y, a, sx, sy); }
+function putDisc(x, d, X, Y, a, sx, sy, coarse) { putRot(x, discKey(d), DW + 6, DH + 8, discArt(d), X, Y, a, sx, sy, coarse); }
 
 // the mallet (origin = head centre): a zelkova head with brass rings and a pale striking face toward the tower,
 // a handle leaning away from it with a red cord grip
@@ -1445,10 +1467,14 @@ const fudeSpr = () => bake("fude", 32, 92, 16, 3, q => {
 });
 function fude(x, X, Y, a, s) { put(x, fudeSpr(), X, Y, a, s || 1); }
 const pointAt = (x, e, now) => fude(x, e.cx - (e.w / 2 + 1 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 6)) * e.s, e.y + 31 * e.s, Math.PI / 2 - 0.3, e.s); // the brush nudges the tag
-function pressHint(x, s, k) { // first run: an inked ring on the cushion to hold, and the brush tapping its inner end
-  const cx = CUSH_X[s < 0 ? 0 : 1], cy = CUSH_Y + 14, a = s * (Math.PI / 2 - 0.42), dx = Math.sin(a), dy = -Math.cos(a), d = 2 + clamp(k, 0, 1) * 12;
-  if (k < 0.3) { const r = 10 + (0.3 - k) * 70; cordLine(x, pEll(cx, cy, r, r * 0.4), 2, "paper", 0.7); }
-  fude(x, cx - s * 26 - dx * d, cy + 4 - dy * d, a, 0.9);
+function pressHint(x, s, now) { // first run, before the first hold: a pulsing inked ring on the cushion and the brush pressing it down
+  const cx = CUSH_X[s < 0 ? 0 : 1], cy = CUSH_Y + 15, still = Juice.reduce, ph = still ? 0.5 : (now % 1000) / 1000;
+  const down = ph < 0.28 ? easeOut(ph / 0.28) : ph < 0.62 ? 1 : 1 - smooth((ph - 0.62) / 0.38); // comes down, holds, lifts
+  const pr = 1 + (still ? 0 : 0.1 * Math.sin(now / 160)); // the ring breathes
+  cordLine(x, pEll(cx, cy, 40 * pr, 19 * pr), 2.4, "paper", 0.8);
+  if (!still && ph > 0.28 && ph < 0.7) { const k = (ph - 0.28) / 0.42, rr = 44 + k * 18; cordLine(x, pEll(cx, cy, rr, rr * 0.47), 1.6 * (1 - k) + 0.6, "goldL", 0.6); } // a ripple while it is held
+  const d = s * 0.45, up = (1 - down) * 18; // tip down on the cushion's middle, the handle leaning out and up; it lifts along the handle
+  fude(x, cx + Math.sin(d) * up, cy - 1 - Math.cos(d) * up, Math.PI + d, 0.9);
 }
 function star(x, X, Y, r, col, rot, inner) {
   shape(x, pStar(X, Y, r, r * 0.42, 8, rot), col, 1.4);
@@ -1530,7 +1556,7 @@ function pineTree(x, X, Y, s, seed) { // a garden pine: a leaning trunk and flat
     const cx = X + dx * s, cy = Y + dy * s, ww = w * s * (0.9 + r() * 0.2), hgt = (11 + r() * 5) * s, pts = [], n = 5 + fl(r() * 3);
     for (let i = 0; i <= n; i++) { const t = i / n; pts.push([cx - ww / 2 + ww * t + (r() - 0.5) * 3 * s, cy - Math.sin(Math.PI * (0.08 + t * 0.84)) * hgt - (i % 2 ? 2.4 : 0) * s]); } // scalloped top
     for (let i = 0; i <= 10; i++) { const t = 1 - i / 10; pts.push([cx - ww / 2 - 2 * s + (ww + 4 * s) * t, cy + (i % 2 ? 1 : 4.6 + r() * 2.4) * s]); }     // tufts of needles underneath
-    const pad = pSmooth(pts); shape(x, pad, "pine", 1.2, "warm", 0, 4 * s);
+    const pad = pSmooth(pts); shape(x, pad, "pine", 1.2, "mid", 0, 4 * s);
     const cap = [[cx - ww, cy - hgt - 12 * s], [cx + ww, cy - hgt - 12 * s]]; // the snow cap, thicker where it settled
     for (let i = 0; i <= 8; i++) { const t = 1 - i / 8; cap.push([cx - ww * 0.5 + ww * t, cy - hgt * (0.42 + 0.28 * Math.sin(Math.PI * t)) + (r() - 0.3) * 3.4 * s]); }
     x.save(); x.clip(pad); const cp = pSmooth(cap); x.fillStyle = C("paper"); x.fill(cp); ST.edge(x, cp, 0.8); x.restore(); ST.edge(x, pad, 1.2);
@@ -1602,7 +1628,7 @@ function gardenRight(x, X1) { // past the core on the right: a stone water basin
   bamboo(x, 446, 384, 418, 404, 4.4, 30); shape(x, pRR(440, 384, 8, 44, 2), "plank", 1.1, "plankD", 1.4, 0);
   stone(x, 446, 428, 12, 5, true); stone(x, 366, 428, 10, 4.4, true);
   pineTree(x, 556, 424, 1.05, 12);
-  for (let k = 0; 400 + k * 160 < X1 + 60; k++) { const sx = 470 + k * 160 + hh(k, 31) * 50, sr = 18 + hh(k, 32) * 12; if (k % 2) stone(x, sx, 424, sr, sr * 0.36, true); else { const b = pBlob(sx, 410, sr * 1.3, sr * 0.8, 0.12, k + 9); shape(x, b, "pine", 1.2, "warm", 0, 4); x.save(); x.clip(b); x.fillStyle = C("paper"); x.fill(pEll(sx, 398, sr, 6)); x.restore(); } }
+  for (let k = 0; 400 + k * 160 < X1 + 60; k++) { const sx = 470 + k * 160 + hh(k, 31) * 50, sr = 18 + hh(k, 32) * 12; if (k % 2) stone(x, sx, 424, sr, sr * 0.36, true); else { const b = pBlob(sx, 410, sr * 1.3, sr * 0.8, 0.12, k + 9); shape(x, b, "pine", 1.2, "mid", 0, 4); x.save(); x.clip(b); x.fillStyle = C("paper"); x.fill(pEll(sx, 398, sr, 6)); x.restore(); } }
   if (X1 > 640) pineTree(x, 760 + hh(2, 9) * 60, 428, 0.8, 21);
 }
 function workshop(x, X0, Y0) { // the open workshop on the left: shoji slid aside, racks of daruma at every stage
@@ -1660,8 +1686,12 @@ function allPosts(X0, X1) { const p = POST_X.slice(); for (let k = 1; 348 + k * 
 function posts(x, X0, X1) {
   const t = vTop();
   for (const px of allPosts(X0, X1)) {
-    const p = pRR(px - 8, t + 18, 16, 431 - t - 18, 1.5);
-    ST.fill(x, p, "plank"); grain(x, p, px - 8, t + 18, 16, 431 - t, 4, "plankL", px | 0, true); ST.shade(x, p, "plankD", 3.4, 0); ST.edge(x, p, 1.4);
+    const p = pPoly([[px - 8, t + 18], [px + 8, t + 18], [px + 8.4, 428], [px - 7.6, 428]]);
+    ST.fill(x, p, "plank"); grain(x, p, px - 8, t + 18, 16, 431 - t, 4, "plankL", px | 0, true); ST.shade(x, p, "plankD", 3.4, 0);
+    x.strokeStyle = C("plankL"); x.lineWidth = 1; for (const e of [-5.2, 4.6]) x.stroke(pLine(px + e, t + 24, px + e + 0.3, 424)); // the chamfered corners catch the light
+    ST.edge(x, p, 1.4);
+    const base = pPoly([[px - 12, 427], [px + 11, 426.4], [px + 13.4, 433], [px + 12.6, 440], [px - 12.4, 440.6], [px - 13.6, 433.4]]); // a dressed foundation stone
+    shape(x, base, "grey", 1.3, "greyD", 2, 2);
   }
 }
 function eave(x, X0, X1, Y0) {
@@ -1700,8 +1730,12 @@ function floorProps(x, X0, X1) {
     const mat = pPoly([[380, 476], [566, 474], [574, 516], [372, 518]]);
     shape(x, mat, "tagL", 1.3, "tagG", 0, 3); x.save(); x.clip(mat); x.strokeStyle = C("tagG"); x.lineWidth = 0.7; for (let xx = 372; xx < 576; xx += 4) x.stroke(pLine(xx, 474, xx - 2, 518)); x.restore();
     for (const s of [0, 1]) ST.line(x, s ? pLine(372, 515, 574, 513) : pLine(380, 478, 566, 476), 2.6, "indigo");
-    [[402, 13, "red", -0.05], [432, 16, "done", 0.03], [466, 11, "white", 0], [494, 15, "red", 0.06], [528, 12, "gold", -0.04], [552, 10, "done", 0]].forEach(([dx, r, st, a]) => smallDaruma(x, dx, 503 - (dx % 7), r, st, a));
-    cat(x, 622, 508);
+    // two loose rows at different depths, a paint pot in the gap, never one even line; the cat sleeps by the screen edge
+    [[430, 492, 10, "white", 0.05], [518, 494, 11, "gold", -0.04], [398, 507, 14, "red", -0.06], [486, 510, 16, "done", 0.03], [548, 506, 12, "red", 0.08]].forEach(([dx, dy, r, st, a], i) => {
+      if (i === 2) pot(x, 456, 512, 18, 13, "paper", "red");
+      smallDaruma(x, dx, dy, r, st, a);
+    });
+    cat(x, Math.max(470, Math.min(640, vRight() - 40)), 536);
   }
   if (X0 < -60) { // the left side: a low work table with a daruma half painted
     const tx = -150;
@@ -1798,12 +1832,22 @@ function drawTower(x, now) {
 function drawGauge(x, now) { // the brass pointer over the gauge on the stand's apron
   const t = vtilt(now), px = MID + clamp(t * 56, -60, 60), hot = Math.abs(t) >= ZONE[1];
   shape(x, pPoly([[px - 6, GAUGE_Y - 7], [px + 6, GAUGE_Y - 7], [px + 0.6, GAUGE_Y + 6], [px - 0.6, GAUGE_Y + 6]]), hot && (fl(now / 120) & 1) ? "paper" : "gold", 1.2, "goldD", 1, 1.4);
+  // the push of the last strike: an arrow under the gauge from where the lean was, as long as the push (a PERFECT
+  // barely moves it, TOO HARD shoves it), so steering by the side you strike from is something you see
+  const age = fx.vt - fx.pushT, r = run;
+  if (age >= 0 && age < 900 && !r.teeter && !r.dead) {
+    const k = age < 120 ? easeOut(age / 120) : 1, d = fx.pushDir, x0 = MID + clamp(fx.pushFrom * 56, -60, 60), len = Math.min(74, 7 + fx.pushLen * 90) * k, y = GAUGE_Y + 24;
+    const tip = x0 + d * len, hw = 5.5, sh = 2.2, hb = tip - d * Math.min(len, 9);
+    const col = fx.pushTier === "perfect" ? "goldL" : fx.pushTier === "good" || fx.pushTier === "close" ? "paper" : "redL";
+    shape(x, pPoly([[x0, y - sh], [hb, y - sh], [hb, y - hw], [tip, y], [hb, y + hw], [hb, y + sh], [x0, y + sh]]), col, 1.1);
+    ST.line(x, pLine(x0, y - 6, x0, y + 6), 1.3);
+  }
 }
 function drawMallet(x, now) {
   const r = run, s = r.side, age = fx.vt - fx.hitT, k = r.charging ? r.pw / 100 : 0, held = state === "play" && (input.want || r.charging);
   let gap, tilt = 0;
-  if (age >= 0 && age < 16) { gap = 12; tilt = -s * 0.22; }               // the swing: one frame on the way in, head whipped ahead
-  else if (age >= 16 && age < 55) { gap = 0; tilt = -s * 0.1; }          // contact
+  if (fx.swingFrame && age >= 0 && age < 90) { fx.swingFrame = false; gap = 12; tilt = -s * 0.22; } // the swing: the first drawn frame after a release, head whipped ahead
+  else if (age >= 0 && age < 55) { gap = 0; tilt = -s * 0.1; }           // contact
   else if (age >= 55 && age < 120) { gap = -7; tilt = -s * 0.14; }       // follow-through into the gap the disc left
   else if (age >= 120 && age < 230) gap = 16 * Math.sin((age - 120) / 110 * Math.PI) + 6; // recoil
   else if (r.charging) { gap = 14 + k * 22; tilt = s * 0.34 * k; }       // pulled back on the first frame, then further with the power
@@ -1841,7 +1885,7 @@ function drawFlyers(x) {
 }
 function drawBodies(x, now) {
   for (const b of fx.bodies) {
-    if (!b.head) { putDisc(x, b.d, b.x, b.y, b.a); continue; }
+    if (!b.head) { putDisc(x, b.d, b.x, b.y, b.a, 0, 0, !b.rest || Math.abs(b.a - Math.round(b.a / Math.PI) * Math.PI) > 0.05); continue; } // tumbling: coarse turns
     drawDaruma(x, b.x, b.y, b.a, b.hit ? "bonk" : "scared", now, run.eyes, run.goldBody, 0, 1, 0);
     if (b.hit) for (let i = 0; i < 3; i++) { const a = now / 260 + i * 2.1; star(x, b.x + Math.cos(a) * 34, b.y - 40 + Math.sin(a) * 8, 6, "goldL", a); }
   }
@@ -1905,7 +1949,7 @@ function drawRuler(x, now) {
 function drawCushions(x, now) {
   const rs = recSide(), r = run;
   for (const s of [-1, 1]) {
-    const cx = CUSH_X[s < 0 ? 0 : 1], held = state === "play" && (input.want || r.charging) && r.side === s, y = CUSH_Y + (held ? 2 : 0);
+    const cx = CUSH_X[s < 0 ? 0 : 1], held = (state === "play" ? input.want || r.charging : r.ai && r.charging) && r.side === s, y = CUSH_Y + (held ? 2 : 0); // the demo AI presses its cushion too
     if (rs === s) { // the side to strike from: a gold rim and a small arrow just above it
       at(x, cx, y, 1, 0, () => cordLine(x, cushPath(), 2.6, "gold", 0.8));
       const ay = CUSH_Y - 12 + (r.teeter && !Juice.reduce && (fl(now / 160) & 1) ? 2 : 0);
@@ -1916,7 +1960,7 @@ function drawCushions(x, now) {
       shape(x, pCut(-20, -10.5, 40, 21, 3.5), "tagL", 1.2, "tagD", 0, 2.4);
       text(x, S(s < 0 ? "keyL" : "keyR"), 0, 0.5, 14, "ink", { max: 36 });
     });
-    if (rs && rs !== s && held && !r.dead) { // held from the side that hurts: chevrons run toward the other cushion (slide the finger across)
+    if (rs && rs !== s && held && !r.dead && state === "play") { // held from the side that hurts: chevrons run toward the other cushion (slide the finger across)
       const lit = fl(now / 110) % 3;
       for (let i = 0; i < 3; i++) { const vx = MID + rs * (i * 18 - 18), on = i === (rs > 0 ? lit : 2 - lit); ST.line(x, pPoly([[vx - rs * 5, CUSH_Y + 6], [vx + rs * 5, CUSH_Y + 16], [vx - rs * 5, CUSH_Y + 26]], true), on ? 4.4 : 3.4, on ? "goldL" : "gold"); }
     }
@@ -1961,17 +2005,17 @@ function drawCall(x, now) { // the judgement word: pops in from 0.8 with an over
   });
   x.globalAlpha = 1;
 }
-function drawHint(x, now) { // first run: a hand on the cushion to hold; a ring says "let go now"; the words above the ruler
+function drawHint(x, now) { // first run: the brush presses the cushion to hold; once the needle runs, marks on the band and the words
   const r = run, d = r.stack[0]; if (!d) return;
-  const b = bandOf(d), s = recSide() || r.side || 1, hx = CUSH_X[s < 0 ? 0 : 1];
-  const k = r.charging ? clamp((Math.abs(r.pw - b.c) - b.hw) / 25, 0, 1) : (fl(now / 450) & 1) ? 1 : 0.4;
-  pressHint(x, hx < MID ? -1 : 1, k);
+  if (!r.charging) { if (!input.want) pressHint(x, recSide() || r.side || 1, now); return; }
+  const b = bandOf(d);
   if (fl(now / 300) & 1) for (const v of [b.lo, b.hi]) { const ux = METER_X + v * METER_W / 100; shape(x, pPoly([[ux - 4, METER_Y - 11], [ux + 4, METER_Y - 11], [ux, METER_Y - 4]]), "paper", 1); }
   if (!(fx.vt - fx.swapT < 900)) text(x, S("hintRel"), MID, 507, 15 * L.u, "paper", { ol: "ink", ow: 0.3 });
 }
 const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
 function norenPlace() { // a wide screen hangs the curtain in the workshop doorway on the left; a phone, across the top
-  if (L.wide) { const s = Math.min(hudS(), (L.x0 - 24) / 236); return { x: sideX(-1), y: vTop() + 22, s, w: 236 }; }
+  if (L.wide) { const s = Math.min(hudS(), (L.x0 - 24) / 236); return { x: sideX(-1), y: vTop() + 22, s, w: 236, side: true }; }
+  if (L.x0 >= 150) { const s = Math.min(L.u, (L.x0 - 14) / 236); return { x: sideX(-1), y: vTop() + 22, s, w: 236, side: true }; } // near-square (the 630x500 cover): beside the tower, never over the daruma
   const s = L.u; return { x: 180, y: vTop() + 22, s, w: Math.round(Math.min(344, (L.W - 16) / s) / 4) * 4 };
 }
 function drawTitle(x, now) {
@@ -1986,7 +2030,7 @@ function drawTitle(x, now) {
   const b = bestOf();
   if (L.wide) drawShelf(x, now, b > 0);
   else if (b > 0) { // best and, from the second run, the rank on a dark plank hung at the left, clear of the tower
-    const rk = runsOf() >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b, w = Math.round((textW(x, t, 16) + 34) / 10) * 10 + 10, px = 26 + w * u / 2, py = n.y + (NOREN_H + 12) * n.s;
+    const rk = runsOf() >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b, w = Math.round((textW(x, t, 16) + 34) / 10) * 10 + 10, px = n.side ? n.x : 26 + w * u / 2, py = n.y + (NOREN_H + 12) * n.s;
     cords(x, [[px - (w / 2 - 12) * u, py + 2 * u], [px + (w / 2 - 12) * u, py + 2 * u]], n.y + NOREN_H * n.s - 4);
     at(x, px, py, u, 0, () => { put(x, plankSpr(w), 0, 0); text(x, t, 0, 18, 16, "paper", {}); if (rk) seal(x, 0, 58, rk, 999, 16); });
   }
@@ -2009,7 +2053,7 @@ function drawOver(x, now) {
   cords(x, [[180 - 110 * u, y + 4 * u], [180 + 110 * u, y + 4 * u]], beamY());
   at(x, 180, y, u, 0, () => {
     board(x, 0, 0, B.w, H);
-    if (age > RES.head) text(x, S("over"), 0, B.title, 30, "paneT", big);
+    text(x, S("over"), 0, B.title, 30, "paneT", big); // the headline rides down with the board: never a blank paper
     if (age > RES.cause) { text(x, r.cause, 0, B.cause, 17, "paneS", { max: 280 }); if (r.tip) text(x, r.tip, 0, B.tip, 15, "paneT", { w: 700, max: 280 }); }
     if (age > RES.count) {
       text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -56 : 0, B.score, 56, "paneT", big);
@@ -2043,21 +2087,22 @@ function drawPlaques(x) {
 }
 function draw(now) {
   if (!run) return;
-  const x = ctx, sh = shakeOffset(10);
+  const x = ctx, sh = shakeOffset(Math.min(10, 12 / L.kc)); // at most about 12 CSS px on any screen (bar 1.2.4)
   let zm = zoomNow(now);
   if (!zm && fx.push > 0.002) zm = { x: MID, y: 380, s: 1 + (DEMO ? 0.08 : 0.05) * fx.push * (Juice.reduce ? 0.3 : 1) }; // the edge: a slow push-in, released by the punch
   putLayer(x, BG, sh.x, sh.y, zm);
   view(x, sh.x, sh.y, zm);
   drawGauge(x, now);
   if (fx.bodies) drawBodies(x, now);
-  else { drawTower(x, now); if (!isTitle() || run.charging || fx.vt - fx.hitT < 300) drawMallet(x, now); }
+  else { drawTower(x, now); drawMallet(x, now); }
   drawFlyers(x);
   drawImpact(x, now);
   partsDraw(x);
   drawWind(x, now);
   view(x, 0, 0, zm); // the floor tools follow the camera but never shake
-  if (!isTitle() && !isOver()) { drawRuler(x, now); if (!DEMO) drawCushions(x, now); }
+  if (!isTitle() && !isOver()) { drawRuler(x, now); drawCushions(x, now); }
   if (state === "play" && hint.active) drawHint(x, now);
+  if (run.teeter || (isDying() && !fx.bodies)) warmCrumble(2);
   view(x); // the HUD and the boards never move with the camera
   if (!isTitle() && !isOver()) { drawHud(x, now); drawCall(x, now); }
   if (isTitle()) drawTitle(x, now);
@@ -2093,12 +2138,12 @@ function visualStep(dt) { // springs, swings and petals (the rules never read th
 function resize() {
   const cw = wrap.clientWidth || innerWidth, ch = wrap.clientHeight || innerHeight;
   artResize(cv, cw, ch, CW, CH, 220);
-  // A wide screen frames the scene closer (up to 1.32x) so the tower is not a small strip in the middle: the sky
-  // above the tower goes off screen, the side areas stay wide enough for the HUD (about 250 px each at 16:9).
-  const z = L.wide ? clamp(L.W / (CW + 2 * 250 * L.u), 1, 1.32) : 1;
+  // A wide screen frames the scene closer (up to 1.4x) so the tower is not a small strip in the middle: the sky
+  // above the tower goes off screen, the side areas stay wide enough for the HUD (about 230 px each at 16:9).
+  const z = L.wide ? clamp(L.W / (CW + 2 * 230 * L.u), 1, 1.4) : 1;
   if (z > 1.01) { artResize(cv, cw, ch, CW, CH / z, 1); L.y0 = -(CH - CH / z) * 0.85; L.wide = true; }
   if (DEMO && !L.wide) { // ?demo=1 portrait: frame the scene a little smaller, with the extra floor at the bottom, so the ruler clears the Shorts caption area
-    artResize(cv, cw, ch, CW, CH * 1.11, 220);
+    artResize(cv, cw, ch, CW, CH * 1.06, 220);
     if (!L.wide) L.y0 = Math.min(L.y0, (L.H - CH) * 0.2);
   }
   buildBg(); layoutUI();
