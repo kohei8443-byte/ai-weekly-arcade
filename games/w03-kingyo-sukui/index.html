@@ -9,7 +9,7 @@
    only transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
 [hidden]{display:none!important}
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#5d9ad3}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#5f92cc}
 body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
 #wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
 #cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
@@ -61,7 +61,7 @@ const PALS = {
     tag: "#e2c48c", tagL: "#f3e2b6", tagD: "#b48d58", tagG: "#cfa970", plank: "#6b4c37", plankL: "#8c6c51", plankD: "#402e23",
     pane: "#f4ebd3", paneL: "#dac8a2", paneT: "#1c1a24", paneS: "#a8352a",
     red: "#e4502f", redD: "#a3322a", redL: "#f39a78", gold: "#e9b949", goldD: "#a87a2e", goldL: "#f8df98", orange: "#f0913a", indigo: "#3b4f9e",
-    sky0: "#5d9ad3", sky1: "#79afe0", sky2: "#9bc6ea", sky3: "#c2dff0", mist: "#c9ece8", far: "#4f9eb5", mid: "#5e9a4e",
+    sky0: "#5f92cc", sky1: "#83a8d8", sky2: "#a6c1e2", sky3: "#d0d9ea", mist: "#c9ece8", far: "#4f9eb5", mid: "#5e9a4e",
     ground: "#bba684", groundL: "#cdb993", poolA: "#d8c69c", poolB: "#e8d9b0", lit: "#f6d488", warm: "#ffe9b0", shadeK: "#1b1a30", hlK: "#fff8e6",
     water: "#86c8cf"
   },
@@ -585,6 +585,28 @@ function drawTapHint(x, X, Y, k) { // (X, Y) = where to press; k = 0 when a pres
   hand(x, X, Y + 10 + clamp(k, 0, 1) * 14, 0);
 }
 // ==== ART KIT END ====
+// the pointer here is the stall keeper's child: a small round hand in warm skin and a red kanoko-dyed yukata
+// sleeve with a folded paper cuff (fingertip at X, Y; a = 0 points up), so it never reads as a white cartoon glove
+function kidHand(x, X, Y, a, s) {
+  put(x, bake("kidHand", 50, 64, 25, 2, q => {
+    const skin = (p, ox, oy) => shape(q, p, "tagL", 1.2, "tag", ox, oy);
+    skin(pSmooth([[-10.5, 33], [-18, 27.5], [-16.8, 21], [-12, 21.4], [-7, 27]]), 1.5, 1.8);                     // thumb
+    skin(pSmooth([[-12.5, 20.5], [-4, 17.4], [7.5, 18.4], [14.2, 24.5], [13.6, 37.5], [6, 43.5], [-8.5, 43], [-13.6, 34]]), 2.4, 2.4);
+    for (const [y, w] of [[23.4, 5.6], [29.7, 6], [35.8, 5]]) skin(pSmooth([[2, y - 3.4], [5 + w, y - 3.7], [9 + w, y + 0.1], [5 + w, y + 3.7], [2, y + 3.4]]), 1.2, 1.4);
+    skin(pSmooth([[-4.4, 23], [-4.2, 9], [-3.2, 1.6], [0, -0.2], [3.2, 1.4], [4.4, 9], [5, 23]]), 1.6, 0);       // a short, round index finger
+    ST.line(q, pSmooth([[-2.6, 13.2], [0, 12.2], [2.8, 13.3]], true), 0.8, "tagD");                                 // knuckle crease
+    const sleeve = pSmooth([[-20, 41], [-3, 38.6], [16.5, 39.6], [22, 57], [6, 61.5], [-9, 60], [-23, 60.5]]);
+    shape(q, sleeve, "red", 1.3, "redD", 2, 2);
+    q.save(); q.clip(sleeve);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) { // kanoko: rows of tiny paper squares, each with a pin dot
+      const cx = -22 + j * 6.4 + (i & 1) * 3.2, cy = 46 + i * 4.8;
+      q.fillStyle = C("paper"); q.fill(pPoly([[cx, cy - 1.7], [cx + 1.7, cy], [cx, cy + 1.7], [cx - 1.7, cy]]));
+      q.fillStyle = C("redD"); q.fillRect(cx - 0.45, cy - 0.45, 0.9, 0.9);
+    }
+    q.restore();
+    shape(q, pSmooth([[-20.5, 40.6], [-3, 38.2], [16.8, 39.2], [17.6, 43.4], [-3, 42.6], [-20.2, 45]]), "paper", 1, "paperD", 0, 1.2); // folded cuff
+  }), X, Y, a, s);
+}
 
 // ======================================================================================================
 // 金魚すくい / Goldfish Scoop (w03). Hold to dip the paper scoop, release to lift. Every fish on the paper
@@ -652,10 +674,11 @@ function phaseAt(sec) {
 const GOLD_FIRST = 30, GOLD_EVERY = 25, GOLD_LIFE = 14000, RESTOCK_EVERY = 20;
 const SPARES = [15, 40, 80, 130];  // caught-fish milestones that put a spare scoop in the tray (at most 3 wait there)
 // ?demo=1 is a 30 s clip. The run clock starts at 18 s (calico fish already in), and the drama is scripted by
-// elapsed clip seconds: a close call, the golden fish, then a greedy scoop that tears in slow motion.
-const DEMO_SKIP = 18;
+// elapsed seconds (a recording starts about 1.5 s in): the first dip waits, so the x8 opener lands in the clip; one
+// close call; a big haul; a greedy scoop that tears; the last (fresh) scoop goes for the golden fish alone; the final tear.
+const DEMO_SKIP = 18, DEMO_HOLD = 2300, DEMO_GOLD = 12.4;
 // The second greedy scoop ends the run (one spare scoop), so the result card lands inside the 30 s clip. Fixed seeds keep the beats on time.
-const DEMO_SCRIPT = [{ at: 5, act: "close", until: 7.5 }, { at: 7.5, act: "greedy", until: 10.5 }, { at: 10.5, act: "big", until: 13 }, { at: 13, act: "gold", until: 17 }, { at: 17, act: "greedy", until: 27 }];
+const DEMO_SCRIPT = [{ at: 4.6, act: "close", until: 7.6 }, { at: 7.6, act: "big", until: 10.2 }, { at: 10.2, act: "greedy", until: 13 }, { at: 13, act: "gold", until: 17 }, { at: 19.6, act: "greedy", until: 28 }];
 const DEMO_SEEDS = [32, 21, 33];
 const RANKS = [0, 150, 350, 600, 900, 1300];
 const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
@@ -677,7 +700,11 @@ const STRINGS = {
     m_x8: "1回で 4匹すくう", m_close2: "ギリギリを 2回", m_gold: "金の魚を すくう", m_deme3: "でめきんを 3匹",
     m_ranchu: "らんちゅうを すくう", m_poi12: "1本のポイで 12匹", m_fish50: "50匹 すくう", m_score300: "300点 とる",
     m_streak8: "からぶりなしで 8回", m_x8x3: "×8を 3回", m_score600: "600点 とる", m_close4: "ギリギリを 4回",
-    ranks: ["見習い", "常連さん", "腕きき", "名人", "金魚の主", "伝説の手"], space: "SPACE", credit: "Made with Claude"
+    ranks: ["見習い", "常連さん", "腕きき", "名人", "金魚の主", "伝説の手"], space: "SPACE", credit: "Made with Claude",
+    hook: "破れる前に、あと1匹?", last1: "ラスト1本!", tipSpook: "真上で しずめると にげる",
+    w_soak: "つけすぎ", w_fast: "速すぎ", w_load: "重み", w_dip: "しずめた", w_empty: "からぶり", w_slip: "ずるっ",
+    why_soak: "水に つけすぎて 紙が よわっていた", why_fast: "速く うごかして 紙が よわっていた", why_load: "金魚の 重みで 紙が よわっていた",
+    why_dip: "何度も しずめて 紙が よわっていた", why_empty: "からぶりで 紙が よわっていた"
   },
   en: {
     title: "GOLDFISH SCOOP", titleEn: "GOLDFISH SCOOP", mark: "夏", start: "PLAY", how1: "HOLD TO DIP THE PAPER", how2: "RELEASE TO SCOOP!",
@@ -694,7 +721,11 @@ const STRINGS = {
     m_x8: "4 FISH IN ONE SCOOP", m_close2: "2 CLOSE CALLS", m_gold: "CATCH THE GOLDEN FISH", m_deme3: "CATCH 3 BLACK MOORS",
     m_ranchu: "CATCH A LIONHEAD", m_poi12: "12 FISH ON ONE PAPER", m_fish50: "CATCH 50 FISH", m_score300: "SCORE 300",
     m_streak8: "8 SCOOPS, NONE EMPTY", m_x8x3: "THREE ×8 HAULS", m_score600: "SCORE 600", m_close4: "4 CLOSE CALLS",
-    ranks: ["ROOKIE", "REGULAR", "SKILLED", "MASTER", "FISH LORD", "LEGEND"], space: "SPACE", credit: "Made with Claude"
+    ranks: ["ROOKIE", "REGULAR", "SKILLED", "MASTER", "FISH LORD", "LEGEND"], space: "SPACE", credit: "Made with Claude",
+    hook: "ONE MORE FISH?", last1: "LAST SCOOP!", tipSpook: "A DIP ON TOP SCARES THEM",
+    w_soak: "SOAKED", w_fast: "TOO FAST", w_load: "WEIGHT", w_dip: "DIPS", w_empty: "EMPTY LIFT", w_slip: "SLIP",
+    why_soak: "SOAKING HAD WORN THE PAPER", why_fast: "FAST MOVES HAD WORN THE PAPER", why_load: "THE WEIGHT HAD WORN THE PAPER",
+    why_dip: "MANY DIPS HAD WORN THE PAPER", why_empty: "EMPTY LIFTS HAD WORN THE PAPER"
   }
 };
 let lang = store.get("lang", null);
@@ -730,7 +761,7 @@ const rin = (a, b) => a + run.rnd() * (b - a);
 
 function newFx() {
   return { vt: 0, disp: 0, scoreT: -1e9, call: null, note: null, notes: [], ripples: [], flyers: [], bowl: [], pressT: -1e9,
-    pauseT: 0, trayT: -1e9, nearT: -1e9, lastNote: "", meter: null, mBox: null, fa: 0, fv: 0, ta: 0, tv: 0, lastScore: 0 };
+    pauseT: 0, trayT: -1e9, nearT: -1e9, lastNote: "", meter: null, mBox: null, fa: 0, fv: 0, ta: 0, tv: 0, lastScore: 0, camX: 180, zm: null };
 }
 // AI hands per mode: speed px/s in the air, reaction ms (mean, sd), pause between scoops ms (min, spread),
 // aim error px (one sigma) and the chance of a greedy mistake (lifting an overloaded paper)
@@ -746,17 +777,18 @@ function newRun(mode, seed) {
     t: t0, t0, acc: 0, slowUntil: 0, slowK: 1, hold: false, startAt: T(),
     score: 0, caught: 0, lifts: 0, streak: 0, maxStreak: 0, maxN: 0, x8s: 0, closes: 0, golds: 0, demes: 0, ranchus: 0, tears: 0, maxPoiFish: 0, byType: {},
     fish: [], schools: [], nid: 1, poi: null, poiNo: 0, stock: mode === "demo" ? 1 : 2, spareI: 0, phase: -1,
-    spawnT: 0, nextGold: mode === "demo" ? t0 + 12500 : GOLD_FIRST * 1000, nextRestock: RESTOCK_EVERY * 1000, dead: null, result: null,
+    spawnT: 0, nextGold: mode === "demo" ? t0 + DEMO_GOLD * 1000 : GOLD_FIRST * 1000, nextRestock: RESTOCK_EVERY * 1000, dead: null, result: null,
     script: mode === "demo" ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : [],
-    A: { plan: null, wait: 250, under: 0, hold: 0, chase: 0, act: null, until: 0, react: 150, err: false },
+    A: { plan: null, wait: mode === "demo" ? DEMO_HOLD : 250, under: 0, hold: 0, chase: 0, act: null, until: 0, react: 150, err: false },
     ptr: { down: false, touch: false, fx: 90, fy: 228, id: -1 }, keys: {}, tips: {}, missions: null, mDone: {}
   };
   fx = newFx(); PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
-  // the tub: drifting schools of small reds. School 0 starts right under the scoop, so the first dip pays (bar 1.1.2)
+  // the tub: drifting schools of small reds. School 0 starts right under the scoop, so the first dip pays (bar 1.1.2);
+  // in play it holds three, so the opening is a x2 or x4 and the x8 is earned later (the clip opens on a x8)
   for (let i = 0; i < 4; i++) run.schools.push(i ? { x: rin(WX0 + 26, WX1 - 26), y: rin(WY0 + 24, WY1 - 40), tx: 0, ty: 0, re: 0 } : { x: 90, y: 198, tx: 90, ty: 198, re: 2600 });
   const ph = phaseAt(run.t / 1000); run.phase = ph.i;
   for (let i = 1; i <= ph.i; i++) for (const k in PHASES[i].add || {}) for (let j = 0; j < PHASES[i].add[k]; j++) addFish(k, rin(WX0 + 10, WX1 - 10), rin(WY0 + 10, WY1 - 10), -1, 1);
-  for (let j = 0; j < 4; j++) addFish("wakin", 90, 198, 0, 1);
+  for (let j = 0; j < (mode === "play" ? 3 : 4); j++) addFish("wakin", 90, 198, 0, 1);
   while (run.fish.length < ph.pop) { const s = run.schools[1 + (run.fish.length % 3)]; addFish("wakin", s.x, s.y, run.schools.indexOf(s), 1); }
   for (const f of run.fish) { if (f.school >= 0) { const s = run.schools[f.school], a = f.oa; f.x = s.x + Math.cos(a) * f.or; f.y = s.y + Math.sin(a) * f.or * 0.8; } }
   newPoi(false);
@@ -914,13 +946,13 @@ function newPoi(enter) {
   const x = prev ? clamp(prev.x, WX0 + 20, WX1 - 20) : 90, y = prev ? clamp(prev.y, WY0 + 30, WY1 - 30) : 200;
   run.poi = { no: run.poiNo, x, y, tx: x, ty: y, state: enter ? "enter" : "air", t: 0, S: 100, wet: false, speed: 0, load: EMPTY, over: false,
     ride: [], out: "", liftDur: 0, queued: false, tapLift: false, hole: null, fish: 0, col: POI_COLS[(run.poiNo - 1) % POI_COLS.length],
-    capWas: MAXPIP, low: false, cause: "", near: 0, ex0: TRAY.x, ey0: TRAY.y - 8, ex1: x, ey1: y, spots: [] };
+    capWas: MAXPIP, low: false, cause: "", near: 0, ex0: TRAY.x, ey0: TRAY.y - 8, ex1: x, ey1: y, spots: [], wr: {}, wl: {} };
   const p = run.poi;
   for (let i = 0; i < 5; i++) p.spots.push({ x: Math.round(rin(-8, 8)), y: Math.round(rin(-8, 8)), at: 20 + i * 14 });
   if (enter) { p.x = p.ex0; p.y = p.ey0; fx.trayT = fx.vt; }
   // a finger or key still down from the tear dips once the new scoop is ready; a quick tap made meanwhile dips and lifts
   if (!run.ai) p.queued = run.ptr.down || run.keys.dip ? "hold" : prev && prev.queued === "tap" ? "tap" : false;
-  run.A.plan = null; run.A.wait = Math.max(run.A.wait, 200);
+  run.A.plan = null; run.A.wait = Math.max(run.A.wait || 0, 200);
 }
 function poiStep(dt, ph) {
   const p = run.poi; if (!p) return;
@@ -930,7 +962,13 @@ function poiStep(dt, ph) {
     if (p.t >= 380) { p.state = "air"; p.t = 0; if (run.ai || autopilot) { p.tx = p.x; p.ty = p.y; } qDip(p); }
     return;
   }
-  if (p.state === "torn") { if (p.t >= 760 && !run.dead && run.stock > 0) { run.stock--; newPoi(true); } return; }
+  if (p.state === "torn") {
+    if (p.t >= 760 && !run.dead && run.stock > 0) {
+      run.stock--; newPoi(true);
+      if (!run.stock) { run.last = true; notice("last1"); if (loud()) sfx.notice(); } // the last scoop: the band comes in fuller
+    }
+    return;
+  }
   const ox = p.x, oy = p.y;
   if (p.state !== "lift") {
     const k = 1 - Math.exp(-dt * (p.state === "water" ? 16 : 24)), tx = clamp(p.tx, WX0 + 2, WX1 - 2), ty = clamp(p.ty, WY0 + 2, WY1 - 2);
@@ -949,6 +987,7 @@ function poiStep(dt, ph) {
   p.speed += (v - p.speed) * (1 - Math.exp(-dt * 8));
   const ex = Math.max(0, (p.speed - SLOW) / SLOW);
   p.S -= (ph.drain + 26 * ex + 0.5 * p.load.w) * dt; // fish on the paper weigh on it: greed wears it faster than time
+  wear(p, "soak", ph.drain * dt); wear(p, "fast", 26 * ex * dt); wear(p, "load", 0.5 * p.load.w * dt);
   if (ex > 0.3) tip("tipSlow");
   const prevN = p.load.n; p.load = loadAt(p.x, p.y);
   const cap = capOf(p.S), over = p.load.w > cap;
@@ -962,29 +1001,37 @@ function poiStep(dt, ph) {
   if (p.S < 25 && !p.low) { p.low = true; tip("tipLow"); if (loud()) sfx.lowWarn(); }
   if (p.tapLift && p.t >= 140) { p.tapLift = false; lift(false); }
 }
-function capDrop(p, from, to) { // a lost pip pops off the meter and falls into the water; the first time, a word says why
+// what wore the paper, by cause: wr since the last lost pip (named on the meter), wl over the paper's life (named on
+// the tear plate), so every lost pip and every tear has a visible reason (bar 1.4.2)
+function wear(p, k, v) { if (v > 0) { p.wr[k] = (p.wr[k] || 0) + v; p.wl[k] = (p.wl[k] || 0) + v; } }
+const topWear = o => Object.keys(o).reduce((a, k) => a && o[a] >= o[k] ? a : k, null);
+function capDrop(p, from, to) { // a lost pip pops off the meter and falls into the water, its cause in one word beside it
   p.capWas = to; fx.pipT = fx.vt;
+  const k = topWear(p.wr); p.wr = {};
+  if (run.mode === "play" && k) fx.wear = { k, t: fx.vt };
   if (!fx.meter || run.mode === "attract") return;
   const m = fx.meter;
   for (let i = to; i < from; i++) addPart({ x: m.x + (i * 11 + 5) * m.u, y: m.y + 7 * m.u, vx: (Math.random() - 0.5) * 80, vy: -100, g: 520, life: 0.6, max: 0.6, col: "paper", kind: "chip", s: 4.5 * m.u, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12 });
-  if (!run.tips.weak && run.mode === "play") { run.tips.weak = true; fx.weakT = fx.vt; }
+  if (!run.tips.weak && run.mode === "play") { run.tips.weak = true; notice("weak"); } // on the chime's paper, not over the scoop
 }
 function qDip(p) { const q = p.queued; if (!q) return; p.queued = false; if (dip() && q === "tap") p.tapLift = true; }
 function dip() {
   const p = run.poi; if (!p || p.state !== "air" || run.dead) return false;
   const ph = phaseAt(run.t / 1000);
   const c0 = capOf(p.S);
-  p.state = "water"; p.t = 0; p.wet = true; p.speed = 0; p.dipT = fx.vt; p.S = Math.max(0, p.S - ph.dip); p.over = false; p.capWas = c0;
+  p.state = "water"; p.t = 0; p.wet = true; p.speed = 0; p.dipT = fx.vt; p.S = Math.max(0, p.S - ph.dip); p.over = false; p.capWas = c0; wear(p, "dip", ph.dip);
   if (p.S <= 0) { p.load = loadAt(p.x, p.y); tear("worn"); return true; } // a worn-out paper falls apart as it touches the water
   if (capOf(p.S) < c0) capDrop(p, c0, capOf(p.S));
   p.load = loadAt(p.x, p.y);
   // the splash startles fish near it: dipping right on a school scatters part of it, sliding in from the side does not
-  const spook = { wakin: 0.2 + 0.06 * ph.i, shubun: 0.6, golden: run.mode === "demo" ? 0.1 : 0.6, deme: 0.15, ranchu: 0.08 };
+  const spook = { wakin: 0.2 + 0.06 * ph.i, shubun: 0.6, golden: run.mode === "demo" ? 0 : 0.6, deme: 0.15, ranchu: 0.08 };
+  let bolted = 0;
   for (const f of run.fish) {
     if (f.ride || f.cd > 0 || f.appear < 1) continue;
     const d2 = (f.x - p.x) ** 2 + (f.y - p.y) ** 2;
-    if (d2 < (CATCH + 6) ** 2 && run.rnd() < spook[f.type]) burstAway(f, p, f.type === "shubun" || f.type === "golden" ? 55 : 40);
+    if (d2 < (CATCH + 6) ** 2 && run.rnd() < spook[f.type]) { burstAway(f, p, f.type === "shubun" || f.type === "golden" ? 55 : 40); f.spookT = fx.vt; ripple(f.x, f.y, 1, 7, 320, "w"); bolted++; }
   }
+  if (bolted && (Number(store.get("runs", 0)) || 0) < 3) tip("tipSpook"); // the splash scares a school: say so, the first runs
   p.load = loadAt(p.x, p.y);
   ripple(p.x, p.y, PR + 2, PR + 18, 420, "p"); ripple(p.x, p.y, PR, PR + 8, 260, "w");
   wburst(p.x, p.y - 2, 5, 40, { col: "p", g: 160 });
@@ -999,7 +1046,7 @@ function lift(cancel) {
   if (L.w === cap + 1 && cap > 0) { // over by a single pip: the heaviest fish slides off and the paper survives, badly worn (bar 1.4.3)
     const f = L.list.reduce((a, b) => b.T.w > a.T.w ? b : a), list = L.list.filter(o => o !== f);
     p.slip = f; burstAway(f, p, 45); ripple(f.x, f.y, 2, 12, 400, "w");
-    p.S = Math.max(0.5, p.S - PIP); cap = capOf(p.S); // the slip leaves a spent paper at worst; it gives way on the next dip
+    p.S = Math.max(0.5, p.S - PIP); cap = capOf(p.S); wear(p, "slip", PIP); // the slip leaves a spent paper at worst; it gives way on the next dip
     L = { w: L.w - f.T.w, n: L.n - 1, pts: L.pts - f.T.pts, list, gold: list.some(o => o.type === "golden") };
     call("slip", "a", p.x, p.y); if (loud()) sfx.creak(3);
     if (L.w > cap) { const g = L.list.reduce((a, b) => b.T.w > a.T.w ? b : a); L.list = L.list.filter(o => o !== g); L.w -= g.T.w; L.n--; L.pts -= g.T.pts; burstAway(g, p, 45); } // the worn paper sheds one more if it must
@@ -1013,7 +1060,7 @@ function lift(cancel) {
     p.out = "empty"; p.liftDur = 150;
     if (!cancel && !p.slip) {
       run.streak = 0; call("empty", "p", p.x, p.y);
-      if (!(run.mode === "play" && hint.active)) p.S = Math.max(0, p.S - 2.5); // an empty scoop still soaks the paper (forgiven while the first-run hint is up)
+      if (!(run.mode === "play" && hint.active)) { p.S = Math.max(0, p.S - 2.5); wear(p, "empty", 2.5); } // an empty scoop still soaks the paper (forgiven while the first-run hint is up)
       offsetCheck(p);
     }
     if (loud()) sfx.liftEmpty();
@@ -1024,10 +1071,10 @@ function lift(cancel) {
   for (const f of run.fish) if (!f.ride && !f.leave && f.appear >= 1) { const d = Math.hypot(f.x - p.x, f.y - p.y); if (d > CATCH && d < CATCH + 4 && L.w + f.T.w <= cap) near++; }
   p.near = near;
   if (near) fx.nearIds = run.fish.filter(f => !f.ride && !f.leave && f.appear >= 1 && Math.hypot(f.x - p.x, f.y - p.y) > CATCH && Math.hypot(f.x - p.x, f.y - p.y) < CATCH + 4 && L.w + f.T.w <= cap).map(f => f.id);
-  if (L.w > cap) { p.out = "tear"; p.liftDur = 260; slow(170, 0.3); if (loud()) sfx.strain(); }
+  if (L.w > cap) { p.out = "tear"; p.liftDur = 260; slow(170, 0.3); if (loud()) sfx.strain(realSec(130)); }
   else if (L.w === cap && L.w >= 3) { // the peak: the paper sags and creaks, then holds. Full slow motion only for the first one and new records
     const peak = !run.closes || L.w > (run.closeW || 0); p.out = "close"; p.peak = peak; p.liftDur = peak ? 420 : 320;
-    if (peak) slow(330, 0.45); else slow(120, 0.6); if (loud()) sfx.strain();
+    if (peak) slow(330, 0.45); else slow(120, 0.6); if (loud()) sfx.strain(realSec(p.liftDur));
   }
   else { p.out = "ok"; p.liftDur = 190; if (loud()) sfx.lift(); }
 }
@@ -1035,7 +1082,6 @@ function finishLift() {
   const p = run.poi, L = p.load, n = L.n, close = p.out === "close";
   p.state = "air"; p.t = 0; p.landT = fx.vt;
   if (p.out === "empty") { if (p.S <= 0) tear("worn"); return; }
-  run.belowN = 0;
   for (const f of p.ride) { const i = run.fish.indexOf(f); if (i >= 0) run.fish.splice(i, 1); }
   const mult = MULT(n), gold = L.gold;
   let gain = L.pts * mult; if (close) gain = Math.ceil(gain * 1.5);
@@ -1043,9 +1089,9 @@ function finishLift() {
   p.fish += n; run.maxPoiFish = Math.max(run.maxPoiFish, p.fish);
   if (mult >= 8) run.x8s++; if (close) run.closes++;
   for (const f of p.ride) { run.byType[f.type] = (run.byType[f.type] || 0) + 1; if (f.type === "golden") run.golds++; if (f.type === "deme") run.demes++; if (f.type === "ranchu") run.ranchus++; }
-  const c0 = capOf(p.S); p.S = Math.max(0, p.S - 1.5 * L.w); // carrying weight wears the paper too
+  const c0 = capOf(p.S); p.S = Math.max(0, p.S - 1.5 * L.w); wear(p, "load", 1.5 * L.w); // carrying weight wears the paper too
   if (capOf(p.S) < c0) capDrop(p, c0, capOf(p.S)); else p.capWas = c0;
-  fx.scoreT = T();
+  fx.scoreT = T(); if (mult >= 2) { p.popT = fx.vt; p.popK = mult >= 4 ? 0.1 : 0.08; }
   p.ride.forEach((f, i) => fx.flyers.push({ type: f.type, x0: f.x, y0: f.y, t0: fx.vt + i * 85, dur: 420 + i * 25, i, dir: f.dir, a: f.va }));
   p.ride = [];
   // tiered feedback (bar 1.2.3): shake, hitstop and the zoom only for the top tier (x8, a close call, the golden fish)
@@ -1063,8 +1109,8 @@ function finishLift() {
   } else if (mult >= 4) { // the good tier: particles, a ring and the gong in the catch notes; no shake, no hitstop
     wburst(x, y, mult >= 8 ? 16 : 12, mult >= 8 ? 95 : 80, { col: "y" }); if (mult >= 8) wburst(x, y, 3, 100, { kind: "spr" });
     ripple(x, y, PR + 2, PR + (mult >= 8 ? 26 : 20), 420, "y"); if (loud()) sfx.catchN(n, run.streak);
-  } else if (mult >= 2) {
-    wburst(x, y, 8, 60, { col: "w" }); if (loud()) sfx.catchN(n, run.streak);
+  } else if (mult >= 2) { // the double: a rim pop and a second ring, so x2 is felt apart from x1
+    wburst(x, y, 8, 60, { col: "w" }); ripple(x, y, PR + 3, PR + 20, 500, "w"); if (loud()) sfx.catchN(n, run.streak);
   } else { wburst(x, y, 4, 40, { col: "p" }); if (loud()) sfx.catchN(n, run.streak); }
   if (run.mode === "play") hint.success();
   if (p.near && n <= 3 && fx.vt - fx.nearT > 5000) { fx.nearT = fx.vt; fx.nearShow = fx.nearIds || []; notice("near"); if (loud()) sfx.near(); }
@@ -1075,14 +1121,14 @@ function finishLift() {
   checkMissions();
   if (p.S <= 0) { p.load = EMPTY; tear("worn"); } // the catch is banked, then the spent paper gives way
 }
-// touch players often press right on the fish, so the paper (drawn above the finger) misses them: after two empty
-// lifts with fish just under the paper, point from the paper down to the finger once (first runs only)
+// touch players often press right on the fish, so the paper (drawn above the finger) misses them: the first empty
+// lift of a run with fish just under the paper points from the paper down to the finger (every run, once)
 function offsetCheck(p) {
-  if (run.mode !== "play" || autopilot || !run.ptr.touch || run.tips.above) return;
+  if (run.mode !== "play" || autopilot || !run.ptr.touch || run.tips.above || !offNow()) return;
   const off = touchOff(), below = run.fish.some(f => !f.ride && !f.leave && Math.abs(f.x - p.x) < 14 && f.y - p.y > CATCH - 2 && f.y - p.y < off + 12);
-  run.belowN = below ? (run.belowN || 0) + 1 : 0;
-  if (run.belowN >= 2 && (Number(store.get("runs", 0)) || 0) < 2) { run.tips.above = true; fx.aboveT = fx.vt; notice("tipAbove"); }
+  if (below) showAbove();
 }
+function showAbove() { run.tips.above = true; fx.aboveT = fx.vt; notice("tipAbove"); }
 function tear(kind) {
   const p = run.poi, L = p.load, cap = kind === "heavy" ? p.liftCap : capOf(p.S), rip = kind !== "melt";
   const worn = kind === "worn" || (p.state === "water" && p.t < 1000); // gave out within a second of the dip: it was spent already
@@ -1093,17 +1139,21 @@ function tear(kind) {
   p.ride = []; p.load = EMPTY;
   run.tears++; run.streak = 0;
   p.cause = kind === "heavy" ? fmt("causeHeavy", { a: L.w, b: cap }) : worn ? S("causeWorn") : S("causeMelt");
-  call(rip ? "torn" : "melt", "r", p.x, p.y, p.cause, true);
+  if (p.wl.slip) { p.wl.load = (p.wl.load || 0) + p.wl.slip; delete p.wl.slip; }
+  const wk = topWear(p.wl); p.why = wk && (kind !== "heavy" || cap <= 5) ? "why_" + wk : ""; // why the paper held so little
+  call(rip ? "torn" : "melt", "r", p.x, p.y, p.cause, true); fx.call.sub2 = p.why ? S(p.why) : "";
   for (let i = 0; i < 14; i++) addPart({ x: wx(p.x + rin(-8, 8)), y: wx(p.y + rin(-8, 8)), vx: rin(-50, 50) * WS, vy: rin(-90, -20) * WS, g: 280, life: 0.9, max: 0.9, col: i & 1 ? "paper" : "paperD", kind: "chip", s: 3.4, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 10 }); // shreds of paper (the run's random draws stay in order)
   ripple(p.x, p.y, PR + 2, PR + 34, 700, "p"); ripple(p.x, p.y, PR, PR + 18, 500, "w");
   wburst(p.x, p.y, 12, 90, { kind: "drop", col: "p", g: 240 });
-  addTrauma(rip ? 0.8 : 0.45); slow(rip ? 240 : 160, 0.3); hitstop(rip ? 0.14 : 0.05);
-  if (rip && run.stock <= 0 && run.mode !== "attract") zoomPunch(wx(p.x), wx(p.y), 1.04, 520, T()); // the camera only for the run-ending rip
+  const end = run.stock <= 0; // the last paper's end is the run's climax: deeper slow motion and the biggest push-in
+  addTrauma(rip ? (end ? 0.95 : 0.8) : 0.45); slow(end ? 320 : rip ? 240 : 160, end ? 0.22 : 0.3); hitstop(rip || end ? 0.15 : 0.05);
+  if (end && run.mode !== "attract") zoomPunch(wx(p.x), wx(p.y), 1.08, 760, T()); // the camera only for the run-ending tear
   if (loud()) { duckMus(); if (rip) sfx.tear(); else sfx.melt(); }
   musDrop();
   checkMissions();
   if (run.stock <= 0) kill(kind);
 }
+const realSec = ms => { const sl = Math.max(0, run.slowUntil - run.t); return (Math.min(ms, sl) / run.slowK + Math.max(0, ms - sl)) / 1000; }; // world ms -> seconds heard
 function slow(simMs, k) { run.slowK = run.t < run.slowUntil ? Math.min(run.slowK, k) : k; run.slowUntil = Math.max(run.slowUntil, run.t + simMs); } // world slow motion, in world time
 function checkMissions() {
   if (!run.missions) return;
@@ -1161,8 +1211,10 @@ function aiStep() {
     else if (L.w > cap) { if (c) { p.tx += (p.x - c.x) * 0.02; } go = A.under > 1800 && L.w <= cap + 1; } // at most a slip, never a rip here
     else go = A.under > 3400;                                       // waiting for a pip to break
   } else {
-    if (L.n && L.w <= cap && (L.n >= A.plan.n || A.under > 900)) { A.hold += STEP_MS; if (A.hold >= A.react) go = true; }
-    else if (L.w > cap) { A.hold += STEP_MS; if (A.err && A.hold >= A.react) go = true; else if (A.under > 1300) { const f = L.list.reduce((a, b) => b.T.w > a.T.w ? b : a); p.tx = p.x + (p.x - f.x) * 0.8; p.ty = p.y + (p.y - f.y) * 0.8; } }
+    const noClose = run.mode === "demo" && run.closes && L.w === cap && L.w >= 3; // the clip has its one close call; later ones would repeat it
+    const gp = A.act === "gold" && A.plan && A.plan.gold, full = gp ? L.gold || A.under > 2600 : L.n >= A.plan.n || A.under > 900; // the gold plan waits for the golden fish itself
+    if (L.n && L.w <= cap && !noClose && full) { A.hold += STEP_MS; if (A.hold >= A.react) go = true; }
+    else if (L.w > cap || noClose) { A.hold += STEP_MS; if (A.err && A.hold >= A.react) go = true; else if (A.under > (noClose ? 300 : 1300)) { const ok = L.list.filter(f => !(A.act === "gold" && f.type === "golden")), f = (ok.length ? ok : L.list).reduce((a, b) => b.T.w > a.T.w ? b : a); p.tx = p.x + (p.x - f.x) * 0.8; p.ty = p.y + (p.y - f.y) * 0.8; } }
     if ((A.under > 1900 && L.w <= cap + 1) || A.under > 3200) go = true; // a careful hand risks a slip, not a rip
   }
   if (go) {
@@ -1174,6 +1226,10 @@ function aiStep() {
 }
 function aiPlan(p, C) {
   const cap = capOf(p.S), act = run.A.act, cands = [];
+  if (act === "gold") { // the clip's gold beat: go for the golden fish itself, not a bunch that happens to hold it
+    const g = run.fish.find(f => f.type === "golden" && f.appear >= 1 && !f.leave && !f.ride);
+    if (g) { const a = Math.atan2(p.y - g.y, p.x - g.x); return { x: g.x, y: g.y, v: 1, ids: [g.id], n: 1, w: g.T.w, gold: true, ox: 0, oy: 0, side: { x: Math.cos(a) * 14, y: Math.sin(a) * 14 } }; }
+  }
   for (const f of run.fish) {
     if (f.ride || f.leave || f.appear < 1) continue;
     const pts = [{ x: f.x, y: f.y }];
@@ -1188,6 +1244,7 @@ function aiPlan(p, C) {
       else if (act === "close") { if (L.w > cap || L.w < cap - 1) v = v / 20; else if (L.w === cap) v *= 3; }
       else if (act === "big") { if (L.w > cap) continue; v *= L.n >= 3 ? 2 + L.n : 0.2; } // the clip's middle beat: a x4 or x8 haul
       else if (L.w > cap) continue;
+      if (run.mode === "demo" && act !== "close" && run.closes && L.w === cap && L.w >= 3) continue; // one close call per clip
       if (act === "gold" && L.gold) v *= 20;
       if (run.mode === "demo" && q.y > WY1 - 40) v /= 3; // the clip keeps its action out of the Shorts caption area
       const d = Math.hypot(q.x - p.x, q.y - p.y);
@@ -1217,7 +1274,7 @@ function keyStep(dt) { // arrows move the scoop; Shift moves it slowly (no drain
 // ---------- KEEP: failure. The last tear holds in slow motion with the cause on screen, then the result (bar 1.4.1) ----------
 function kill(reason) {
   const p = run.poi;
-  run.dead = { reason, at: T(), cause: p.cause, x: p.x, y: p.y };
+  run.dead = { reason, at: T(), cause: p.cause, why: p.why || "", x: p.x, y: p.y };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (run.mode === "play") { pfStop(); hint.runEnded((run.t - run.t0) / 1000); }
   if (loud()) sfx.fail();
@@ -1283,7 +1340,11 @@ const imm = {
   dip(w) { const q = vary(45, 0.1); hiss("bandpass", 1300 * q.f, 1.4, 0.13, 0.34 * q.g, w, null, 450); tone("sine", 600 * q.f, 300, 0.09, 0.22 * q.g, w); tone("triangle", 950 * q.f, 520, 0.05, 0.1 * q.g, w); },
   liftEmpty(w) { const q = vary(40, 0.1); hiss("bandpass", 800 * q.f, 1.2, 0.12, 0.24 * q.g, w, null, 2400); tone("sine", 420 * q.f, 650, 0.07, 0.12 * q.g, w); },
   lift(w) { const q = vary(40, 0.1); hiss("bandpass", 900 * q.f, 1, 0.16, 0.26 * q.g, w, null, 2800); tone("sine", 380 * q.f, 760, 0.1, 0.14 * q.g, w); },
-  strain(w) { for (let i = 0; i < 6; i++) hiss("bandpass", 1700 + i * 260, 6, 0.022, 0.3, w + i * 0.05); tone("triangle", 520, 430, 0.35, 0.12, w); tone("triangle", 1040, 860, 0.3, 0.06, w); },
+  strain(w, d) { // the paper stretching for the whole hold: creaks that come faster and climb, a rising groan, then a gap so the payoff pops
+    d = Math.max(0.25, d || 0.4); const n = Math.max(5, Math.round(d / 0.055));
+    for (let i = 0; i < n; i++) { const k = i / n; hiss("bandpass", (1500 + k * 1600) * (0.94 + Math.random() * 0.12), 7, 0.028, 0.24 + 0.14 * k, w + d * 0.88 * (1 - Math.pow(1 - k, 1.5))); }
+    tone("triangle", 470, 760, d * 0.9, 0.13, w, null, d * 0.65); tone("sine", 940, 1520, d * 0.86, 0.05, w, null, d * 0.6);
+  },
   catchN(w, n, st) { // routine payoff: one pluck per fish, up the scale; a streak lifts the base note (two octaves at most)
     const q = vary(30, 0.08), o = Math.min(st || 0, 8); n = n || 1;
     hiss("bandpass", 2600 * q.f, 2, 0.04, 0.18, w);
@@ -1336,7 +1397,7 @@ const imm = {
 // and milestones near -23.5 dB (4 to 6 dB above); the danger cues (lost pip, dissolve crackle, low warning) sit at or
 // above the play music so the lead-in to a tear is heard, not only seen
 const LVL = { dip: 3, lift: 3.5, liftEmpty: 2.5, catchN: 1.4, plop: 2, ui: 2, pip: 14, lowWarn: 8, creak: 3, crackle: 10, close: 0.7, big: 0.7, gold: 0.62,
-  best: 0.7, notice: 0.85, mission: 1.1, spare: 1.4, tear: 1.25, melt: 1.3, fail: 0.55 };
+  best: 0.7, notice: 0.85, mission: 1.1, spare: 0.8, tear: 1.25, melt: 1.3, fail: 0.55, strain: 0.75, enter: 4.5, tick: 4, restock: 1.8 };
 function playSfx(k, w, ...a) { // each sound through its own trim gain on the way into the SFX bus
   const keep = AU.sfx, gn = AU.ctx.createGain(); gn.gain.value = LVL[k] || 1; gn.connect(keep); AU.sfx = gn;
   try { imm[k](w, ...a); } finally { AU.sfx = keep; }
@@ -1355,6 +1416,7 @@ const FLUTE = [7, -2, 8, 7, 5, -2, -1, 5, 7, 8, 10, -2, 8, -2, 7, -1, 5, -2, 7, 
 const FLUTE2 = [10, -2, 12, 10, 8, -2, -1, 8, 10, 12, 13, -2, 12, -2, 10, -1, 8, -2, 10, 8, 7, -2, 5, -2, 7, 8, 10, -2, 8, -2, -1, -1,
   12, -2, 13, 12, 10, -2, 12, -2, 13, 15, 13, -2, 12, 10, 8, -1, 10, -2, 8, 7, 5, -2, 7, -2, 5, -2, 3, -2, -2, -2, -1, -1]; // the answer, from 45 s
 const MUS_LV = { title: 0.32, play: 0.4, strain: 0.18, bed: 0.4, duck: 0.08, off: 0 }; // music sits under the routine hits
+const musLv = lv => MUS_LV[lv] * (DEMO ? 1.8 : 1); // the clip carries the band about 5 dB louder, a steady bed for Shorts
 const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1, lay: 0, strain: false };
 function duckMus() { // the band dips under a top-tier stinger and comes back
   if (!AU.music || AU.offline) return; const t = AU.ctx.currentTime, gn = AU.music.gain;
@@ -1363,7 +1425,7 @@ function duckMus() { // the band dips under a top-tier stinger and comes back
 function musicLevel(lv) {
   mus.level = lv;
   if (!mus.bus || !AU.ctx) return;
-  const v = MUS_LV[lv], t = AU.ctx.currentTime;
+  const v = musLv(lv), t = AU.ctx.currentTime;
   mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" ? 0.02 : 0.2);
   if (lv === "duck") mus.drop = mus.i + 16;
   if (lv === "bed" || lv === "title") mus.lay = 0;
@@ -1372,7 +1434,7 @@ function musDrop() { // a tear: the band stops for a moment and comes back from 
   mus.drop = mus.i + 12; mus.lay = 0;
   if (!mus.bus || !AU.ctx || mus.level !== "play") return;
   const t = AU.ctx.currentTime, gn = mus.bus.gain;
-  gn.cancelScheduledValues(t); gn.setTargetAtTime(0.08, t, 0.02); gn.setTargetAtTime(MUS_LV.play, t + 0.8, 0.5);
+  gn.cancelScheduledValues(t); gn.setTargetAtTime(musLv("duck"), t, 0.02); gn.setTargetAtTime(musLv("play"), t + 0.8, 0.5);
 }
 function layersNow() {
   if (!run) return 0;
@@ -1380,6 +1442,7 @@ function layersNow() {
   if (mus.i < mus.drop) return 0;
   const ph = run.phase, st = run.streak;
   let l = 0; if (ph >= 1 || st >= 3) l = 1; if (ph >= 2 || st >= 6) l = 2; if (ph >= 3 || st >= 10) l = 3;
+  if (run.last && !run.dead) l = Math.min(3, l + 1); // the last scoop lifts the band one layer
   return l;
 }
 function entry(lay, w) { // a layer arrives with its own flourish, so you hear it come in
@@ -1397,7 +1460,7 @@ function musicStep() {
   const p = run && run.poi, strain = !!(p && loud() && !run.dead && p.state === "water" && p.load.n && p.load.w >= capOf(p.S) * 0.75);
   if (strain !== mus.strain && (mus.level === "play" || mus.level === "strain")) { mus.strain = strain; musicLevel(strain ? "strain" : "play"); }
   const gold = run && run.fish.some(f => f.type === "golden" && !f.leave);
-  while (mus.next < c.currentTime + 0.15) {
+  while (mus.next < c.currentTime + 0.35) { // scheduled well ahead, so a slow frame never makes the band stumble
     const i = mus.i++, w = mus.next;
     if (mus.level !== "bed") { const lay = layersNow(); if (lay > mus.lay) entry(lay, w); mus.lay = lay; }
     musVoice(i, w, mus.bus, { bed: mus.level === "bed", lay: mus.lay, strain: mus.strain, gold, title: mus.level === "title" });
@@ -1452,7 +1515,7 @@ const RES = { drop: 220, head: 200, cause: 300, count: 420, countDur: 650, rank:
 function makeResult(now) {
   const play = run.mode === "play", best = Number(store.get("best", 0)) || 0, runs = Number(store.get("runs", 0)) || 0;
   const r = { at: now, score: run.score, best, newBest: play && run.score > best && run.score > 0, rank: rankOf(run.score), showRank: !play || runs >= 1,
-    cause: run.dead.cause || "", ticks: 0, rankDone: false, stamped: false, goal: null, tasks: play && run.missions ? run.missions.slice() : null, taskN: 0 };
+    cause: run.dead.cause || "", why: run.dead.why ? S(run.dead.why) : "", ticks: 0, rankDone: false, stamped: false, goal: null, tasks: play && run.missions ? run.missions.slice() : null, taskN: 0 };
   // one concrete next goal from a small rotating list (bar 1.6.1)
   const ri = RANKS.findIndex(t => t > run.score), pool = [
     ri > 0 ? { k: "g_rank", n: RANKS[ri] - run.score, ri } : null, run.x8s ? null : { k: "g_x8" }, run.golds ? null : { k: "g_gold" }, run.closes ? null : { k: "g_close" }
@@ -1531,7 +1594,7 @@ const FISH = {
   golden: { r: 17, c: ["gold", "goldL", "goldD"], tx: -0.36, span: 0.62 }
 };
 FISH.golden = Object.assign({}, FISH.wakin, FISH.golden);
-const BENDS = [-0.46, -0.23, 0, 0.23, 0.46];
+const BENDS = [-0.46, -0.31, -0.155, 0, 0.155, 0.31, 0.46], POSE_MID = 3; // tail poses, left to right
 // the tail swings about the root of the tail, more toward its tip, so it bends in a curve
 function bendPts(pts, x0, bend, span) {
   return pts.map(([px, py]) => { const k = clamp((x0 - px) / span, 0, 1), a = bend * k * (0.5 + 0.5 * k), dx = px - x0; return [x0 + dx * Math.cos(a) - py * Math.sin(a), dx * Math.sin(a) + py * Math.cos(a)]; });
@@ -1540,7 +1603,11 @@ function fishArt(x, u, t, pose, sil) {
   const d = FISH[t], bend = BENDS[pose], body = pSmooth(d.body), tail = pSmooth(bendPts(d.tail, d.tx, bend, d.span)), fins = P2();
   for (const s of [1, -1]) fins.addPath(pSmooth(d.fin.map(([a, b]) => [a, b * s])));
   const eyes = t === "deme" ? [1, -1].map(s => pBlob(0.48, 0.33 * s, 0.15, 0.14, 0.04, 5 + s)) : [];
-  if (sil) { x.fillStyle = C("far"); for (const p of [tail, fins, body, ...eyes]) x.fill(p); return; }
+  if (sil) { // a one-tone silhouette; deep and under get a thin ink edge round the whole shape
+    x.fillStyle = C(sil === "under" ? "paperD" : "far"); for (const p of [tail, fins, body, ...eyes]) x.fill(p);
+    if (sil !== "cast") for (const p of [tail, fins, body]) ST.edge(x, p, 0.9 * u);
+    return;
+  }
   const [c0, c1, c2] = d.c, w = 1.2 * u;
   ST.fill(x, tail, d.tc || c0, null, u);
   x.save(); x.clip(tail); x.lineWidth = 0.8 * u; x.strokeStyle = C(t === "shubun" ? "red" : c2);
@@ -1566,8 +1633,41 @@ function fishArt(x, u, t, pose, sil) {
 }
 const FISH_MAT = [0.24, 0, 0];
 const fishSpr = (t, pose) => lit("f" + t + pose, FISH[t].r, FISH_MAT, (x, u) => fishArt(x, u, t, pose));
-const fishShadow = (t, pose) => { const r = FISH[t].r; return bake("fs" + t + pose, 2.4 * r, 2.4 * r, 1.2 * r, 1.2 * r, x => { x.scale(r, r); fishArt(x, 1 / r, t, pose, true); }); };
-const poseOf = (ph, k) => { const v = Math.sin(ph * (k || 1.6)); return v < -0.7 ? 0 : v < -0.25 ? 1 : v < 0.25 ? 2 : v < 0.7 ? 3 : 4; };
+// Fish frames: every kind's lit frames (BENDS.length tail poses x FISH_ANG headings) are drawn into one atlas canvas
+// per kind and size, a pose row at a time from the kit's litFrame, so play never makes new canvases (bar 1.10.5).
+// The shade stays lower right: a heading between two steps turns the nearest frame by at most 11 degrees.
+const FISH_ANG = 16, ATLAS = new Map();
+function fishAtlas(t) {
+  let A = ATLAS.get(t);
+  if (!A || A.K !== L.K) {
+    const s = fishSpr(t, 0), N = s.N, P = N + 2; // a 2 px gutter so filtering never bleeds a neighbour in
+    A = { K: L.K, N, P, c: cnv(P * FISH_ANG, P * BENDS.length), cells: new Uint8Array(FISH_ANG * BENDS.length), left: FISH_ANG * BENDS.length };
+    A.x = A.c.getContext("2d"); ATLAS.set(t, A);
+  }
+  return A;
+}
+function fishCell(A, t, pose, j) { // one heading of one tail pose, lit once and kept in the atlas
+  const k = pose * FISH_ANG + j; if (A.cells[k]) return;
+  A.cells[k] = 1; A.left--;
+  A.x.drawImage(litFrame(fishSpr(t, pose), j * TAU / FISH_ANG), j * A.P + 1, pose * A.P + 1);
+}
+function fishWarm(n) { // light a few cells ahead of need each quick frame (about 1 ms each), so no frame ever pays for a whole kind
+  for (const t in FISH) {
+    const A = fishAtlas(t); if (!A.left) continue;
+    for (let k = 0; k < A.cells.length && n > 0; k++) if (!A.cells[k]) { fishCell(A, t, fl(k / FISH_ANG), k % FISH_ANG); n--; }
+    if (n <= 0) return;
+  }
+}
+function drawFishLit(x, t, pose, X, Y, a, sc) {
+  const A = fishAtlas(t), st = TAU / FISH_ANG, i0 = Math.round(a / st), j = md(i0, FISH_ANG), D = A.N / L.K;
+  fishCell(A, t, pose, j);
+  x.save(); x.translate(X, Y); if (sc) x.scale(sc, sc); x.rotate(a - i0 * st);
+  x.drawImage(A.c, j * A.P + 1, pose * A.P + 1, A.N, A.N, -D / 2, -D / 2, D, D); x.restore();
+}
+// silhouettes per pose: "far" for a cast shadow on the tub floor (no ink), "deep" for a fish still deep in the
+// water (far with a thin ink edge), "under" for a fish seen through the dry paper (paperD with a thin ink edge)
+const fishSil = (t, pose, kind) => { const r = FISH[t].r; return bake("fs" + kind + t + pose, 2.4 * r, 2.4 * r, 1.2 * r, 1.2 * r, x => { x.scale(r, r); fishArt(x, 1 / r, t, pose, kind); }); };
+const poseOf = (ph, k) => Math.round((Math.sin(ph * (k || 1.6)) + 1) * (BENDS.length - 1) / 2);
 // sunlight through the reed awning: soft flat patches on the water (light, so no ink line)
 const dappleSpr = i => bake("dap" + i, 64, 44, 32, 22, x => { x.fillStyle = C("mist"); x.fill(pBlob(0, 0, 27 - i * 5, 15 + i * 2, 0.24, i * 7 + 3)); if (i === 1) x.fill(pBlob(20, -9, 7, 5, 0.2, 2)); });
 // the scoop: a moulded ring with a short grip; the paper states are drawn on top of it each frame
@@ -1702,7 +1802,7 @@ function cumulus(x, X, Y, w, h, n) { // a summer cloud: round lobes of uneven si
   ST.fill(x, p, "paper");
   x.save(); x.clip(p); // the shaded underside: a wavy flat band, and the lower right of each lobe
   const hem = []; for (let px = X - 4; px <= X + w + 4; px += 6) hem.push([px, Y - h * 0.16 - Math.sin(px / 23 + n) * 3]);
-  x.fillStyle = C("sky3"); x.fill(pPoly([...hem, [X + w + 4, Y + 9], [X - 4, Y + 9]]));
+  x.fillStyle = C("goldL"); x.fill(pPoly([...hem, [X + w + 4, Y + 9], [X - 4, Y + 9]])); // the low sun warms the hem
   lobes.forEach(([cx, cy, r], i) => { if (i % 2) ST.line(x, pSmooth([[cx - r * 0.7, cy + r * 0.62], [cx - r * 0.1, cy + r * 0.2], [cx + r * 0.62, cy + r * 0.36]], true), 0.9, "sky3"); });
   x.restore();
   ST.shade(x, p, "sky3", 3, 4); ST.edge(x, p, 1.1);
@@ -1895,13 +1995,69 @@ function strawHat(x, X, Y) { // a low bamboo stool with a straw hat and a red-ri
   shape(x, pPoly([[X - 13.6, Y - 15.5], [X + 10.8, Y - 15.5], [X + 11, Y - 11.6], [X - 14, Y - 11.4]]), "red", 0.8);
   cordLine(x, pSmooth([[X + 10, Y - 13], [X + 17, Y - 7], [X + 21, Y - 2]], true), 1.8, "red", 0.4);
 }
+// passers-by on the open ground, kept quiet so they never pull the eye from the tub: flat greyD figures in yukata
+// with a warm rim where the low sun catches them; only the child's goldfish bag keeps its colour (feet at 0, 0)
+const walkerSpr = kid => bake(kid ? "walkerK" : "walkerA", 46, 74, 22, 70, q => {
+  const fig = [];
+  if (!kid) {
+    fig.push(pEll(1.5, -59, 6, 6.6), pEll(-3.4, -64.6, 3.4, 3.1));                                          // head and hair bun
+    fig.push(pSmooth([[-7, -51.5], [5.5, -52], [8.6, -44], [7.8, -26], [7.4, -4.4], [0.6, -3], [-6, -4.2], [-8, -26], [-9.4, -44]]));
+    fig.push(pSmooth([[-8.6, -48], [-14, -40], [-14.6, -29], [-9, -27.5], [-7.6, -38]]));                    // the hanging sleeve
+    fig.push(pSmooth([[5.6, -46], [12.6, -38.5], [15, -40.8], [8.4, -48.6]]));                                // the forearm
+    fig.push(pEll(17.6, -45.5, 5.8, 6.4));                                                                     // a round fan
+  } else {
+    fig.push(pEll(0.5, -36.5, 5.6, 6));                                                                        // a big round head
+    fig.push(pEll(-1.8, -42.4, 2.4, 2.2));                                                                     // a little topknot
+    fig.push(pSmooth([[-5, -30], [4.6, -30.2], [6.4, -22], [6.2, -4], [0.4, -3], [-5, -4], [-6.6, -22]]));
+    fig.push(pSmooth([[4, -27], [9.6, -26.6], [10.6, -24], [5, -23.2]]));                                      // the arm held out
+  }
+  for (const p of fig) ST.fill(q, p, "greyD");
+  const K = L.K; rimLight(q.canvas, "lit", -1.7 * K, -1.1 * K, 1);
+  for (const p of fig) ST.edge(q, p, 0.9);
+  for (const fx of kid ? [-2.4, 3] : [-3, 3.8]) shape(q, pBlob(fx, -1.4, kid ? 2.4 : 2.9, 1.3, 0.1, 5), "plank", 0.8); // geta
+  if (!kid) { ST.line(q, pLine(17.6, -39, 15, -33.5), 1); obi(q); }
+  else { // a soft sash tied in a bow at the back, and the goldfish bag hanging from the raised hand on a cord
+    const bow = pSmooth([[-5, -21], [-9.4, -24], [-10.4, -18.6], [-6, -17.4]]), sash = pPoly([[-6.4, -21.6], [6.2, -21.8], [6.2, -18], [-6.2, -17.6]]);
+    for (const p of [sash, bow]) { q.fillStyle = C("grey"); q.fill(p); ST.edge(q, p, 0.7); }
+    ST.line(q, pLine(10.2, -24.6, 11, -20.5), 0.8);
+    const bag = pSmooth([[11, -20.5], [15.6, -15.5], [16.6, -8.6], [11.4, -4.6], [6, -8.4], [6.6, -15.2]]);
+    shape(q, bag, "mist", 0.9, "sky3", 1.2, 1.2);
+    q.save(); q.clip(bag); q.fillStyle = C("water"); q.fillRect(4, -13, 14, 10); q.restore();
+    shape(q, pSmooth([[9, -9.6], [12, -11.2], [14.4, -9.6], [12, -8]]), "red", 0.6); ST.edge(q, bag, 0.9);
+  }
+  function obi(c) { // the obi: one lighter band across the waist
+    const ob = pPoly([[-8, -37.2], [8, -37.6], [7.9, -32.6], [-7.8, -32.2]]); c.fillStyle = C("grey"); c.fill(ob); ST.edge(c, ob, 0.8);
+  }
+});
+function walkers(x, X, Y, flip) { // a parent with a fan and a child a step behind; long thin shadows fall away from the sun
+  for (const [dx, dy, kid] of [[0, 0, false], [-22, 5, true]]) {
+    const wx0 = X + dx * flip;
+    x.fillStyle = C("tagD"); x.fill(pBlob(wx0 + 15, Y + dy + 1, kid ? 13 : 20, kid ? 2.6 : 3.4, 0.08, fl(wx0) & 63));
+    put(x, walkerSpr(kid), wx0, Y + dy, 0, flip, 1);
+  }
+}
+// a reed blind leant against the fence: thin reeds tied with two cords, a bamboo bar on top
+function sudare(x, X, Y, w, h) {
+  const p = pPoly([[X, Y - h], [X + w, Y - h - 3], [X + w + 7, Y], [X + 6, Y + 2]]);
+  ST.fill(x, p, "tagL"); x.save(); x.clip(p); x.fillStyle = C("tagG"); for (let yy = Y - h - 4; yy < Y + 3; yy += 2.4) x.fillRect(X - 2, yy, w + 12, 0.8); x.restore();
+  ST.shade(x, p, "tag", 1.6, 1.8); ST.edge(x, p, 1);
+  for (const k of [0.24, 0.76]) cordLine(x, pLine(X + w * k, Y - h - 3 * k, X + w * k + 6.5, Y + 1), 1.4, "plank", 0.4);
+  bamboo(x, X - 3, Y - h + 0.6, X + w + 4, Y - h - 3.4, 4.4, 30);
+}
 function buildBg() {
   BG = layer(BGM, (x, X0, Y0, W, H) => {
     const X1 = X0 + W, Y1 = Y0 + H, r = seeded(17), side = X => X < -10 || X > CW + 10;
     // the summer sky in flat steps with hand-cut edges (never a gradient), thunderheads, hills and trees far off
     x.fillStyle = C("sky0"); x.fillRect(X0, Y0, W, H);
-    below(x, X0, X1, -70, 5, 1, "sky1"); below(x, X0, X1, 18, 4, 2, "sky2"); below(x, X0, X1, 84, 3, 3, "sky3");
-    for (let n = Math.floor((X0 - 220) / 250); n * 250 < X1 + 60; n++) cumulus(x, n * 250 + 50 * hash1(n * 5), 128 - 16 * h01(n * 3), 120 + 60 * h01(n * 7), 52 + 36 * h01(n * 9), n + 20);
+    below(x, X0, X1, -70, 5, 1, "sky1"); below(x, X0, X1, 18, 4, 2, "sky2"); below(x, X0, X1, 70, 3, 3, "sky3");
+    below(x, X0, X1, 98, 3, 5, "warm"); below(x, X0, X1, 122, 2, 6, "goldL"); // the late-afternoon glow low over the hills
+    // thunderheads at an uneven pitch: some slots stay empty, sizes differ a lot, now and then a small one rides beside
+    for (let n = Math.floor((X0 - 300) / 230); n * 230 < X1 + 80; n++) {
+      if (h01(n * 11 + 3) < 0.24) continue;
+      const big = h01(n * 7), cx = n * 230 + 70 * hash1(n * 5);
+      cumulus(x, cx, 126 - 20 * h01(n * 3), 86 + 120 * big, 30 + 70 * big * h01(n * 9) + 14 * h01(n * 4), n + 20);
+      if (h01(n * 13) > 0.62) cumulus(x, cx + 100 + 110 * big, 112 - 14 * h01(n * 17), 44 + 22 * h01(n * 19), 14 + 10 * h01(n * 23), n + 61);
+    }
     below(x, X0, X1, 138, 9, 4, "far", 0.7);
     for (let n = Math.floor((X0 - 40) / 46); n * 46 < X1 + 40; n++) if (side(n * 46)) tree(x, n * 46 + 18 * hash1(n * 13), 160 + 6 * h01(n), 0.8 + 0.5 * h01(n * 3 + 1), n);
     // the street on both sides: a bamboo fence, a path in dappled sun, the neighbours' things
@@ -1912,7 +2068,8 @@ function buildBg() {
     if (X0 < -20) grassBand(x, X0 - 4, -12, 200, 236, 4);
     if (X1 > CW + 20) grassBand(x, CW + 12, X1 + 4, 204, 232, 6);
     // sunflowers in front of the fence, of uneven height and spacing
-    for (const [sx, sb, sh, sd] of [[-372, 244, 96, 1], [-38, 246, 122, 2], [404, 240, 116, 3], [436, 246, 88, 4], [560, 242, 132, 5], [600, 247, 100, 6], [736, 243, 120, 7]]) if (sx > X0 - 20 && sx < X1 + 20) sunflower(x, sx, sb, sh, sd);
+    for (const [sx, sb, sh, sd] of [[-372, 244, 96, 1], [-38, 246, 122, 2], [410, 240, 128, 3], [446, 247, 74, 4], [712, 244, 104, 7]]) if (sx > X0 - 20 && sx < X1 + 20) sunflower(x, sx, sb, sh, sd);
+    if (X1 > CW + 60) sudare(x, 528, 250, 46, 58);
     if (X0 < -20) lane(x, X0 - 4, -12, 7);
     if (X1 > CW + 20) lane(x, CW + 12, X1 + 4, 9);
     // pebbles in small clusters and tufts of grass on the open ground
@@ -1932,12 +2089,13 @@ function buildBg() {
       shadow(x, 474, 622, 44, 7); strawHat(x, 470, 592);
       shadow(x, 604, 617, 22, 6); bucket(x, 598, 590);
       shadow(x, 704, 633, 23, 6); potGlory(x, 700, 612, 8, ["redL", "indigo", "indigo"]);
+      walkers(x, 520, 356, 1);
     } else if (X1 > CW + 20) { shadow(x, 410, 583, 22, 6); bucket(x, 404, 556); }
     // past the usual edges (very wide screens) the street goes on with other things at an uneven pitch
     for (const sd of [-1, 1]) {
       const q = seeded(sd < 0 ? 41 : 43);
       for (let X = sd < 0 ? -440 : 800, k = 0; sd < 0 ? X > X0 - 60 : X < X1 + 60; X += sd * (80 + q() * 80), k++) {
-        const kind = [0, 2, 1, 0, 3, 2][k % 6], y = 440 + q() * 160; // every neighbour differs from the one before
+        const kind = [0, 2, 1, 0, 3, 2][(k + (sd > 0 ? 1 : 0)) % 6], y = 440 + q() * 160; // every neighbour differs from the one before
         if (kind === 0) sunflower(x, X, 244 + q() * 6, 90 + q() * 50, 20 + k);
         else if (kind === 1) { shadow(x, X + 4, y + 21, 23, 6); potGlory(x, X, y, 9 + k, k % 2 ? ["indigo", "redL", "paper"] : ["redL", "paper", "indigo"]); }
         else if (kind === 2) { shadow(x, X + 6, y + 26, 22, 6); bucket(x, X, y); }
@@ -2034,16 +2192,18 @@ function drawFish(x, now, shadow) {
   for (const f of run.fish) {
     if (f.ride || f.appear < 0.3) continue;
     const pose = poseOf(f.ph), X = wx(f.x), Y = wx(f.y), a = f.va == null ? f.dir * Math.PI / 4 : f.va, s = fishScale(f), deep = f.appear < 0.6;
-    if (shadow) { if (!deep) put(x, fishShadow(f.type, pose), X + 5, Y + 8, a, s * 0.95); continue; }
-    if (deep) { put(x, fishShadow(f.type, pose), X, Y, a, s); continue; } // still deep: only a dark shape
-    drawLit(x, fishSpr(f.type, pose), X, Y, a, s);
+    if (shadow) { if (!deep) put(x, fishSil(f.type, pose, "cast"), X + 5, Y + 8, a, s * 0.95); continue; }
+    if (deep) { put(x, fishSil(f.type, pose, "deep"), X, Y, a, s); continue; } // still deep: only a dark shape
+    drawFishLit(x, f.type, pose, X, Y, a, s);
+    const sk = f.spookT != null ? (fx.vt - f.spookT) / 450 : 1;
+    if (sk >= 0 && sk < 1) for (const d of [-0.85, 0, 0.85]) { const b = a + d, r0 = 17 + sk * 7; ST.line(x, pLine(X + Math.cos(b) * r0, Y + Math.sin(b) * r0, X + Math.cos(b) * (r0 + 6), Y + Math.sin(b) * (r0 + 6)), 1.7); } // startled: ink dashes off the head
     if (f.type === "golden" && !Juice.reduce) { const k = md(now / 600 + f.id * 0.37, 1); if (k < 0.5) { const sx = X + Math.cos(f.id + fl(now / 600)) * 12, sy = Y - 8 + Math.sin(f.id * 3 + fl(now / 600)) * 6, ss = Math.sin(k * TAU) * 1.2; at(x, sx, sy, ss, k, () => shape(x, pStar(0, 0, 5, 1.4, 4), "goldL", 0.8)); } }
   }
 }
 function drawRide(x, now) { // fish on the lifted paper wriggle
   const p = run.poi; if (!p || p.state !== "lift") return;
   const dy = wx(poiDy(p) - 1);
-  for (const f of p.ride) drawLit(x, fishSpr(f.type, poseOf(now / 55 + f.id, 1)), wx(f.x), wx(f.y) + dy, f.va || 0);
+  for (const f of p.ride) drawFishLit(x, f.type, poseOf(now / 55 + f.id, 1), wx(f.x), wx(f.y) + dy, f.va || 0);
 }
 function drawNear(x) { // the honest near miss: a ring blinks on the fish that was just past the rim
   const k = fx.vt - fx.nearT; if (k > 900 || !fx.nearShow || (fl(k / 110) & 1)) return;
@@ -2060,12 +2220,29 @@ function drawPips(x, now) { // weight beads over the fish near the scoop; the on
   }
 }
 const touchOff = () => clamp(Math.round(TOUCH_OFF_CSS / (L.kc * WS)), 16, 32);
+// until the first catch of a first run (the first-run hint is up) the scoop sits right under the finger, so a
+// stranger who presses on the fish gets them; after that it sits above the finger, and the first such press shows why
+const offNow = () => run.mode === "play" && hint.active ? 0 : touchOff();
 const touchy = () => run.mode === "play" && !autopilot && run.ptr.touch;
 function poiDy(p) { // the scoop's own motion: it sinks a little on a dip, rises on a lift, then settles with a bounce
   const a = fx.vt - (p.dipT || -1e9), b = fx.vt - (p.landT || -1e9);
   if (p.state === "water") return a < 160 ? 1.6 * (1 - a / 160) * (a < 60 ? a / 60 : 1) : 0;
-  if (p.state === "lift") { const k = clamp(p.t / p.liftDur, 0, 1); return -k * 3 + (p.out === "close" && k > 0.25 && k < 0.7 ? 2 * Math.sin((k - 0.25) / 0.45 * Math.PI) : 0); } // a close call sags before it rises
+  if (p.state === "lift") { // a close call first gives a little (the wind-up), then sags before it rises
+    const k = clamp(p.t / p.liftDur, 0, 1), ant = p.out === "close" && p.t < 80 ? 1.4 * Math.sin(p.t / 80 * Math.PI) : 0;
+    return -k * 3 + ant + (p.out === "close" && k > 0.25 && k < 0.7 ? 2 * Math.sin((k - 0.25) / 0.45 * Math.PI) : 0);
+  }
   return p.state === "air" && b < 260 ? -2 * wob(b / 260, 9, 4) : 0;
+}
+// squash and stretch of the scoop as [sx, sy] (STYLE.md 8): squashed by a dip, a wind-up and a landing, stretched while
+// it lifts, and a pop for a double or more, each settling with a damped wobble in 200 to 300 ms
+function poiScale(p) {
+  const r = Juice.reduce ? 0.3 : 1, a = fx.vt - (p.dipT || -1e9), b = fx.vt - (p.landT || -1e9), c = fx.vt - (p.popT || -1e9);
+  let q = 0;
+  if (p.state === "water") q = a < 240 ? 0.06 * wob(a / 240, 9, 4) : 0;
+  else if (p.state === "lift") q = p.out === "close" && p.t < 80 ? 0.05 * Math.sin(p.t / 80 * Math.PI) : -0.05 * Math.sin(clamp(p.t / p.liftDur, 0, 1) * Math.PI);
+  else if (p.state === "air" && b < 280) q = 0.05 * wob(b / 280, 9, 4);
+  const pop = c < 260 ? (p.popK || 0) * wob(c / 260, 8, 4) : 0;
+  return [1 + (q + pop) * r, 1 + (pop - q) * r];
 }
 function poiXY(p, now) {
   const wob2 = p.state === "lift" && p.out === "empty" ? Math.sin(p.t / 18) * 1.2 : 0, tr = p.state === "water" && p.over && !reduceMotion ? Math.sin(now / 22) * 1.3 : wob2;
@@ -2083,14 +2260,21 @@ function drawPoi(x, now, under) {
   const [X, Y] = poiXY(p, now);
   // the grip: down and to the right, or straight down to the finger on touch
   let dx = 0.6, dy = 0.8, len = 40;
-  if (touchy()) { dx = 0; dy = 1; len = Math.max(12, wx(touchOff()) - 32); }
+  if (touchy()) { dx = 0; dy = 1; len = Math.max(12, wx(offNow()) - 32); }
   const r0 = 30, x0 = X + dx * r0, y0 = Y + dy * r0, x1 = X + dx * (r0 + len), y1 = Y + dy * (r0 + len);
   if (!sub) cordLine(x, pLine(x0, y0, x1, y1), 5.4, p.col, 1);
   if (touchy() && run.ptr.down && !sub) { x.fillStyle = C("paper"); x.fill(pEll(x1, y1 + 3, 5, 2.4)); ST.line(x, pEll(x1, y1 + 3, 5, 2.4), 0.8); }
-  // the paper
+  // the paper and the ring, squashed and stretched about the centre
+  const [ssx, ssy] = poiScale(p);
+  x.save(); x.translate(X, Y); x.scale(ssx, ssy); x.translate(-X, -Y);
   const paper = pEll(X, Y, 25.6, 25.6);
   if (p.state === "torn") put(x, paperSpr("wet"), X, Y);
   else put(x, paperSpr(sub ? "sub" : p.wet ? "wet" : "dry"), X, Y);
+  if (!sub && (p.state === "air" || p.state === "enter")) { // the fish under the hanging paper show through it as shapes, so what the meter counts is seen
+    x.save(); x.clip(paper);
+    for (const f of run.fish) { if (f.ride || f.appear < 0.6) continue; const fX = wx(f.x), fY = wx(f.y); if (Math.abs(fX - X) < 48 && Math.abs(fY - Y) < 48) put(x, fishSil(f.type, poseOf(f.ph), "under"), fX, fY, f.va == null ? f.dir * Math.PI / 4 : f.va, fishScale(f)); }
+    x.restore();
+  }
   if (p.state !== "torn") for (const s of p.spots) if (p.S < 100 - s.at) { x.fillStyle = C(sub ? "water" : "paperD"); x.fill(pBlob(X + wx(s.x), Y + wx(s.y), 3.4, 3, 0.2, s.at)); if (!sub) { x.fillStyle = C("water"); x.fill(pBlob(X + wx(s.x) + 0.4, Y + wx(s.y) + 0.3, 2.2, 1.9, 0.2, s.at + 1)); } }
   if (strained && lk > 0.05) { // the paper sags under the weight, then cracks
     const sg = Math.sin(Math.min(1, lk * 1.6) * Math.PI / 2) * (p.out === "tear" ? 1 : 0.8);
@@ -2104,6 +2288,7 @@ function drawPoi(x, now, under) {
     p.hole.forEach((q, i) => { if (q.y > -2 && i % 2 === 0) { const sx = X + wx(q.x), sy = Y + wx(q.y); shape(x, pPoly([[sx - 1.6, sy - 1], [sx + 1.8, sy - 1], [sx + 1.2, sy + hang - (i & 2 ? 3 : 0)], [sx - 0.6, sy + hang + 1 - (i & 2 ? 3 : 0)]]), i & 2 ? "paperD" : "paper", 0.8); } });
   }
   put(x, ringSpr(p.col), X, Y);
+  x.restore();
   if (sub) { cordLine(x, pEll(X, Y, 33, 33), 1.4, "mist", 0.5); } // the waterline round the dipped frame
   if (p.queued && !sub) { const bl = fl((fx.vt - p.qT) / 120) & 1; cordLine(x, pEll(X, Y, 38, 38), 2.2, bl ? "goldL" : "paper", 0.7); } // a press waiting for the scoop: always drawn, so it shows on the next frame
 }
@@ -2127,12 +2312,19 @@ function drawMeter(x, now) { // the paper's strength as slots above the scoop: e
     }
     shape(x, pCut(SW + 6, -3, cw, 20, 3), "paper", 1, "paperD", 0, 1.6);
     text(x, cnt, SW + 6 + cw / 2, 7.4, 15, over ? "red" : warn ? "redD" : "ink", { f: ST.title, w: 900 });
+    const wa = fx.wear && fx.vt - fx.wear.t < 1300 ? fx.wear : null;
+    if (wa && run.mode === "play") { // why the last pip went: one word on a red-edged slip beside the count (left of the plate near the rim)
+      const wd = S("w_" + wa.k), ww = textW(x, wd, 14) + 14, right = mx + (SW + 6 + cw + 6 + ww) * u < TX1 + 10, wx0 = right ? SW + cw + 10 : -9 - ww;
+      const hop = -2 * Math.max(0, wob((fx.vt - wa.t) / 260, 9, 4));
+      shape(x, pCut(wx0, -2 + hop, ww, 18, 3), "paper", 1, "redL", 0, 1.4);
+      text(x, wd, wx0 + ww / 2, 7.4 + hop, 14, "redD", {});
+    }
   });
   if (run.mode === "attract") return;
-  const wet = p.state === "water", word = wet && p.over ? "tipOver" : fx.vt - (fx.weakT || -1e9) < 1300 ? "weak" : null;
+  const wet = p.state === "water", cl = fx.call, word = wet && p.over && !(cl && T() - cl.t < 850) ? "tipOver" : null; // one word at a time: a live call wins
   if (word) { // on the far side of the scoop from the meter, so the two never overlap
     const ty = my > py ? py - 46 * u : Math.min(py + 46 * u, TY1 - 16), ww = textW(x, S(word), 16) * u / 2 + 8;
-    text(x, S(word), clamp(px, TX0 + ww, TX1 - ww), ty, 16 * u, word === "weak" ? "goldL" : bl ? "red" : "paper", { ol: "ink", ow: 0.3 });
+    text(x, S(word), clamp(px, TX0 + ww, TX1 - ww), ty, 16 * u, bl ? "red" : "paper", { ol: "ink", ow: 0.3 });
   }
   if (wet && p.over && p.load.n) { // the way out: an arrow pointing away from the heaviest fish on the paper
     const f = p.load.list.reduce((a, b) => b.T.w > a.T.w ? b : a), a = Math.atan2(p.y - f.y, p.x - f.x) || 0;
@@ -2151,7 +2343,7 @@ function drawBowl(x) { // the catch bowl on the front counter: the fish you scoo
   if (!fx.bowl.length) return;
   const t = fx.vt / 1000;
   x.save(); x.clip(pEll(BOWL_X, BOWL_Y + bump + 0.6, 33, 10));
-  fx.bowl.forEach((b, i) => { const sp = 0.8 + (i % 3) * 0.3, a = t * sp + b.ph, X = BOWL_X + Math.cos(a) * 24 * b.lane, Y = BOWL_Y + bump + 1 + Math.sin(a) * 5 * b.lane; drawLit(x, fishSpr(b.type, poseOf(t * 4 + i)), X, Y, Math.atan2(Math.cos(a) * 5, -Math.sin(a) * 24), 0.4); });
+  fx.bowl.forEach((b, i) => { const sp = 0.8 + (i % 3) * 0.3, a = t * sp + b.ph, X = BOWL_X + Math.cos(a) * 24 * b.lane, Y = BOWL_Y + bump + 1 + Math.sin(a) * 5 * b.lane; drawFishLit(x, b.type, poseOf(t * 4 + i), X, Y, Math.atan2(Math.cos(a) * 5, -Math.sin(a) * 24), 0.4); });
   x.restore();
 }
 function drawTray(x) { // spare scoops stand in a small wooden box
@@ -2162,7 +2354,7 @@ function drawTray(x) { // spare scoops stand in a small wooden box
 function drawFlyers(x) { // scooped fish arc from the paper into the bowl, turning
   for (const f of fx.flyers) {
     const k = clamp((fx.vt - f.t0) / f.dur, 0, 1), X = lerp(wx(f.x0), BOWL_X - 16 + ((f.i * 10) % 32), easeOut(k)), Y = lerp(wx(f.y0), BOWL_Y, k) - Math.sin(k * Math.PI) * 56;
-    drawLit(x, fishSpr(f.type, poseOf(k * 20 + f.i)), X, Y, (f.a || 0) + k * 5, 1 - 0.55 * k);
+    drawFishLit(x, f.type, poseOf(k * 20 + f.i), X, Y, (f.a || 0) + k * 5, 1 - 0.55 * k);
   }
 }
 function hintSpot() { // where the first-run finger points: the closest bunch of fish
@@ -2172,22 +2364,23 @@ function hintSpot() { // where the first-run finger points: the closest bunch of
 }
 function drawHints(x, now) {
   const p = run.poi;
-  if (state === "play" && hint.active && !autopilot && p && p.state === "air") { // first-run gesture hint: where to press
+  const above = fx.vt - (fx.aboveT || -1e9) < 2800; // one pointing hand at a time: the offset link wins
+  if (state === "play" && hint.active && !autopilot && p && p.state === "air" && !above) { // first-run gesture hint: where to press
     const s = hintSpot();
     if (s) { // the paper lands on the bunch; the finger goes below it (on touch), linked by a dotted line
-      const off = wx(run.ptr.touch || !finePointer ? touchOff() : 0), X = wx(s.x), Y = wx(s.y), up = fl(now / 450) & 1;
+      const off = wx(run.ptr.touch || !finePointer ? offNow() : 0), X = wx(s.x), Y = wx(s.y), up = fl(now / 450) & 1;
       cordLine(x, pEll(X, Y, 26, 26), up ? 2.6 : 1.6, "paper", 0.7);
       for (let yy = Y + 30; yy < Y + off - 12; yy += 7) cordLine(x, pLine(X, yy, X, yy + 3), 1.6, "paper", 0.5);
       if (up && off) cordLine(x, pEll(X, Y + off, 13, 13), 2, "paper", 0.6);
-      hand(x, X, Y + off + (up ? 0 : 6), 0);
+      kidHand(x, X, Y + off + (up ? 0 : 6), 0);
     }
   }
-  if (state === "play" && p && fx.vt - (fx.aboveT || -1e9) < 2800 && p.state !== "torn") { // the paper sits above the finger: show the link once
+  if (state === "play" && p && above && p.state !== "torn") { // the paper sits above the finger: show the link
     const X = wx(p.x), Y = wx(p.y), off = wx(touchOff()), up = fl(now / 300) & 1;
     cordLine(x, pEll(X, Y, 36, 36), 2.4, up ? "goldL" : "paper", 0.7);
     for (let yy = Y + 40; yy < Y + off - 16; yy += 7) cordLine(x, pLine(X, yy, X, yy + 3), 1.8, "goldL", 0.6);
     shape(x, pPoly([[X, Y + off - 12], [X - 6, Y + off - 20], [X + 6, Y + off - 20]]), "goldL", 1);
-    hand(x, X, Y + off + (up ? 0 : 4), 0);
+    kidHand(x, X, Y + off + (up ? 0 : 4), 0);
   }
 }
 // HUD: the score is brushed on the tanzaku of a glass wind chime hung from the beam; a small paper under it carries
@@ -2215,7 +2408,7 @@ function drawHud(x, now) {
       for (const sx of [-TZ_W / 2 + 12, TZ_W / 2 - 12]) ST.line(x, pLine(sx, TZ_H + 6, sx * Math.min(1, lw / TZ_W), dy + 1), 0.8);
       shape(x, pCut(-lw / 2, dy, lw, lh, 4), n ? "paper" : "paper", 1.1, "paperD", 1.6, 2);
       let tx = -lw / 2 + 13;
-      if (icon) { drawLit(x, fishSpr(icon, 2), tx + 12, dy + lh / 2, 0, 0.9); tx += 30; }
+      if (icon) { drawFishLit(x, icon, POSE_MID, tx + 12, dy + lh / 2, 0, 0.9); tx += 30; }
       lines.forEach((l, i) => text(x, l, icon ? tx : 0, dy + 17 + i * 20, 16, n ? "redD" : "ink", { a: icon ? "left" : "center" }));
       if (icon) { const bx = tx + textW(x, lines[0], 16) + 8; for (let i = 0; i < TYPES[icon].w; i++) put(x, beadSpr("gold"), bx + i * 7 + 3, dy + lh / 2); }
     });
@@ -2256,16 +2449,18 @@ function drawCall(x, now) { // one judgement word near the scoop: pops in, holds
   const age = now - cl.t; if (age > 1050) return;
   const u = L.u, red = cl.col === "red", big = cl.big, size = (big ? 26 : 20), full = S(cl.key);
   const pts = cl.sub && cl.sub[0] === "+", ww = textW(x, full, size, { f: ST.title, w: 900 }) * u, sw = cl.sub ? textW(x, cl.sub, pts ? 18 : 16, pts ? { f: ST.title, w: 900 } : {}) * u : 0;
-  const lo = DEMO ? 40 : TX0 + 10, hi = DEMO ? 300 : TX1 - 10, inl = pts && ww + sw + 12 * u <= hi - lo;
-  let y = wx(cl.y) - 70 * u - Math.min(6, age / 40); if (y < TY0 - 10) y = wx(cl.y) + 56 * u;
-  if (!red) y = lerp(y, TY0 + 18 * u, smooth(clamp((age - 250) / 300, 0, 1))); // after a beat the word floats up to the rim, off the next target
-  const up = (big ? 16 : 13) * u, down = cl.sub && !inl ? (pts ? 36 : 38) * u : up, m = fx.mBox, p = run.poi; // how far the word (and its line) reach above and below y
-  if (m && p && !run.dead && p.state !== "torn" && p.state !== "enter" && y - up < m.y1 + 2 && y + down > m.y0 - 2) y = m.y0 - 4 - down - up >= TY0 - 16 ? m.y0 - 4 - down : m.y1 + 4 + up; // never on the meter
-  const half = (inl ? ww + sw + 8 * u : Math.max(ww, sw)) / 2 + 4, X = clamp(wx(cl.x), lo + half, hi - half) - (inl ? (sw + 8 * u) / 2 : 0);
+  const s2 = red && cl.sub2 ? cl.sub2 : "", sw2 = s2 ? Math.min(TX1 - TX0 - 40 * u, textW(x, s2, 14) * u) : 0; // why the paper was weak, under the cause
+  const z = fx.zm, zx = v => z ? z.x + z.s * (v - z.x) : v, zy = v => z ? z.y + z.s * (v - z.y) : v; // world spots seen through the camera (drawn unzoomed)
+  const lo = zx(DEMO ? 40 : TX0 + 10), hi = zx(DEMO ? 300 : TX1 - 10), inl = pts && ww + sw + 12 * u <= hi - lo, ty0 = zy(TY0), cy = zy(wx(cl.y));
+  let y = cy - 70 * u - Math.min(6, age / 40); if (y < ty0 - 10) y = cy + 56 * u;
+  if (!red) y = lerp(y, ty0 + 18 * u, smooth(clamp((age - 250) / 300, 0, 1))); // after a beat the word floats up to the rim, off the next target
+  const up = (big ? 16 : 13) * u, down = (cl.sub && !inl ? (pts ? 36 : 38) * u : up) + (s2 ? 20 * u : 0), m = fx.mBox && { y0: zy(fx.mBox.y0), y1: zy(fx.mBox.y1) }, p = run.poi; // how far the word (and its lines) reach above and below y
+  if (m && p && !run.dead && p.state !== "torn" && p.state !== "enter" && y - up < m.y1 + 2 && y + down > m.y0 - 2) y = m.y0 - 4 - down - up >= ty0 - 16 ? m.y0 - 4 - down : m.y1 + 4 + up; // never on the meter
+  const half = (inl ? ww + sw + 8 * u : Math.max(ww, sw, sw2)) / 2 + 4, X = clamp(zx(wx(cl.x)), lo + half, hi - half) - (inl ? (sw + 8 * u) / 2 : 0);
   const sc = age < 160 ? lerp(0.8, 1, easeBack(age / 160)) : 1;
   x.globalAlpha = age > 850 ? 1 - (age - 850) / 200 : 1;
   if (red && cl.sub && !pts) { // a tear: the red word and its cause share one paper plate, readable over red fish
-    const tw = Math.max(ww, sw) + 24 * u, ph = (big ? 30 : 24) * u + 28 * u;
+    const tw = Math.max(ww, sw, sw2) + 24 * u, ph = (big ? 30 : 24) * u + 28 * u + (s2 ? 20 * u : 0);
     shape(x, pCut(X - tw / 2, y - 18 * u, tw, ph, 4), "paper", 1.2, "paperD", 1.6, 2);
   }
   at(x, X, y, sc * u, 0, () => word(x, full, 0, 0, size, cl.col));
@@ -2273,18 +2468,20 @@ function drawCall(x, now) { // one judgement word near the scoop: pops in, holds
     if (inl) text(x, cl.sub, X + ww / 2 + 6 * u, y + 2 * u, 18 * u, "goldL", { a: "left", f: ST.title, w: 900, ol: "ink", ow: 0.28 });
     else if (pts) text(x, cl.sub, X, y + 24 * u, 18 * u, "goldL", { f: ST.title, w: 900, ol: "ink", ow: 0.28 });
     else { const yy = y + 26 * u; if (!red) { const tw = sw + 16 * u; shape(x, pCut(X - tw / 2, yy - 12 * u, tw, 24 * u, 3), "paper", 1, "paperD", 1.2, 1.4); } text(x, cl.sub, X, yy, 16 * u, "redD", {}); }
+    if (s2) text(x, s2, X, y + 46 * u, 14 * u, "ink", { w: 700, max: sw2 });
   }
   x.globalAlpha = 1;
 }
 const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
-const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, e.s);
+const pointAt = (x, e, now) => kidHand(x, e.cx - (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, e.s);
 function drawFan(x, now, X, s, drop) { // the title fan with the title, the English name and the how-to, all brushed on it
   const ja = lang === "ja", still = Juice.reduce, Y = beamY() + (drop || 0);
   if (drop) cordLine(x, pLine(X, beamY(), X, Y + 2), 1.4, "red", 0.45);
   at(x, X, Y, s, still ? 0 : Math.sin(now / 1100) * 0.014, () => {
     put(x, fanSpr(), 0, 0);
     const y = FAN_Y;
-    text(x, S("title"), -8, y + 64, ja ? 42 : 30, "ink", { f: ST.title, w: 900, max: 214, deep: "paperD" });
+    text(x, S("hook"), 4, y + 27, 17, "redD", { f: ST.title, w: 900, max: 184 }); // the gamble, brushed above the name
+    text(x, S("title"), -8, y + 66, ja ? 42 : 30, "ink", { f: ST.title, w: 900, max: 214, deep: "paperD" });
     seal(x, 112, y + 96, S("mark"), 999, 17);
     text(x, ja ? S("titleEn") : STRINGS.ja.title, -8, y + 100, 16, "indigo", { w: 700 });
     text(x, S("how1"), 0, y + 132, 18, "ink", { max: 244 }); text(x, S("how2"), 0, y + 157, 17, "redD", { max: 226 });
@@ -2308,7 +2505,9 @@ function drawTitle(x, now) { // the title hangs in the world: a fan from the bea
   const st = UI.start;
   at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => tagBtn(x, 0, 0, st.w, st.h, S("start"), 24));
   pointAt(x, st, now);
-  if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 10) * u, st.y + 30 * u, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3 });
+  if (finePointer) at(x, st.cx + (st.w / 2 + 44) * u, st.y + 13 * u, u, 0, () => { // the key, on a small dark tag of its own
+    put(x, plankSpr(66, 30), 0, 0); text(x, S("space"), 0, 16, 14, "paper", { w: 700 });
+  });
   // lower left; on a 9:16 screen the catch bowl sits there on the counter, so the credit moves just right of it
   const room = L.wide || vBot() - 648 > 18 * u;
   text(x, S("credit"), room ? vLeft() + 10 : BOWL_X + 44, vBot() - 12, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3, w: 700 });
@@ -2331,10 +2530,12 @@ function drawOver(x, now) {
   at(x, 180, y, su, 0, () => {
     board(x, 0, 0, 320, H);
     if (age > RES.head) text(x, S("over"), 0, 38, 30, "paneT", big);
-    if (age > RES.cause && r.cause) text(x, r.cause, 0, 70, 16, "paneS", { max: 276 });
+    const sy = r.why ? 121 : 112; // with a second cause line the score sits a little lower
+    if (age > RES.cause && r.cause) text(x, r.cause, 0, r.why ? 63 : 70, 16, "paneS", { max: 276 });
+    if (age > RES.cause && r.why) text(x, r.why, 0, 84, 14, "paneT", { w: 700, max: 276 });
     if (age > RES.count) {
-      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -54 : 0, 112, 50, "paneT", big);
-      if (r.showRank && r.rankDone) seal(x, 84, 112, S("ranks")[r.rank], age - RES.rank, 16); // the rank lands as a seal, with the stamp sound
+      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -54 : 0, sy, 50, "paneT", big);
+      if (r.showRank && r.rankDone) seal(x, 84, sy, S("ranks")[r.rank], age - RES.rank, 16); // the rank lands as a seal, with the stamp sound
     }
     const row = (ry, k) => { if (k) text(x, S(k), -138, ry, 16, "paneT", { a: "left", w: 700 }); x.fillStyle = C("paneL"); for (let i = -138; i < 138; i += 5) x.fillRect(i, ry + 15, 2, 2); };
     const val = (ry, v) => text(x, v, 138, ry, 19, "paneS", { a: "right", f: ST.title, w: 900 });
@@ -2343,7 +2544,7 @@ function drawOver(x, now) {
       const kw = kinds.reduce((a, t) => a + cw(t), 0);
       row(152, kw + textW(x, S("rFish"), 16, { w: 700 }) + 10 > 276 ? null : "rFish"); // the catch by kind: a fish and a count each
       let xx = 138;
-      for (const t of kinds) { const s = "×" + run.byType[t]; text(x, s, xx, 152, 17, "paneS", { a: "right", f: ST.title, w: 900 }); xx -= cw(t); drawLit(x, fishSpr(t, 2), xx + 13, 152, -Math.PI / 2, 0.82); }
+      for (const t of kinds) { const s = "×" + run.byType[t]; text(x, s, xx, 152, 17, "paneS", { a: "right", f: ST.title, w: 900 }); xx -= cw(t); drawFishLit(x, t, POSE_MID, xx + 13, 152, -Math.PI / 2, 0.82); }
       if (!kinds.length) val(152, "0");
       if (play) {
         row(186, "rMult"); val(186, run.maxN ? "×" + MULT(run.maxN) : "-");
@@ -2362,7 +2563,7 @@ function drawOver(x, now) {
     }
     if (play && age > RES.goal && r.goal) {
       const gt = fmt(r.goal.k, { n: r.goal.n, r: r.goal.ri != null ? S("ranks")[r.goal.ri] : "" }), tw = Math.min(250, textW(x, gt, 17));
-      hand(x, -tw / 2 - 8, H - 30, Math.PI / 2, 0.72); text(x, gt, -tw / 2 + 6, H - 30, 17, "paneS", { a: "left", max: 250 });
+      kidHand(x, -tw / 2 - 8, H - 30, Math.PI / 2, 0.72); text(x, gt, -tw / 2 + 6, H - 30, 17, "paneS", { a: "left", max: 250 });
     }
   });
   if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, true); if (retryReady()) pointAt(x, UI.retry, now); }
@@ -2378,12 +2579,22 @@ function drawPlaques(x) {
   if (!btnPause.hidden) pq(UI.pause, "pause");
   if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang", S("lang"));
 }
+// two camera zooms about scene points as one: b after a (each maps q -> f + s (q - f))
+function zcomp(a, b) {
+  if (!a || !b) return a || b;
+  const s = a.s * b.s; if (Math.abs(s - 1) < 1e-6) return null;
+  return { s, x: (b.x * (1 - b.s) + b.s * a.x * (1 - a.s)) / (1 - s), y: (b.y * (1 - b.s) + b.s * a.y * (1 - a.s)) / (1 - s) };
+}
+// the wide ?demo=1 framing: a steady push-in on the tub that leans a little toward the scoop, the side HUD unscaled,
+// so the fish are not tiny in the 1920x1080 clip (the bowl on the counter stays in frame)
+const DEMO_CAM = { s: 1.28, y: 505 };
 function draw(now) {
   if (!run) return;
   fx.mBox = null;
   const x = ctx, sh = shakeOffset(10), p = run.poi;
   let zm = zoomNow(now);
   if (!zm && p && p.state === "lift" && p.out === "close" && p.peak && run.mode !== "attract" && !reduceMotion) zm = { x: wx(p.x), y: wx(p.y), s: 1 + 0.035 * smooth(p.t / p.liftDur) }; // a slow push-in while the paper holds
+  zm = fx.zm = zcomp(DEMO && L.wide ? { x: fx.camX, y: DEMO_CAM.y, s: DEMO_CAM.s } : null, zm); // the wide clip sits closer on the tub
   putLayer(x, BG, sh.x, sh.y, zm);
   view(x, sh.x, sh.y, zm);
   drawTombo(x, now);
@@ -2416,6 +2627,7 @@ function visualStep(dt) { // springs and swings of the visuals (the rules never 
   }
   if (run.score > (fx.lastScore || 0)) { fx.fv += 0.32; fx.tv += 0.55; }
   fx.lastScore = run.score;
+  if (run.poi) fx.camX += (lerp(180, wx(run.poi.x), 0.4) - fx.camX) * (1 - Math.exp(-dt * 1.5));
   fx.fv += (-26 * fx.fa - 2.6 * fx.fv) * dt; fx.fa += fx.fv * dt;
   fx.tv += (-40 * (fx.ta + fx.fa * 0.4) - 3 * fx.tv) * dt; fx.ta += fx.tv * dt;
 }
@@ -2448,7 +2660,7 @@ function startPlay() {
   state = "play"; runCount++;
   newRun("play", newSeed());
   btnPause.hidden = false;
-  pfStart();
+  pfStart(); graceT = performance.now() + 500;
 }
 function showOver(now) {
   state = "over"; run.result = makeResult(now); musicLevel("bed");
@@ -2471,7 +2683,7 @@ function resumeGame() {
   state = "play"; ovPause.hidden = true; btnPause.hidden = false;
   const p = run.poi; if (p && p.state === "water" && !run.ptr.down && !run.keys.dip) lift(true); // a dip left hanging by the pause comes up empty
   musicLevel("play");
-  pfStart();
+  pfStart(); graceT = performance.now() + 500;
 }
 function onHide() { if (state === "play") pauseGame(); else if (run) run.hold = true; }
 function onShow() { if (run) run.hold = false; lastNow = performance.now(); }
@@ -2480,7 +2692,11 @@ function retry() { if (state === "over" && retryReady()) startPlay(); }
 
 // ---------- KEEP: input. Gameplay on pointerdown / keydown; the response is drawn on the next frame ----------
 function toCore(e) { const b = cv.getBoundingClientRect(); return { x: ((e.clientX - b.left) / L.kc - L.x0) / WS, y: ((e.clientY - b.top) / L.kc - L.y0) / WS }; } // world units
-function aimAt(q, touch) { const p = run.poi; if (p) { p.tx = q.x; p.ty = q.y - (touch ? touchOff() : 0); } }
+function aimAt(q, touch, down) {
+  const p = run.poi; if (!p) return;
+  const off = touch ? offNow() : 0; p.tx = q.x; p.ty = q.y - off;
+  if (down && off && !run.tips.above && !store.get("aboveDone", false)) { store.set("aboveDone", true); showAbove(); } // the first press with the offset
+}
 function press() { // the core input: dip the scoop where it is aimed (queued while a new scoop slides in)
   if (!run || run.dead || state !== "play" || autopilot) return;
   const p = run.poi;
@@ -2500,7 +2716,7 @@ cv.addEventListener("pointerdown", e => {
   if (state !== "play" || !run) return;
   const P = run.ptr; P.down = true; P.id = e.pointerId; P.touch = e.pointerType !== "mouse";
   try { cv.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
-  const q = toCore(e); P.fx = q.x; P.fy = q.y; aimAt(q, P.touch); press();
+  const q = toCore(e); P.fx = q.x; P.fy = q.y; aimAt(q, P.touch, true); press();
 });
 cv.addEventListener("pointermove", e => {
   if (state !== "play" || !run) return;
@@ -2590,15 +2806,16 @@ function step(now, dt) {
   if (run) fx.disp = run.score < fx.disp ? run.score : fx.disp + Math.ceil((run.score - fx.disp) * Math.min(1, dt * 10));
   musicStep();
 }
-let lastNow = performance.now();
+let lastNow = performance.now(), graceT = 0; // graceT: the frames right after a start or resume pay for the press itself
 function frame() {
   requestAnimationFrame(frame);
   if (manual) return;
   let now = performance.now(); if (now < lastNow) now = lastNow;
   const raw = now - lastNow; lastNow = now;
-  if (raw > 300 && state === "play") pauseGame(); // a long stall must not count as time the player had
-  step(now, clamp(raw, 0, DEMO ? 120 : 50) / 1000); // a recording on a slow machine keeps the clip's beats near real time
+  if (raw > 300 && state === "play" && now > graceT) pauseGame(); // a long stall must not count as time the player had
+  step(now, clamp(raw, 0, DEMO ? 250 : 50) / 1000); // a recording on a slow machine catches up (fixed steps keep it the same run)
   draw(now);
+  fishWarm(raw < 24 ? 6 : raw < 40 ? 2 : 0); // a few atlas cells ahead per frame, fewer when frames run long
 }
 
 // ---------- KEEP: test hooks (the contract in tools/README.md; tools/qa.mjs and review-kit read them) ----------
