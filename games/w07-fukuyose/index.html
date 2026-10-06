@@ -1675,8 +1675,14 @@ const OVER_HOLD = 4, DEMO_HOLD = 2, OFFER_WAIT = 1.3, RELOAD = 0.3, CHAIN_WIN = 
 const SHIP_MALLET = 3, MAL_EVERY = 40;
 // Three ways to play (kind): 'free' runs until the kumade spills; 'time' ends after TIME_LIMIT s and 'count' once
 // COUNT_LIMIT charms have been dropped and the heap has settled (no merge for SETTLE s, at most SETTLE_MAX s after the
-// last drop). Both still end at once if the kumade spills. Their last HURRY_T s or HURRY_N charms are the hurry.
-const TIME_LIMIT = 60, COUNT_LIMIT = 30, SETTLE = 1.2, SETTLE_MAX = 6, HURRY_T = 10, HURRY_N = 5;
+// last drop). Both still end at once if the kumade spills, and then the score is halved (SPILL_KEEP), so dropping in a
+// hurry without looking is not the way to a high score (a probe with eight kinds of players, 2026-10-06: before this,
+// mashing in the middle as fast as possible scored 88 % of fast aimed play in 60秒, now 64 %). Their last HURRY_T s or HURRY_N
+// charms are the hurry. In 60秒 the festival also moves with the clock: the phase table below counts at least one drop
+// per PROG_T s, so a person who drops slowly meets the bigger charms and the mallets at the same second as a fast one
+// (the same probe: a person dropping every 1.7 s went from 30 % to 41 % of a fast aimed score, one every 2.3 s from 18 %
+// to 44 %). いつもの and 30こ stay on drops alone: there a slow and a fast person already last the same number of drops.
+const TIME_LIMIT = 60, COUNT_LIMIT = 30, SETTLE = 1.2, SETTLE_MAX = 6, HURRY_T = 10, HURRY_N = 5, SPILL_KEEP = 0.5, PROG_T = 0.6;
 // The rim rope hangs between the claws and sags in the middle, and the overflow line is the rope itself: ROPE_DIP px
 // under rimY at the centre and ROPE_SAG px higher at the posts, the curve drawn in drawRimRope (rimPts).
 const ROPE_DIP = 1, ROPE_SAG = 8;
@@ -1929,7 +1935,7 @@ RN.pick = function () {
     if (this.fillI % DEMO_MATCH === 0 && !this.saves) { const m = this.demoMatch(); if (m) { this.matchB = m; return m.lv; } }
     return DEMO_FILL[(this.fillK = (this.fillK || 0) + 1) % DEMO_FILL.length];
   }
-  const play = this.mode === 'play', w = phaseAt(this.drops + 1, !play).w;
+  const play = this.mode === 'play', w = phaseAt(this.prog() + 1, !play).w;
   const room = play ? this.headroom() : 0;
   if (play && this.rnd() < (room > KIND_ROOM ? KIND_P_LOW : room < KIND_TIGHT ? KIND_P_HIGH : KIND_P)) {   // the kind cord: a twin of a charm on top of the heap
     const tops = this.tops(w);
@@ -1982,7 +1988,7 @@ RN.load = function () {
   const off = this.lastOffender;
   if (this.mode === 'demo' && this.warned && this.saves < 1 && !h.planRow && off && off.lv < 8) { h.lv = off.lv; this.saves++; this.saving = off; }
   this.next = this.mode === 'demo' && this.plan.length ? this.plan[0][0] : this.pick();
-  h.tmax = h.timer = phaseAt(this.drops + 1, this.mode === 'demo').timer; h.tick = 4;
+  h.tmax = h.timer = phaseAt(this.prog() + 1, this.mode === 'demo').timer; h.tick = 4;
   h.x = this.clampX(h.x, h.lv); h.tx = this.clampX(h.tx, h.lv);
   if (!this.seen[h.lv]) { this.seen[h.lv] = 1; this.events.push({ type: 'seen', lv: h.lv }); }
   else if (h.lv === MALLET && this.world.bodies.some(b => b.lv === 8 && !b.ghost)) this.events.push({ type: 'malletShip' });
@@ -2063,11 +2069,7 @@ RN.release = function () {
   h.loaded = false; h.reload = this.mode === 'demo' && this.runT > DEMO_SLOPPY ? DEMO_RELOAD : RELOAD; this.drops++;
   if (this.malletIn > 0 && --this.malletIn === 0) this.malletDue = true;   // the mallet promised for a 宝船
   this.events.push({ type: 'drop', x: h.x, lv: h.lv, auto: h.timer <= 0 });
-  const ph = phaseAt(this.drops, this.mode === 'demo');
-  if (ph.i > this.phase) {
-    this.phase = ph.i; if (ph.mallet) this.giveMallet();
-    if (ph.note) this.events.push({ type: 'phase', note: ph.note, i: ph.i });
-  }
+  this.advance();
   return true;
 };
 RN.step = function () {
@@ -2078,6 +2080,7 @@ RN.step = function () {
   if (this.hitstop > 0) { this.hitstop -= DT; return; }
   if (this.slowT > 0) { this.slowT -= DT; this.slowAcc += SLOW_RATE; if (this.slowAcc < 1) return; this.slowAcc -= 1; }
   this.runT += DT;
+  if (this.limitT && (this.steps & 15) === 0) this.advance();   // 60秒's festival also moves with the clock
   this.dropper();
   W.step();
   this.mergeAll();
@@ -2202,7 +2205,16 @@ RN.spawn = function (L, x, y, vx, vy, a, ch, how, aimed) {
 };
 // The 鏡餅 peak stays rare (bar 1.2.8, 1.6.3): once a run has offered one, the phase table's mallets come at most one
 // per MAL_EVERY drops (a rescue mallet counts too), so a long run never hands out a mallet every few drops.
-RN.cyc = function () { return Math.floor(this.drops / MAL_EVERY); };
+RN.cyc = function () { return Math.floor(this.prog() / MAL_EVERY); };
+// How far the festival has come, in drops: the drops themselves, and in 60秒 at least one per PROG_T s of the clock.
+RN.prog = function () { return this.limitT && this.mode === 'play' ? Math.max(this.drops, Math.floor(this.runT / PROG_T)) : this.drops; };
+RN.advance = function () {
+  const ph = phaseAt(this.prog(), this.mode === 'demo');
+  if (ph.i > this.phase) {
+    this.phase = ph.i; if (ph.mallet) this.giveMallet();
+    if (ph.note) this.events.push({ type: 'phase', note: ph.note, i: ph.i });
+  }
+};
 RN.giveMallet = function () {
   if (this.mode === 'play' && this.offered > 0 && this.malletCyc === this.cyc()) return;
   this.malletDue = true;
@@ -2264,7 +2276,9 @@ RN.finish = function (why) {
   this.events.push({ type: 'end', why });
 };
 RN.kill = function (b) {
-  this.dead = { reason: 'overflow', t: this.t, x: b.x, y: b.y, r: b.r, lv: b.lv, id: b.id };
+  const lost = this.limitT || this.limitN ? this.score - Math.floor(this.score * SPILL_KEEP) : 0;   // 60秒 and 30こ: a spill halves the score
+  this.score -= lost;
+  this.dead = { reason: 'overflow', t: this.t, x: b.x, y: b.y, r: b.r, lv: b.lv, id: b.id, lost };
   this.events.push({ type: 'dead', x: b.x, y: b.y, lv: b.lv });
 };
 // The showy end of the demo and the attract play: the basket lets go and everything tumbles out.
@@ -2315,7 +2329,8 @@ const STRINGS = {
     e_mk: "{l}を{n}こ作る", e_ch: "{n}れんさを出す", e_drop: "{n}こ落とす", e_aim: "ねらいどおり {n}回", e_sc: "{n}点をとる", e_mal: "小槌を{n}回使う", e_tsc: "60秒で{n}点をとる", e_csc: "30こで{n}点をとる", e_save: "あふれを{n}回こらえる",
     e_off: "鏡餅を{n}回奉納", e_nowarn: "あふれずに{n}こ落とす", e_mkT: "あわせて{l}を{n}こ", e_mrgT: "あわせて{n}回合体", e_aimT: "あわせて ねらいどおり{n}回", e_offT: "あわせて鏡餅を{n}回奉納", e_day: "今日のお題を{n}日あそぶ", e_streak: "今日のお題を{n}日つづけて",
     modes: ["いつもの", "60秒", "30こ"], modeGo: ["", "60秒で 何点とれるか!", "30こで 何点とれるか!"], bests: ["ベスト", "60秒ベスト", "30こベスト"],
-    limH: ["のこり", "のこり"], limN: ["{n}秒", "{n}こ"], hurryT: "あと{n}秒!", hurryC: "あと{n}こ!", endT: "そこまで!", endC: "おしまい!"
+    limH: ["のこり", "のこり"], limN: ["{n}秒", "{n}こ"], hurryT: "あと{n}秒!", hurryC: "あと{n}こ!", endT: "そこまで!", endC: "おしまい!",
+    halfW: "あふれたら 点は半分", halfD: "点は半分 −{n}", halfR: "あふれたので 点は半分（−{n}）"
   },
   en: {
     title: "LUCKY HEAP", titleEn: "LUCKY HEAP", how: "Match two alike to merge them!", rule: "Keep charms below the rope", start: "TAP TO START", startClick: "CLICK TO START", lang: "日本語", book: "BOOK", close: "CLOSE",
@@ -2335,7 +2350,8 @@ const STRINGS = {
     e_mk: "Make {l} x{n}", e_ch: "Make a {n} chain", e_drop: "Drop {n} charms", e_aim: "{n} on target", e_sc: "Score {n}", e_mal: "Use the mallet x{n}", e_tsc: "Score {n} in 60 SEC", e_csc: "Score {n} in 30 DROPS", e_save: "Save a spill x{n}",
     e_off: "Offer a mochi x{n}", e_nowarn: "Drop {n} with no warning", e_mkT: "{l} x{n} in total", e_mrgT: "{n} merges in total", e_aimT: "{n} on target in total", e_offT: "Offer {n} mochi in total", e_day: "Play the draw on {n} days", e_streak: "The draw {n} days in a row",
     modes: ["CLASSIC", "60 SEC", "30 DROPS"], modeGo: ["", "How much in 60 seconds?", "How much in 30 drops?"], bests: ["BEST", "60 SEC BEST", "30 DROPS BEST"],
-    limH: ["TIME", "DROPS"], limN: ["{n}", "{n}"], hurryT: "{n} seconds left!", hurryC: "{n} drops left!", endT: "TIME UP!", endC: "ALL DONE!"
+    limH: ["TIME", "DROPS"], limN: ["{n}", "{n}"], hurryT: "{n} seconds left!", hurryC: "{n} drops left!", endT: "TIME UP!", endC: "ALL DONE!",
+    halfW: "A spill halves the score", halfD: "Score halved −{n}", halfR: "Spilled, so the score was halved (−{n})"
   }
 };
 let lang = store.get("lang", null);
@@ -2666,12 +2682,12 @@ function onEvents(now) {
     }
     else if (e.type === "load") { fx.ld = 0.35; fx.ldV = 0; }
     else if (e.type === "tick") { if (loud() && play) sfx.tick(e.n); }
-    else if (e.type === "phase") { if (e.note) { say(S("n_" + e.note), 2.2, "ink"); if (loud()) sfx.notice(); } }
+    else if (e.type === "phase") { if (e.note && !R.hurry) { say(S("n_" + e.note), 2.2, "ink"); if (loud()) sfx.notice(); } }   // the hurry keeps the news line
     else if (e.type === "seen") { if (e.lv === MALLET && run.mode !== "attract") { say(S("malletHow"), 2.4, "red"); if (play && !BOOK[MALLET]) { BOOK[MALLET] = 1; store.set("book", BOOK); } } }
     else if (e.type === "ship") { fx.ship = { x: e.x, y: e.y, r: e.r, t: 0 }; if (loud()) sfx.cheer(1.1); if (R.offered === 0 && !R.malletIn) say(S("ship"), 2.4, "red"); }
     else if (e.type === "shipMallet") say(S("shipMallet"), 2.6, "red");
     else if (e.type === "malletShip") say(S("malletShip"), 2.6, "red");
-    else if (e.type === "warn") { const b = R.lastOffender; if (play && run.c.warnAt == null) run.c.warnAt = R.drops; stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, "", b ? b.r : 0); if (loud()) sfx.warn(); }
+    else if (e.type === "warn") { const b = R.lastOffender; if (play && run.c.warnAt == null) run.c.warnAt = R.drops; stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, R.limitT || R.limitN ? S("halfW") : "", b ? b.r : 0); if (loud()) sfx.warn(); }
     else if (e.type === "safe") { if (play) run.c.save++; if (e.near > 0.25) { stamp(S("safe"), e.x, R.rimY - 20, true, S("left", e.left.toFixed(1)), 24); if (loud()) sfx.safe(); } }
     else if (e.type === "offer") { say(S("offer"), 2, "red"); if (loud()) { sfx.offer(); sfx.cheer(1); } }
     else if (e.type === "hurry") { say(S(R.limitT ? "hurryT" : "hurryC", Math.ceil(R.left() - 1e-9)), 2.4, "red"); if (loud()) sfx.hurry(); }
@@ -2906,7 +2922,8 @@ function die(now) {
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   fx.held = false; R.kdir = 0; fx.line = null;   // the news line ends with the run (no 'Next: ...' under SPILLED!)
   if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
-  if (why === "overflow") { stamp(S("over"), R.dead.x, R.rimY - 20, true, "", R.dead.r); if (loud()) sfx.fail(); addTrauma(0.3); }
+  if (why === "overflow") { stamp(S("over"), R.dead.x, R.rimY - 20, true, R.dead.lost ? S("halfD", R.dead.lost) : "", R.dead.r); if (loud()) sfx.fail(); addTrauma(0.3); }
+  if (R.dead.lost) { fx.disp = fx.shown = R.score; fx.bump = T(); }   // the score tag shows the halved score through the freeze
   else { stamp(S(why === "time" ? "endT" : "endC"), 180, 330, 2, "", 0); if (loud()) sfx.end(); }
   musicLevel("duck");
 }
@@ -2918,7 +2935,7 @@ const RES = { head: 120, count: 320, countDur: 700, rows: 1100, rank: 1250, book
 // the draw's result: the day's best (NEW BEST only when the all-time best falls too), the streak and tomorrow's charm
 function makeResult(now, errs) {
   const R = run.R, play = run.mode === "play", dl = play && run.daily, kd = R.kind, all = num(bestKey(kd), 0), best = dl ? dBestNow() : all, runs = num("runs", 0), free = kd === "free";
-  return { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, allBest: R.score > all, rank: rankOf(R.score), showRank: play && runs >= 1 && free, kind: kd,
+  return { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, allBest: R.score > all, rank: rankOf(R.score), showRank: play && runs >= 1 && free, kind: kd, half: R.dead && R.dead.lost || 0,
     big: R.maxLv, offered: R.offered, chain: R.bestChain, book: play ? run.newBook.filter(l => l < 10).slice(-1)[0] : undefined, goal: play && !dl ? goalNow(R.score, R.bestChain, runs < 1 || !free) : null,
     daily: !!dl, streak: dStreakNow(), tom: dl ? drawOf(1).lucky : 0, errs, unlock: play && run.c.unlock, ticks: 0, rankDone: false, stamped: false };
 }
@@ -3410,6 +3427,7 @@ function drawResult(x, now) {
   if (age < RES.head) return;
   const rows = [], eh = fz(13, bs) * 5.8 + 6;
   rows.push(["cause", 46]); rows.push(["score", 52]);
+  if (r.half) rows.push(["half", 24]);   // 60秒 and 30こ: a spill halved the score
   if (play) rows.push(["best", 44]);
   if (r.showRank) rows.push(["rank", 38]);
   if (r.big > 0) rows.push(["big", 58]);
@@ -3439,6 +3457,8 @@ function drawResult(x, now) {
     else if (kind === "score") {
       const k = clamp((age - RES.count) / RES.countDur, 0, 1), v = r.ticks >= 99 ? r.score : Math.round(r.score * easeOut(k));
       tx(x, v, 0, c, 40, p.ink, { deep: p.paperD });
+    } else if (kind === "half") {
+      if (age > RES.rows) tx(x, S("halfR", r.half), 0, c - 4, sm, p.red, {});
     } else if (kind === "best") {
       r.bestY = c;
       if (r.newBest) {
