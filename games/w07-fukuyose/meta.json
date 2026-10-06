@@ -5,12 +5,14 @@
   "title_en": "LUCKY HEAP",
   "tagline_ja": "縁起物を熊手に落として、同じものどうしで合体。最後は鏡餅を奉納します。",
   "tagline_en": "Drop lucky charms into the festival rake. Two alike merge into the next one, all the way up to the mirror mochi.",
-  "how_to_play_ja": "画面を押したまま左右にずらしてねらい、指をはなすと縁起物が落ちます。同じものがくっつくと合体して、福豆から鏡餅まで大きくなります。熊手の縄より上にはみ出したままになると、あふれて終わりです。",
-  "how_to_play_en": "Hold and slide to aim, then let go to drop the charm. Two alike that touch merge into the next one, from a lucky bean up to the mirror mochi. If a charm stays above the rope at the rim, the rake spills and the run ends.",
+  "how_to_play_ja": "画面を押したまま左右にずらしてねらい、指をはなすと縁起物が落ちます。同じものがくっつくと合体して、福豆から鏡餅まで大きくなります。縄より上にはみ出したままだとあふれて終わりで、タイトルでは「いつもの」「60秒」「30こ」から遊び方を選べます。",
+  "how_to_play_en": "Hold and slide to aim, then let go to drop the charm. Two alike that touch merge into the next one, from a lucky bean up to the mirror mochi. A charm left above the rope spills the rake, and on the title you can pick CLASSIC, 60 SEC or 30 DROPS.",
   "controls": [
     "drag to aim, release to drop",
     "arrows / a d to aim",
     "space / enter to drop",
+    "1 2 3 / left right on the title to pick the mode",
+    "d on the title for today's draw",
     "esc/p to pause",
     "m to mute"
   ],
@@ -23,7 +25,7 @@
     "mobile-friendly",
     "high-score"
   ],
-  "session_length_sec": 240,
+  "session_length_sec": 120,
   "video_hook_ja": "5秒で福豆から鏡餅まで、一気に5れんさ。",
   "quality_bar": 1
 }
