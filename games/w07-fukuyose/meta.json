@@ -25,7 +25,7 @@
     "mobile-friendly",
     "high-score"
   ],
-  "session_length_sec": 120,
+  "session_length_sec": 180,
   "video_hook_ja": "5秒で福豆から鏡餅まで、一気に5れんさ。",
   "quality_bar": 1
 }

@@ -1701,8 +1701,12 @@ const FILL_M = 45, FILL_TOP = 6, FILL_FROM = 3, RESCUE_MAX = 7;
 const ropeY = (rimY, x) => { const u = Math.max(-1, Math.min(1, (x - 180) / 144)); return rimY + ROPE_DIP - ROPE_SAG * u * u; };
 // Play gives 4 s above the rope before the spill, enough to answer the warning with a drop or two; the demo keeps 2 s,
 // which its seeds were chosen for (a save and a spill inside 30 s).
-// Phase table by drops (long-form type, bar 1.5.2): something new every 8 to 40 drops and no plateau. The rim rope
-// never moves (2026-10-06): the pressure grows from a quicker cord and bigger charms.
+// Phase table by drops (long-form type, bar 1.5.2): something new every 3 to 18 drops and no plateau. The rim rope
+// never moves (2026-10-06): the pressure grows from a quicker cord and bigger charms. From drop 48 a short row of big
+// charms only (小判 and だるま, a size up while the basket is roomy) comes now and then under the 'bigger' notice, a
+// wave that lifts the heap for every kind of player at the same drop (panel 5: before this, a careful player saw no
+// warning for 6 to 10 minutes and rows came every 22 to 40 drops; a probe with the same eight kinds of players moved a
+// careful person's first warning from 388 s to 260 s, a normal one's from 230 s to 211 s).
 // w: weights of the cord's charm levels 0..5; timer: seconds before the cord lets go by itself (bar 1.5.5);
 // mallet: a lucky mallet joins the queue; note: the notice.
 const PHASES = [
@@ -1710,13 +1714,21 @@ const PHASES = [
   { at: 8, w: [4, 4, 3, 3, 0, 0], timer: 5.6, mallet: 1, note: 'mallet' },
   { at: 18, w: [4, 4, 3, 2, 1, 0], timer: 5.3, note: 'koban' },
   { at: 28, w: [4, 4, 3, 3, 1, 0], timer: 5, note: 'faster' },
-  { at: 50, w: [4, 4, 3, 3, 1, 1], timer: 4.8, mallet: 1, note: 'daruma' },
-  { at: 78, w: [4, 4, 3, 3, 1, 1], timer: 4.6, note: 'faster' },
-  { at: 86, w: [4, 4, 3, 3, 2, 1], timer: 4.4, mallet: 1, note: 'bigger' },
-  { at: 118, w: [4, 4, 3, 3, 2, 1], timer: 4.1, mallet: 1, note: 'faster' },
-  { at: 158, w: [3, 3, 3, 3, 2, 1], timer: 3.9, note: 'faster' },
-  { at: 166, w: [3, 3, 3, 3, 2, 2], timer: 3.6, mallet: 1, note: 'bigger' },
-  { at: 196, w: [3, 3, 3, 3, 2, 2], timer: 3.4, mallet: 1, note: 'faster' }
+  { at: 38, w: [3, 4, 3, 3, 1, 1], timer: 4.8, mallet: 1, note: 'daruma' },
+  { at: 48, w: [0, 0, 0, 0, 3, 2], timer: 4.8, note: 'bigger' },
+  { at: 51, w: [2, 3, 3, 3, 2, 1], timer: 4.6 },
+  { at: 62, w: [2, 3, 3, 3, 2, 2], timer: 4.4, note: 'faster' },
+  { at: 72, w: [0, 0, 0, 0, 3, 2], timer: 4.4, note: 'bigger' },
+  { at: 75, w: [2, 2, 3, 3, 3, 2], timer: 4.2, mallet: 1, note: 'mallet' },
+  { at: 90, w: [2, 2, 2, 3, 3, 3], timer: 4, note: 'faster' },
+  { at: 100, w: [0, 0, 0, 0, 3, 3], timer: 4, note: 'bigger' },
+  { at: 104, w: [1, 2, 2, 3, 3, 3], timer: 3.8 },
+  { at: 118, w: [1, 2, 2, 3, 3, 3], timer: 3.6, mallet: 1, note: 'mallet' },
+  { at: 128, w: [0, 0, 0, 0, 3, 3], timer: 3.6, note: 'bigger' },
+  { at: 132, w: [1, 2, 2, 2, 3, 3], timer: 3.4, note: 'faster' },
+  { at: 150, w: [0, 0, 0, 0, 3, 3], timer: 3.4, note: 'bigger' },
+  { at: 154, w: [1, 2, 2, 2, 3, 3], timer: 3.2, mallet: 1, note: 'mallet' },
+  { at: 168, w: [1, 1, 2, 2, 3, 3], timer: 3, note: 'faster' }
 ];
 // The 30 s demo keeps its own slower table: its hurried hand drops far faster than a person, and with the play
 // table its extra mallets would keep offering 鏡餅 so the clip never reached its overflow ending.
@@ -1733,7 +1745,7 @@ const DEMO_PHASES = [
   { at: 112, w: [2, 2, 3, 3, 3, 2], timer: 3.5, note: 'faster' },
   { at: 126, w: [2, 2, 3, 3, 4, 2], timer: 3.3, mallet: 1, note: 'bigger' }
 ];
-const ROW = 40;   // past the table, a new row every ROW drops
+const ROW = 20;   // past the table, a new row every ROW drops
 function phaseAt(d, demo) {
   const T = demo ? DEMO_PHASES : PHASES;
   let i = 0; for (let j = 0; j < T.length; j++) if (d >= T[j].at) i = j;
@@ -1743,7 +1755,7 @@ function phaseAt(d, demo) {
   // past the table, rows of ROW drops keep rising: the cord hurries every row and bigger charms come more often, so a
   // steady hand never finds a flat stretch
   const m = Math.min(4, Math.floor((k + 1) / 2));
-  return { i: last + k, w: [2, 2, 3, 3, 4 + m, 2 + m], timer: Math.max(2.5, p.timer - 0.25 * k), mallet: 1, note: k % 2 ? 'faster' : 'bigger' };
+  return { i: last + k, w: [1, 1, 2, 2, 3 + m, 3 + m], timer: Math.max(2.5, p.timer - 0.25 * k), mallet: 1, note: k % 2 ? 'faster' : 'bigger' };
 }
 // Openings (bar 1.1.2, 1.1.4, 1.6.2): the kumade starts about half full, with a small tower of offerings in the middle
 // and mixed heaps against both walls. The first charm on the cord dropped on the tower's top ('s0') sets off a chain
@@ -1782,9 +1794,10 @@ const DEMO_MATCH = 2, DEMO_MATCH_LV = [2, 5], DEMO_APART = 1;
 const DEMO_SLOPPY = 5.5, DEMO_RELOAD = 0.2, DEMO_PILEUP = 1, DEMO_OFFER = 0.75, DEMO_FILL = [4, 5, 3, 5, 4, 6, 3, 5, 4, 5, 3, 6, 4, 5, 5, 4];
 // ?demo=1 plays the 30-charm way (DEMO_KIND) and cycles through these seeds (found by a search in the scratch tools):
 // each shows the opening chain to the 鏡餅 by 5.5 s, one offering only, a score change at least every 2 s, the hurry
-// of the last five charms and the end at 18 to 21 s. The first (the one a 30 s capture records) warns at 15.6 s, is
-// saved at 16.1 s and ends at 19.5 s; the sixth spills over the rope instead.
-const DEMO_KIND = 'count', DEMO_SEEDS = [473, 28, 493, 620, 209, 264, 19];
+// of the last five charms and the end at 18 to 21 s. Three of the nine spill over the rope after a save (bar 1.9.2: the
+// clip needs a near miss and a failure), among them the first, the one a 30 s capture records: it warns at 15.8 s, is
+// saved at 16.5 s and spills at 19.1 s. The others end when the 30 charms are down.
+const DEMO_KIND = 'count', DEMO_SEEDS = [264, 473, 518, 28, 493, 1388, 620, 209, 19];
 // Autoplay with a human hand (bar 1.5.1): aim error in px (one sigma) and the share of careless drops, both
 // growing with the number of drops, so a run ends like a tiring person's does.
 const AI_HURRY = 1;
@@ -2211,13 +2224,14 @@ RN.prog = function () { return this.limitT && this.mode === 'play' ? Math.max(th
 RN.advance = function () {
   const ph = phaseAt(this.prog(), this.mode === 'demo');
   if (ph.i > this.phase) {
-    this.phase = ph.i; if (ph.mallet) this.giveMallet();
-    if (ph.note) this.events.push({ type: 'phase', note: ph.note, i: ph.i });
+    this.phase = ph.i;
+    const got = ph.mallet ? this.giveMallet() : false;
+    if (ph.note && (ph.note !== 'mallet' || got)) this.events.push({ type: 'phase', note: ph.note, i: ph.i });   // a mallet held back is not announced
   }
 };
 RN.giveMallet = function () {
-  if (this.mode === 'play' && this.offered > 0 && this.malletCyc === this.cyc()) return;
-  this.malletDue = true;
+  if (this.mode === 'play' && this.offered > 0 && this.malletCyc === this.cyc()) return false;
+  this.malletDue = true; return true;
 };
 // A finished 鏡餅 rests for a moment, then is offered: it rises out of the kumade and leaves room behind.
 RN.lift = function (b) {
@@ -2339,15 +2353,15 @@ const STRINGS = {
     n_mallet: "Lucky mallet ahead!", n_koban: "Gold coins now fall", n_faster: "The cord is quicker", n_bigger: "Bigger ones coming", n_daruma: "Daruma now fall",
     rescue: "Next: {n}. Drop it on top!", rescueMallet: "Next: mallet. Hit the ship!",
     malletHow: "Mallet: one size up", newCharm: "New: {n}!", newMany: "{k} new, up to {n}!", kagamiDone: "Mirror mochi made!", kagamiSeal: "MOCHI!", ship: "Ship! The mochi is next", shipMallet: "Ship! A mallet is on its way", malletShip: "Drop the mallet on the ship", aimed: "ON TARGET x2", goal: "Goal", goalMake: "Make a {n}", goalRank: "Next rank at {n}",
-    goalChain: "Make a {n} chain", stats: "Offered {o}   Best chain {c}", nextGoal: "NEXT GOAL", biggest: "Biggest you made", entered: "New in the book", rank: "RANK",
-    ranks: ["Novice", "Not bad", "Skilled", "Master", "Expert", "Lucky one", "Captain", "Luck god"], bookTitle: "Book of Charms", unknown: "Not found yet", credit: "Made with Claude",
+    goalChain: "Make a chain of {n}", stats: "Offered {o}   Best chain {c}", nextGoal: "NEXT GOAL", biggest: "Biggest charm", entered: "New in the book", rank: "RANK",
+    ranks: ["Novice", "Not bad", "Skilled", "Expert", "Master", "Lucky one", "Captain", "Luck god"], bookTitle: "Book of Charms", unknown: "Not found yet", credit: "Made with Claude",
     names: ["Lucky bean", "Bell", "Plum flower", "Spinning top", "Gold coin", "Daruma", "Beckoning cat", "Sea bream", "Treasure ship", "Mirror mochi", "Lucky mallet"],
     means: ["Chases off demons, calls in luck", "Its clear ring calls the gods", "First to bloom through the cold", "It spins well, so life goes well", "May you never run short",
       "Fall seven times, stand up eight", "Its paw beckons guests and luck", "The fish of celebration", "Brings the treasure of luck", "A seat for the New Year god", "Swing it and a wish comes true"],
     daily: "TODAY'S DRAW", dailyL: ["TODAY'S", "DRAW"], dailyHow: "Today: {n} scores x2", luckyHit: "{n} x2!", dBest: "TODAY'S BEST", dNew: "BEST TODAY", streak: "{n} days in a row", tomorrow: "Tomorrow: {n} x2",
     errs: "ERRANDS", errs3: "3 ERRANDS", errDone: "ERRAND DONE!", sealBook: "SEALS", nextCos: "{n} more seals: a new prize", allCos: "Every prize is yours", newCos: "New prize: {n}", cosLock: "at {n} seals",
     cosN: ["Kumade charm", "Lanterns", "Mochi cloth", "Scroll"], cosV: [["None", "Rice ears", "Pine", "Gold chest"], ["Red", "Gold", "White", "Indigo"], ["Red & white", "Waves", "Hemp leaf", "Rings"], ["Indigo", "Vermilion", "Bamboo", "Tea gold"]],
-    e_mk: "Make {l} x{n}", e_ch: "Make a {n} chain", e_drop: "Drop {n} charms", e_aim: "{n} on target", e_sc: "Score {n}", e_mal: "Use the mallet x{n}", e_tsc: "Score {n} in 60 SEC", e_csc: "Score {n} in 30 DROPS", e_save: "Save a spill x{n}",
+    e_mk: "Make {l} x{n}", e_ch: "Make a chain of {n}", e_drop: "Drop {n} charms", e_aim: "{n} on target", e_sc: "Score {n}", e_mal: "Use the mallet x{n}", e_tsc: "Score {n} in 60 SEC", e_csc: "Score {n} in 30 DROPS", e_save: "Save a spill x{n}",
     e_off: "Offer a mochi x{n}", e_nowarn: "Drop {n} with no warning", e_mkT: "{l} x{n} in total", e_mrgT: "{n} merges in total", e_aimT: "{n} on target in total", e_offT: "Offer {n} mochi in total", e_day: "Play the draw on {n} days", e_streak: "The draw {n} days in a row",
     modes: ["CLASSIC", "60 SEC", "30 DROPS"], modeGo: ["", "How much in 60 seconds?", "How much in 30 drops?"], bests: ["BEST", "60 SEC BEST", "30 DROPS BEST"],
     limH: ["TIME", "DROPS"], limN: ["{n}", "{n}"], hurryT: "{n} seconds left!", hurryC: "{n} drops left!", endT: "TIME UP!", endC: "ALL DONE!",
@@ -2542,7 +2556,10 @@ const ERR_MORE = [["sc", 60000], ["off", 3], ["aim", 20], ["drop", 200], ["mal",
 const errDef = i => { if (i < ERR.length) return ERR[i]; const j = i - ERR.length, q = ERR_MORE[j % ERR_MORE.length]; return [q[0], Math.round(q[1] * (1 + 0.5 * Math.floor(j / ERR_MORE.length))), q[2]]; };
 const TOTI = { mrgT: 0, aimT: 1, offT: 2, mkT: 3 }, SEALK = "福寿吉宝鶴亀松竹梅春喜祝縁運招幸";
 let TOT = store.get("tot", null); if (!Array.isArray(TOT) || TOT.length !== 14) TOT = new Array(14).fill(0);
-let ERRS = (() => { const e = store.get("errs", null); return (Array.isArray(e) && e.length === 3 ? e : [[0, 0], [1, 0], [2, 0]]).map(q => ({ i: q[0] | 0, b: Number(q[1]) || 0, done: !!q[2], sn: q[3] | 0 })); })();
+let ERRS = (() => {   // a damaged entry (not a list) falls back to that slot's first errand, so a bad save never stops the boot
+  const e = store.get("errs", null), ok = Array.isArray(e) && e.length === 3;
+  return [0, 1, 2].map(k => { const q = ok && Array.isArray(e[k]) ? e[k] : [k, 0]; return { i: Math.max(0, q[0] | 0), b: Number(q[1]) || 0, done: !!q[2], sn: Math.max(0, q[3] | 0) }; });
+})();
 let SEALS = num("seals", 0);
 function errVal(d) {
   const R = run && run.mode === "play" && !run.c.fin ? run.R : null, c = R && run.c, k = d[0];
@@ -2687,7 +2704,8 @@ function onEvents(now) {
     else if (e.type === "ship") { fx.ship = { x: e.x, y: e.y, r: e.r, t: 0 }; if (loud()) sfx.cheer(1.1); if (R.offered === 0 && !R.malletIn) say(S("ship"), 2.4, "red"); }
     else if (e.type === "shipMallet") say(S("shipMallet"), 2.6, "red");
     else if (e.type === "malletShip") say(S("malletShip"), 2.6, "red");
-    else if (e.type === "warn") { const b = R.lastOffender; if (play && run.c.warnAt == null) run.c.warnAt = R.drops; stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, R.limitT || R.limitN ? S("halfW") : "", b ? b.r : 0); if (loud()) sfx.warn(); }
+    else if (e.type === "warn") { const b = R.lastOffender; if (play && run.c.warnAt == null) run.c.warnAt = R.drops; const teach = (R.limitT || R.limitN) && (!play || num("halfN", 0) < 3); if (teach && play) save("halfN", num("halfN", 0) + 1);   // the halving line: three times, then the seal stays one line (bar 1.4.5)
+      stamp(S("warn"), b ? b.x : 180, R.rimY - 20, true, teach ? S("halfW") : "", b ? b.r : 0); if (loud()) sfx.warn(); }
     else if (e.type === "safe") { if (play) run.c.save++; if (e.near > 0.25) { stamp(S("safe"), e.x, R.rimY - 20, true, S("left", e.left.toFixed(1)), 24); if (loud()) sfx.safe(); } }
     else if (e.type === "offer") { say(S("offer"), 2, "red"); if (loud()) { sfx.offer(); sfx.cheer(1); } }
     else if (e.type === "hurry") { say(S(R.limitT ? "hurryT" : "hurryC", Math.ceil(R.left() - 1e-9)), 2.4, "red"); if (loud()) sfx.hurry(); }
@@ -2745,7 +2763,7 @@ function taiko(w, peak, dest, f) {
 const sfx = {
   drop(lv) { // the cord lets go: a short swish and the hook's wooden tick, a little lower for bigger charms
     if (!audioOn()) return; const w = at(), q = vary(40, 0.1), s = 1 - Math.min(lv, 9) * 0.035;
-    hiss("bandpass", 2400 * q.f, 2.4, 0.1, 0.78 * q.g, w, null, 800); tone("triangle", 640 * s * q.f, 400 * s, 0.07, 0.64 * q.g, w, null, 0.002, 1800);   // about 3 dB under a small merge
+    hiss("bandpass", 2400 * q.f, 2.4, 0.1, 0.55 * q.g, w, null, 800); tone("triangle", 640 * s * q.f, 400 * s, 0.07, 0.45 * q.g, w, null, 0.002, 1800);   // under a small merge on a phone
   },
   land(lv, sp) { // a wooden knock in the basket: a triangle body that deepens with size, louder for faster landings
     if (!audioOn()) return; const w = at(), q = vary(45, 0.1), k = clamp((sp - 60) / 500, 0.4, 1), f = (350 - Math.min(lv, 10) * 18) * q.f;
@@ -2763,13 +2781,13 @@ const sfx = {
     const d = Math.min(13, ch >= 2 ? mus.chain0 + ch - 1 : Math.min(6, lv)), f = pz(d) * q.f;
     pluck(f, b, 0.3 * q.g); tone("triangle", 240 * q.f, 110, 0.1, 0.22 * q.g, w, null, 0.002, 700); hiss("highpass", 4200, 1, 0.035, 0.07, w);
     if (tier >= 2) { pluck(pz(d + 2) * q.f, b + 0.07, 0.14); kane(pz(d + 5) * q.f, b + 0.07, 0.04); }
-    else if (lv <= 3) pluck(f * 2, b + 0.01, 0.08);   // an octave on top so a small merge tops the drop on a phone
+    else if (lv <= 3) pluck(f * 2, b + 0.01, 0.12);   // an octave on top so a small merge tops the drop on a phone
   },
   big(lv, ch) { // taiko and a chord under the merge's note, for the big ones and long chains
     if (!audioOn()) return; const w = at(), q = vary(20, 0.06), b = Math.min(10, Math.max(lv, 4 + ch) - 2);
     taiko(w, 0.36 * q.g); tone("sine", 100 * q.f, 42, 0.45, 0.3 * q.g, w);
     [0, 2, 4].forEach((n, i) => tone("triangle", pz(n + b) * q.f, pz(n + b) * q.f, 0.5, 0.08, w + 0.03 + i * 0.04));
-    kane(pz(b + 7) * q.f, w + 0.02, 0.08); tone("triangle", 900 * q.f, 600, 0.06, 0.3 * q.g, w, null, 0.002, 2000);   // a bell and a knock a phone plays, so tier 3 tops tier 2
+    kane(pz(b + 7) * q.f, w + 0.02, 0.14); tone("triangle", 900 * q.f, 600, 0.06, 0.3 * q.g, w, null, 0.002, 2000); tone("triangle", 1200 * q.f, 800, 0.05, 0.26 * q.g, w + 0.01, null, 0.002, 2400);   // a bell and two knocks a phone plays, so tier 3 tops tier 2
   },
   kagami() { // the peak: two taiko hits and the home chord (D, A, D) spread upward, a bell shimmer on top
     if (!audioOn()) return; const w = at();
@@ -2788,13 +2806,13 @@ const sfx = {
   },
   cheer(k) { // the crowd: hand claps spread over a moment and a rising "wa" of voices
     if (!audioOn()) return; const w = at() + 0.05;
-    for (let i = 0; i < 14; i++) hiss("bandpass", 1400 + Math.random() * 900, 3, 0.035, (0.28 + Math.random() * 0.08) * k, w + Math.random() * 0.9 * (0.4 + k * 0.6));
-    hiss("bandpass", 650, 2.5, 0.9, 0.1 * k, w, null, 950); hiss("bandpass", 1150, 3, 0.7, 0.05 * k, w + 0.1, null, 1500);
+    for (let i = 0; i < 14; i++) hiss("bandpass", 1400 + Math.random() * 900, 3, 0.035, (0.5 + Math.random() * 0.12) * k, w + Math.random() * 0.9 * (0.4 + k * 0.6));
+    hiss("bandpass", 650, 2.5, 0.9, 0.18 * k, w, null, 950); hiss("bandpass", 1150, 3, 0.7, 0.1 * k, w + 0.1, null, 1500);
   },
-  mallet() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); tone("square", 880 * q.f, 600, 0.06, 0.12, w, null, 0, 1800); tone("square", 1180 * q.f, 900, 0.07, 0.1, w + 0.07, null, 0, 1800); hiss("bandpass", 3000, 2, 0.05, 0.14, w); },
-  offer() { if (!audioOn()) return; const w = at(); [5, 8, 10, 12, 15].forEach((n, i) => pluck(pz(n), w + i * 0.09, 0.08, null, 0.6)); kane(pz(10), w + 0.5, 0.06); hiss("highpass", 6000, 1, 0.5, 0.03, w + 0.2); },
+  mallet() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); tone("square", 880 * q.f, 600, 0.06, 0.2, w, null, 0, 1800); tone("square", 1180 * q.f, 900, 0.07, 0.17, w + 0.07, null, 0, 1800); hiss("bandpass", 3000, 2, 0.05, 0.22, w); },
+  offer() { if (!audioOn()) return; const w = at(); [5, 8, 10, 12, 15].forEach((n, i) => pluck(pz(n), w + i * 0.09, 0.2, null, 0.6)); kane(pz(10), w + 0.5, 0.13); hiss("highpass", 6000, 1, 0.5, 0.05, w + 0.2); },
   warn() { if (!audioOn()) return; const w = at(), q = vary(35, 0.08); tone("sine", 70 * q.f, 50, 0.16, 0.4 * q.g, w); tone("triangle", 230 * q.f, 150, 0.14, 0.24 * q.g, w, null, 0.002, 700); tone("sine", 70 * q.f, 50, 0.16, 0.34 * q.g, w + 0.2); tone("triangle", 230 * q.f, 150, 0.14, 0.2 * q.g, w + 0.2, null, 0.002, 700); tone("triangle", 1320 * q.f, 1320 * q.f, 0.3, 0.05, w); kane(pz(8) * q.f, w, 0.12); kane(pz(8) * q.f, w + 0.2, 0.1); },
-  safe() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.16 * q.g, null, 0.2); pluck(pz(10) * q.f, w + 0.1, 0.16 * q.g, null, 0.4); hiss("bandpass", 900, 1, 0.35, 0.05, w + 0.05, null, 400); },
+  safe() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.3 * q.g, null, 0.2); pluck(pz(10) * q.f, w + 0.1, 0.3 * q.g, null, 0.4); hiss("bandpass", 900, 1, 0.35, 0.08, w + 0.05, null, 400); },
   hurry() { // the last ten seconds or five charms: a festival flute call sliding up, a run of taiko and a hand cymbal
     if (!audioOn()) return; const w = at();
     tone("sine", pz(7), pz(10), 0.28, 0.12, w, null, 0.02); tone("sine", pz(10), pz(10), 0.3, 0.1, w + 0.28, null, 0.01); hiss("bandpass", 2600, 2, 0.5, 0.05, w);
@@ -2815,8 +2833,8 @@ const sfx = {
   fail() { if (!audioOn()) return; const w = at() + 0.1; [9, 7, 4, 2].forEach((n, i) => pluck(pz(n), w + i * 0.15, 0.13, null, 0.3)); tone("sine", 160, 55, 0.7, 0.3, w + 0.6); taiko(w + 0.6, 0.12, null, 0.8); hiss("lowpass", 500, 1, 0.5, 0.2, w + 0.6, null, 90); },
   spill() { if (!audioOn()) return; const w = at(); tone("sine", 86, 38, 0.6, 0.45, w); taiko(w, 0.22, null, 0.85); hiss("lowpass", 800, 1, 0.5, 0.3, w, null, 100); for (let i = 0; i < 6; i++) { hiss("bandpass", 900 + i * 260, 3, 0.05, 0.14, w + 0.15 + i * 0.09); tone("triangle", 620 - i * 40, 420 - i * 30, 0.06, 0.2, w + 0.12 + i * 0.1, null, 0.002, 1600); }
     hiss("bandpass", 1300, 1.2, 0.45, 0.22, w + 0.05, null, 500); },
-  notice() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.12 * q.g, null, 0.2); pluck(pz(9) * q.f, w + 0.08, 0.12 * q.g, null, 0.3); },
-  best() { if (!audioOn()) return; const w = at(); [0, 2, 4, 5, 7, 10].forEach((n, i) => pluck(pz(n + 2), w + i * 0.07, 0.12, null, 0.35)); kane(pz(12), w + 0.42, 0.07); hiss("highpass", 5000, 1, 0.4, 0.04, w + 0.4); },
+  notice() { if (!audioOn()) return; const w = at(), q = vary(30, 0.08); pluck(pz(7) * q.f, w, 0.19 * q.g, null, 0.2); pluck(pz(9) * q.f, w + 0.08, 0.19 * q.g, null, 0.3); },
+  best() { if (!audioOn()) return; const w = at(); [0, 2, 4, 5, 7, 10].forEach((n, i) => pluck(pz(n + 2), w + i * 0.07, 0.25, null, 0.35)); kane(pz(12), w + 0.42, 0.14); hiss("highpass", 5000, 1, 0.4, 0.06, w + 0.4); },
   count(i) { if (!audioOn()) return; const q = vary(25, 0.1), f = (900 + (i % 12) * 40) * q.f; tone("sine", f, f, 0.035, 0.4 * q.g, at()); },
   stamp() { if (!audioOn()) return; const w = at(), q = vary(30, 0.1); tone("sine", 140 * q.f, 60, 0.15, 0.45 * q.g, w); tone("triangle", 260 * q.f, 160, 0.08, 0.2 * q.g, w, null, 0.002, 900); hiss("lowpass", 1200, 1, 0.08, 0.3, w); tone("triangle", 820 * q.f, 600, 0.05, 0.35 * q.g, w, null, 0.002, 2400); hiss("bandpass", 900, 2, 0.03, 0.25, w);
     tone("triangle", 1150 * q.f, 700, 0.035, 0.3 * q.g, w + 0.005, null, 0.001, 2600); hiss("bandpass", 1000, 3, 0.03, 0.3, w); },   // a wooden clack a phone plays
@@ -2879,7 +2897,7 @@ function musicVoices(i, w, s) {
   const bus = mus.bus, lay = s.lay, danger = s.danger, quiet = s.hushed || s.bed;
   if (i % 16 === 0) { const d = s.step * 16 + 0.6; pad(pz(-5), w, d, 0.04, "triangle", 650); pad(pz(-2), w + 0.03, d, 0.024, "triangle", 650); pad(pz(-10), w + 0.05, d, 0.012); }
   const beat = danger ? i % 2 === 0 : i % 8 === 0 || i % 8 === 3 || (lay >= 2 && i % 16 === 14);
-  if (!quiet && beat) { taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1); if (danger) hiss("bandpass", 3000, 3, 0.025, 0.18, w, bus); }   // a rim click: urgent on a phone
+  if (!quiet && beat) { taiko(w, danger ? 0.13 : i % 8 ? 0.12 : 0.16, bus, i % 8 ? 1.12 : 1); if (danger) hiss("bandpass", 3000, 3, 0.025, 0.26, w, bus); }   // a rim click: urgent on a phone
   if (s.hurry && !danger && !quiet) {   // the hurry (60秒 and 30こ): the drums answer on the off-beats and a hand cymbal rattles
     if (i % 8 === 5 || i % 8 === 6) taiko(w, 0.09, bus, 1.25);
     if (i % 2 === 1) hiss("bandpass", 5200, 3, 0.04, 0.05, w, bus);
@@ -2887,12 +2905,12 @@ function musicVoices(i, w, s) {
   if (lay >= 1 && !s.hushed && i % 4 === 2) hiss("bandpass", 2400, 4, 0.03, 0.07, w, bus);
   const ph = Math.floor(i / 32) % 4, m = SONG[ph][i % 32];
   if (lay >= 1 && !s.hushed) {
-    if (danger) { pluck(pz(KOTO_D[i % 8]), w, 0.11, bus, 0.18); if (i % 2) pluck(pz(KOTO_D[i % 8] + 5), w, 0.08, bus, 0.15); }   // and its octave, so danger is louder than calm on a phone
+    if (danger) { pluck(pz(KOTO_D[i % 8]), w, 0.16, bus, 0.18); if (i % 2) pluck(pz(KOTO_D[i % 8] + 5), w, 0.12, bus, 0.15); }   // and its octave, so danger is louder than calm on a phone
     else { const k = (ph === 2 ? KOTO_B : KOTO)[i % 16]; if (k >= 0) pluck(pz(k), w, i % 4 === 0 ? 0.1 : 0.075, bus, 0.32); }
   }
   if (lay >= 2 && !danger && !s.hushed && m >= 0) flute(pz(m + 5), w, 0.36, 0.05);
   if (lay >= 3 && i % 2 === 1) tone("sine", 2350 + (i % 6) * 120, 2350 + (i % 6) * 120, 0.06, 0.05, w, bus);
-  if (danger && i % 2 === 0) kane(pz(10 + (i >> 1) % 3), w, 0.07, bus);
+  if (danger && i % 2 === 0) kane(pz(10 + (i >> 1) % 3), w, 0.09, bus);
   if (s.kane && i % 4 === 0) kane(pz(10 + (i % 8 ? 2 : 0)), w, 0.035, bus);
 }
 function musicStep() {
@@ -2902,10 +2920,10 @@ function musicStep() {
   if (mus.level === "off") { mus.next = c.currentTime + 0.05; return; }
   if (mus.next < c.currentTime) mus.next = c.currentTime + 0.02;
   const R = run && run.R, live = !!R && !R.dead, high = live ? R.snap().top < 330 : false, warm = R ? R.merges > 0 || run.mode !== "play" : false;
-  const step = mus.st = STEP * Math.pow(0.975, Math.min(8, live ? R.phase : 0)) * (live && R.hurry ? 0.94 : 1), bells = high || (!!R && R.maxLv >= 8);
+  const step = mus.st = STEP * Math.pow(0.975, Math.min(8, live ? Math.floor(R.prog() / 20) : 0)) * (live && R.hurry ? 0.94 : 1), bells = high || (!!R && R.maxLv >= 8);
   while (mus.next < c.currentTime + 0.15) {
     const i = mus.i++, w = mus.next, full = mus.level === "play" && i >= mus.drop, bed = mus.level === "bed";
-    const lay = mus.level === "title" || bed ? 1 : !full ? 0 : warm ? (bells ? 3 : 2) : 1;
+    const lay = mus.level === "title" ? 2 : bed ? 1 : !full ? 0 : warm ? (bells ? 3 : 2) : 1;
     musicVoices(i, w, { lay, danger: live && R.warned, hurry: live && R.hurry, hushed: w < mus.hushUntil, bed, kane: i <= mus.kane, step });
     mus.next += step;
   }
@@ -2922,9 +2940,10 @@ function die(now) {
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   fx.held = false; R.kdir = 0; fx.line = null;   // the news line ends with the run (no 'Next: ...' under SPILLED!)
   if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
-  if (why === "overflow") { stamp(S("over"), R.dead.x, R.rimY - 20, true, R.dead.lost ? S("halfD", R.dead.lost) : "", R.dead.r); if (loud()) sfx.fail(); addTrauma(0.3); }
-  if (R.dead.lost) { fx.disp = fx.shown = R.score; fx.bump = T(); }   // the score tag shows the halved score through the freeze
-  else { stamp(S(why === "time" ? "endT" : "endC"), 180, 330, 2, "", 0); if (loud()) sfx.end(); }
+  if (why === "overflow") {
+    stamp(S("over"), R.dead.x, R.rimY - 20, true, R.dead.lost ? S("halfD", R.dead.lost) : "", R.dead.r); if (loud()) sfx.fail(); addTrauma(0.3);
+    if (R.dead.lost) { fx.disp = fx.shown = R.score; fx.bump = T(); }   // the score tag shows the halved score through the freeze
+  } else { stamp(S(why === "time" ? "endT" : "endC"), 180, 330, 2, "", 0); if (loud()) sfx.end(); }
   musicLevel("duck");
 }
 const FREEZE_END = 1100;
@@ -3315,7 +3334,10 @@ function drawTitle(x, ts, a) {
     const ms = MR[0][4], ry = MR[0][1] + 1.5 * ms, x0 = MR[0][0] - 6 * ms, x1 = MR[2][0] + MR[2][2] + 6 * ms;
     for (const X of [x0 + 12 * ms, x1 - 12 * ms]) STYLE.line(x, pPoly([[X, yb - 6 * G[2]], [X, ry]], true), 1.1, p.cord);
     bamboo(x, STYLE, x0, ry, x1, ry, 5 * ms, { node: 46 });
-  } else errBoard(x, 180, yb + MODE_SH + 10, 1, errRows(), S("errs3"), yb);   // the errands' slip hangs on behind the plates
+  } else {   // the errands' one-line slip hangs on behind the plates (the first one not met yet), clear of the basket's rim
+    const rows = errRows(), i = Math.max(0, rows.findIndex(e => !e.done)), fs = fz(13);
+    errSlip(x, rows, i, yb + MODE_SH + 6 + fs * 0.78, fs, yb);
+  }
   MR.forEach((r, i) => {
     const on = i === modeSel, b = KIT.modeP[i][on ? 1 : 0], q = clamp((T() - modeT) / 200, 0, 1), pop = on && q < 1 && !rm ? 1 + 0.16 * Math.sin(Math.PI * q) : 1;
     x.save(); x.translate(r[0] + r[2] / 2, r[1]); x.rotate(rm ? 0 : Math.sin(ts * 1.3 + i * 1.9) * 0.012 + (on && q < 1 ? Math.sin(q * 9) * 0.05 * (1 - q) : 0)); x.scale(r[4] * pop, r[4] * pop);
@@ -3487,7 +3509,7 @@ function drawResult(x, now) {
       tx(x, S("nextGoal"), 0, c - 12, sm, p.red, {});
       tx(x, goalText(r.goal, false), 0, c + 12, 17, p.ink, {});
     } else if (kind === "tom" && age > RES.goal) {
-      tx(x, S("streak", r.streak), 0, c - 12, sm, p.red, {});
+      tx(x, S("streak", r.streak).replace(/^1 days/, "1 day"), 0, c - 12, sm, p.red, {});
       icon(x, r.tom, -16 - textW(S("tomorrow", nameOf(r.tom)), 16) / 2, c + 12, 22, false);
       tx(x, S("tomorrow", nameOf(r.tom)), 0, c + 12, 16, p.ink, {});
     } else if (kind === "errs") errList(x, r.errs, errHead(r), 0, y, bs, age);
@@ -3527,6 +3549,16 @@ function errBoard(x, X, Y, sc, rows, head, cordTop, age) {
   errList(x, rows, head, 0, 3, sc, age);
   x.restore();
 }
+// one line on a paper slip: three boxes for the three errands, then errand i and its count; centre x 180, middle Y.
+// cordTop: hang it on two cords from there (the phone title, under the plates). Returns the slip's width.
+function errSlip(x, rows, i, Y, fs, cordTop) {
+  const p = PAL, st = STYLE, e = rows[i], pr = e.done ? 0 : textW(e.p + "/" + e.n, fs) + 8, w = fs * 3.9 + textW(e.t, fs) + pr + 10, X = 180 - w / 2;
+  if (cordTop != null) for (const m of [-1, 1]) st.line(x, pPoly([[180 + m * (w / 2 - 12), cordTop], [180 + m * (w / 2 - 12), Y - fs * 0.78 + 1]], true), 1.1, p.cord);
+  const slip = pRR(X, Y - fs * 0.78, w, fs * 1.56, 1); st.fill(x, slip, p.paper); st.edge(x, slip, 0.9);
+  rows.forEach((r, k) => { const b = pRR(X + 5 + k * fs * 0.62, Y - fs * 0.3, fs * 0.5, fs * 0.6, 1); st.fill(x, b, r.done ? p.red : k === i ? p.tag : p.white); st.edge(x, b, 0.6); });
+  errLine(x, e, X + 5 + fs * 2, Y, w - fs * 2 - 10, fs, undefined, true);
+  return w;
+}
 // play: a board under the goal tag (wide) or one line between the ema row and the straw rope (phone) with the errand
 // that moved last and three boxes for the three; a met errand hangs a red slip with its seal there for 2.6 s
 function drawErrHUD(x) {
@@ -3536,10 +3568,7 @@ function drawErrHUD(x) {
   if (V.wide) errBoard(x, P[0], P[1], P[2], rows, S("errs"), LY.ema[1] + LY.ema[3] - 8 * LY.ema[5]);
   else {
     let i = fx.errI != null && !(rows[fx.errI].done && bt > 2.6) ? fx.errI : rows.findIndex(e => !e.done); if (i < 0) i = fx.errI || 0;
-    const e = rows[i], pr = e.done ? 0 : textW(e.p + "/" + e.n, fs) + 8, w = fs * 3.9 + textW(e.t, fs) + pr + 10, X = 180 - w / 2, Y = P[1];
-    const slip = pRR(X, Y - fs * 0.78, w, fs * 1.56, 1); st.fill(x, slip, p.paper); st.edge(x, slip, 0.9);
-    rows.forEach((r, k) => { const b = pRR(X + 5 + k * fs * 0.62, Y - fs * 0.3, fs * 0.5, fs * 0.6, 1); st.fill(x, b, r.done ? p.red : k === i ? p.tag : p.white); st.edge(x, b, 0.6); });
-    errLine(x, e, X + 5 + fs * 2, Y, w - fs * 2 - 10, fs, undefined, true);
+    errSlip(x, rows, i, P[1], fs);
   }
   if (bt < 2.6) {   // the slip pops in like a seal, then fades
     const e = rows[B.k], k = clamp(bt / 0.14, 0, 1), sz = 1 + 0.4 * (1 - easeOut(k)), w = Math.max(textW(S("errDone"), fs), textW(e.t, fs)) + fs * 3.6;
