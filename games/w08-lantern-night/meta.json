@@ -1,0 +1,33 @@
+{
+  "slug": "lantern-night",
+  "week": 8,
+  "title_ja": "ちょうちん夜行",
+  "title_en": "Lantern Night",
+  "tagline_ja": "ちょうちんの明かりは、命で、武器。妖怪の夜を夜明けまで生きのびる。",
+  "tagline_en": "Your paper lantern is your life and your weapon. Survive the yokai night until dawn.",
+  "how_to_play_ja": "ドラッグ（PC はマウスを押したまま、または WASD・矢印キー）で歩くだけで、ちょうちんの光と武器が近くの妖怪を自動で倒します。妖怪が落とす光の粒を拾うと明かりがもどり、たまると 3 枚の札から 1 枚えらんで強くなれます。光が消えたら終わりです。",
+  "how_to_play_en": "Just drag to walk (on PC, hold the mouse or use WASD / arrows); your lantern's light and weapons hit nearby yokai on their own. Pick up the light motes they drop to refill your light, and when the bar fills, choose one of three cards to grow stronger. If your light goes out, the run ends; last until dawn to win.",
+  "controls": [
+    "drag to move",
+    "hold the mouse to walk toward the cursor",
+    "wasd/arrows to move",
+    "tap/quick click/space to dash",
+    "1/2/3 or arrows + space to pick a card",
+    "esc/p to pause",
+    "m to mute"
+  ],
+  "genre": "survivor action",
+  "tags": [
+    "survivor",
+    "horde-survival",
+    "auto-attack",
+    "roguelite",
+    "japan",
+    "yokai",
+    "one-more-try",
+    "mobile-friendly"
+  ],
+  "session_length_sec": 300,
+  "video_hook_ja": "このちょうちんが消えたら、終わり。",
+  "quality_bar": 1
+}
