@@ -58,9 +58,9 @@ const platform = (name, ...args) => { try { window.Platform[name](...args); } ca
 const PALS = {
   B: { // 「よるの惑星」 (w08, kouhei's pick): the night side of a small planet; CO in the game says what each colour is
     ink: "#241a3c", paper: "#f6f2ea", paperD: "#d8d0c4", grey: "#b2a7c4", greyD: "#6e6386",
-    tag: "#3a3160", tagL: "#51478a", tagD: "#2a2147", tagG: "#cfc2dc", plank: "#9dcc5a", plankL: "#c8e692", plankD: "#72a13c",
+    tag: "#3a3160", tagL: "#51478a", tagD: "#2a2147", tagG: "#f2a7c8", plank: "#9dcc5a", plankL: "#c8e692", plankD: "#72a13c",
     pane: "#8c5dc4", paneL: "#b394e0", paneT: "#63409a", paneS: "#f08c6a",
-    red: "#f07a55", redD: "#c5553a", redL: "#ffd8c6", gold: "#f4c44e", goldD: "#c1902a", goldL: "#ffd36a", orange: "#fff3c4", indigo: "#3c5ba6",
+    red: "#f07a55", redD: "#c5553a", redL: "#ffd8c6", gold: "#f4c44e", goldD: "#c1902a", goldL: "#ffd36a", orange: "#c7739c", indigo: "#3c5ba6",
     sky0: "#2a2147", sky1: "#342a5b", sky2: "#1e1836", sky3: "#90b3eb", mist: "#cfc2dc", far: "#19132e", mid: "#a996c3",
     ground: "#e8dff0", groundL: "#f4eff8", poolA: "#d7cae6", poolB: "#cbbcdd", lit: "#5fc9bf", warm: "#fff3c4", shadeK: "#2f9188", hlK: "#a9ede5", grass: "#72a13c"
   },
@@ -610,7 +610,8 @@ const CO = {
   crys: "lit", crysD: "shadeK", crysL: "hlK", bulb: "paneS", stalk: "grass",
   accent: "red", accentD: "redD", accentL: "redL", gold: "gold", goldD: "goldD", goldL: "goldL",
   visor: "indigo", visorL: "sky3", lamp: "warm",
-  slime: "plank", slimeD: "plankD", slimeL: "plankL", hop: "pane", hopD: "paneT", hopL: "paneL", beetle: "tagL", beetleD: "tag"
+  slime: "plank", slimeD: "plankD", slimeL: "plankL", hop: "pane", hopD: "paneT", hopL: "paneL", beetle: "tagL", beetleD: "tag",
+  jelly: "tagG", jellyD: "orange", jellyL: "redL", armor: "indigo", armorD: "tag", armorL: "sky3"
 };
 const DEMO = /[?&]demo=1(&|$)/.test(location.search);
 const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
@@ -623,67 +624,103 @@ const HZ = 120, DT = 1 / HZ;
 const PL = { spd: 74, r: 8, dash: 260, dashT: 0.17, dashInv: 0.3, dashCd: 1.3, inv: 0.9 };
 // The lamp's light is health, sight and weapon reach at once: it drains all the time and comes back from the
 // light crystals of defeated creatures. Its radius on screen is lightR(light).
-const LT = { start: 100, max: 100, drain: 1.6, ramp: 0.2, r0: 52, rk: 1.16, cap: 214 };
+const LT = { start: 100, max: 100, drain: 1.6, ramp: 0.35, r0: 52, rk: 1.16, cap: 214 };
 const lightR = l => Math.min(LT.cap, LT.r0 + LT.rk * Math.max(0, l));
+const LIVES = 2;                   // spare batteries: when the light goes out, one lights it again at half (kouhei, 2026-10-07)
+// Creatures come in tiers: when a stronger kind arrives, the weakest stops coming (kouhei, 2026-10-07).
+// Bosses (boss = their order) each have their own attacks; ranged ones (keep) stay at a distance inside the light.
 const KIND = {
-  kage: { hp: 3, spd: 38, r: 9, dmg: 4, xp: 1, lt: 1.2 },
-  hitotsu: { hp: 5, spd: 44, r: 10, dmg: 5, xp: 1, lt: 1.4, hop: 1.1 },
-  onibi: { hp: 2, spd: 96, r: 7, dmg: 4, xp: 1, lt: 0.9 },
-  kasa: { hp: 16, spd: 32, r: 12, dmg: 8, xp: 3, lt: 3.4, hop: 1.4 },
-  nyudo: { hp: 300, spd: 24, r: 30, dmg: 10, xp: 20, lt: 30, boss: 1, atk: ["stomp"] },
-  kumo: { hp: 1000, spd: 36, r: 28, dmg: 10, xp: 20, lt: 30, boss: 2, atk: ["lunge"] },
-  oni: { hp: 2400, spd: 30, r: 34, dmg: 12, xp: 30, lt: 40, boss: 3, atk: ["stomp", "lunge"] }
+  kage: { hp: 4, spd: 38, r: 9, dmg: 4, xp: 1, lt: 1.2 },
+  hitotsu: { hp: 12, spd: 44, r: 10, dmg: 6, xp: 1, lt: 1.5, hop: 1.1 },
+  onibi: { hp: 6, spd: 96, r: 7, dmg: 5, xp: 1, lt: 1 },
+  kasa: { hp: 50, spd: 34, r: 12, dmg: 9, xp: 3, lt: 3.4, hop: 1.4 },
+  kurage: { hp: 120, spd: 46, r: 13, dmg: 11, xp: 5, lt: 5, drift: 1 },
+  yoroi: { hp: 360, spd: 30, r: 16, dmg: 14, xp: 9, lt: 8 },
+  nyudo: { hp: 160, spd: 26, r: 30, dmg: 10, xp: 20, lt: 30, boss: 1, atk: ["stomp"] },
+  kumo: { hp: 560, spd: 36, r: 28, dmg: 11, xp: 22, lt: 30, boss: 2, atk: ["lunge"], combo: 1 },
+  kani: { hp: 1500, spd: 30, r: 30, dmg: 12, xp: 24, lt: 32, boss: 3, atk: ["spray"], keep: 110 },
+  kurageB: { hp: 2200, spd: 28, r: 34, dmg: 12, xp: 26, lt: 34, boss: 4, atk: ["summon", "pulse"], keep: 80 },
+  oni: { hp: 5000, spd: 30, r: 34, dmg: 14, xp: 30, lt: 36, boss: 5, atk: ["stomp", "spikes", "lunge"] },
+  eye: { hp: 7000, spd: 34, r: 28, dmg: 14, xp: 32, lt: 38, boss: 6, atk: ["sweep", "burst"], keep: 130 },
+  bird: { hp: 11000, spd: 40, r: 32, dmg: 15, xp: 34, lt: 40, boss: 7, atk: ["meteor", "lunge"], keep: 150 },
+  king: { hp: 30000, spd: 30, r: 44, dmg: 16, xp: 60, lt: 60, boss: 8, atk: ["stomp", "spray", "meteor", "sweep", "summon", "burst"] }
 };
-const BOSSES = [{ at: 180, kind: "nyudo" }, { at: 360, kind: "kumo" }, { at: 600, kind: "oni" }];
-const ATK = { stomp: { tele: 1, R: 110, dmg: 28 }, lunge: { tele: 0.9, len: 300, spd: 430, dmg: 26 } };
-const FOE_CAP = 220, FOE_HARD = 400;
-// Weapons fire by themselves and only reach inside the light; eight levels each (index = level - 1). The last three
-// levels are big steps, so a long night ends with the child far stronger than the creatures (kouhei, 2026-10-07)
-const WPN = {
-  spark: [{ n: 1, cd: 0.85, dmg: 4, pierce: 0 }, { n: 1, cd: 0.75, dmg: 5, pierce: 0 }, { n: 2, cd: 0.72, dmg: 5, pierce: 0 }, { n: 2, cd: 0.62, dmg: 6, pierce: 1 }, { n: 3, cd: 0.52, dmg: 7, pierce: 1 },
-    { n: 3, cd: 0.48, dmg: 10, pierce: 1 }, { n: 4, cd: 0.44, dmg: 12, pierce: 2 }, { n: 5, cd: 0.4, dmg: 15, pierce: 2 }],
-  fly: [{ n: 2, dmg: 2 }, { n: 3, dmg: 2 }, { n: 3, dmg: 3 }, { n: 4, dmg: 3 }, { n: 5, dmg: 4 }, { n: 5, dmg: 6 }, { n: 6, dmg: 8 }, { n: 7, dmg: 11 }],
-  bell: [{ cd: 3.4, dmg: 4, kb: 120 }, { cd: 3.2, dmg: 5, kb: 130 }, { cd: 3, dmg: 6, kb: 140 }, { cd: 2.6, dmg: 7, kb: 150 }, { cd: 2.4, dmg: 9, kb: 170 },
-    { cd: 2.3, dmg: 12, kb: 180 }, { cd: 1.9, dmg: 14, kb: 190 }, { cd: 1.7, dmg: 18, kb: 210 }],
-  fuda: [{ n: 1, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 11, pierce: 3 }, { n: 3, cd: 1.15, dmg: 11, pierce: 3 }, { n: 3, cd: 0.9, dmg: 13, pierce: 4 },
-    { n: 4, cd: 0.88, dmg: 15, pierce: 4 }, { n: 4, cd: 0.8, dmg: 19, pierce: 5 }, { n: 5, cd: 0.72, dmg: 24, pierce: 6 }]
+// one boss at a time: the next comes at its time, or 25 s after the last one fell if that is later. The last is the
+// final boss: defeating it brings the dawn.
+const BOSSES = [{ at: 60, kind: "nyudo" }, { at: 130, kind: "kumo" }, { at: 200, kind: "kani" }, { at: 270, kind: "kurageB" },
+  { at: 340, kind: "oni" }, { at: 410, kind: "eye" }, { at: 480, kind: "bird" }, { at: 560, kind: "king" }];
+const BOSS_GAP = 25, LAST_BOSS = BOSSES.length;
+// Every boss attack shows on the ground first (tele, s), then lands. Damage grows 6 % per boss.
+const ATK = {
+  stomp: { tele: 1, R: 95, dmg: 24 },
+  lunge: { tele: 0.9, len: 300, spd: 430, dmg: 22 },
+  spray: { tele: 0.75, n: 5, fan: 0.9, spd: 150, dmg: 9, vol: 3, gap: 0.5 },
+  summon: { tele: 0.9, n: 5, R: 14 },
+  pulse: { tele: 1.1, R: 140, dmg: 20 },
+  spikes: { tele: 0.8, len: 280, w: 14, dmg: 20, dur: 0.45 },
+  sweep: { tele: 0.85, len: 330, w: 9, spin: 1.3, dur: 1.2, dmg: 22 },
+  burst: { tele: 0.6, n: 14, spd: 120, dmg: 8 },
+  meteor: { tele: 1.1, n: 6, R: 32, dmg: 18, spread: 110 }
 };
-// what the next level adds, by the level owned now (the card's second line)
-const GAIN = { spark: [0, "u_dmg", "u_more", "u_pierce", "u_more", "u_dmg", "u_more", "u_more"], fly: [0, "u_more", "u_dmg", "u_more", "u_more", "u_dmg", "u_more", "u_more"],
-  bell: [0, "u_dmg", "u_dmg", "u_fast", "u_dmg", "u_dmg", "u_fast", "u_dmg"], fuda: [0, "u_more", "u_dmg", "u_more", "u_fast", "u_more", "u_dmg", "u_more"] };
-const PMAX = 5; // passives have five levels
-const PASSIVE = ["oil", "wick", "zori", "fan", "wind"];
-const OPTS = ["spark", "fly", "bell", "fuda", ...PASSIVE];
-const isWpn = k => Object.prototype.hasOwnProperty.call(WPN, k);
-const maxLv = k => isWpn(k) ? WPN[k].length : PMAX;
-// experience: about a card every 12 s at first and every 20 s near dawn; kills grow richer as the night fills up,
-// so the level keeps pace with the crowd (about Lv 6, 14, 25 and 34 at 1, 3, 6 and 9 minutes)
-const xpNeed = lv => Math.round(5 + 3 * lv + 0.3 * lv * lv);
-const flyR = rr => clamp(rr * 0.55, 44, 118);
-// Phase table as data (bar 1.5.2, long-play type): 0-8 s the core verb only and safe, then denser; a new creatures, a
-// surround wave, a comet stream or a boss every 20 to 40 s; past the last row the pace keeps rising (no plateau).
+// How the night gets harder (tuned with the bot probes, kouhei 2026-10-07: "the enemies can be stronger"): creatures
+// hp x (1 + t / hpT), damage x (1 + t / dmgT), speed x (1 + t / spdT); bosses hp x bossHp, their attacks + bossDmg
+// per boss, a rest of rest s (plus up to restR) between attacks; light from crystals x lt. A boss attack takes a share
+// of the light's maximum (ATK dmg is that share in %), so it stays a real threat however big the light has grown.
+const GROW = { hpT: 200, dmgT: 400, spdT: 800, bossHp: 2, bossDmg: 0.06, rest: 2, restR: 1, lt: 0.85 };
+const atkScale = (R, e) => (1 + GROW.bossDmg * (e.boss - 1)) * R.lmax / 100;
+const FOE_CAP = 160, FOE_HARD = 300;
+// The child's forms (kouhei, 2026-10-07): a hand gun at first; each boss leaves a part, and each part makes the next
+// form. The weapons fire by themselves and only reach inside the light. robots: armor (damage taken x), crush (damage
+// per s to creatures pushing against it), move (speed x); drones and missiles join later.
+const FORMS = [
+  { k: "gun", shot: "bolt", n: 1, cd: 0.55, dmg: 6, spd: 320, home: 12, rad: 4 },
+  { k: "mgun", shot: "pellet", n: 1, cd: 0.13, dmg: 3.2, spd: 460, spread: 0.07, rad: 3 },
+  { k: "rocket", shot: "rocket", n: 2, cd: 0.8, dmg: 10, spd: 250, home: 4, blast: 40, bdmg: 12, rad: 5 },
+  { k: "beam", shot: "beam", n: 1, cd: 0.5, dmg: 26, w: 10 },
+  { k: "robo", shot: "shell", n: 2, cd: 0.24, dmg: 7, spd: 420, blast: 18, bdmg: 4, rad: 4, armor: 0.6, crush: 40, move: 0.95 },
+  { k: "roboD", shot: "shell", n: 2, cd: 0.24, dmg: 7, spd: 420, blast: 18, bdmg: 4, rad: 4, armor: 0.6, crush: 40, move: 0.95, drones: 4 },
+  { k: "roboM", shot: "shell", n: 2, cd: 0.24, dmg: 7, spd: 420, blast: 18, bdmg: 4, rad: 4, armor: 0.55, crush: 50, move: 0.95, drones: 4, missiles: 6 },
+  { k: "ship", shot: "spread", n: 1, cd: 0.16, dmg: 8, spd: 480, way: 5, fan: 0.72, pierce: 1, rad: 4, armor: 0.5, crush: 60, move: 1.25, drones: 4, missiles: 8 }
+];
+const FORM_SCALE = [1, 2.4, 4, 6, 10, 13, 16, 20];   // the revive and the transform blasts grow with the form
+const BELL_SCALE = [1, 1.6, 2.2, 3, 4.2, 5, 5.8, 6.6]; // the shockwave grows less, so the crowd is not wiped by itself
+const DRONE = { cd: 0.5, dmg: 6, reach: 130 };
+const MISSILE = { cd: 2, dmg: 10, spd: 230, blast: 30, bdmg: 8 };
+const droneR = rr => clamp(rr * 0.34, 36, 62);
+// level-up cards, five levels each: power and rapid fire work on every weapon, the shockwave grows with the form
+const CARDS = ["pow", "wind", "bell", "oil", "wick", "zori", "fan"], CMAX = 5;
+const CARD_W = { pow: 1.2, wind: 1.2, bell: 1.1 };   // the rest 0.9
+const BELL = [{ cd: 3.2, dmg: 6, kb: 130 }, { cd: 2.9, dmg: 8, kb: 145 }, { cd: 2.6, dmg: 11, kb: 160 }, { cd: 2.3, dmg: 15, kb: 180 }, { cd: 2, dmg: 20, kb: 200 }];
+// experience: a card about every 15 s at first and every 20 s or so late (kouhei asked for a little more room between them)
+const XP_K = 1.9;
+const xpNeed = lv => Math.round(XP_K * (5 + 3 * lv + 0.3 * lv * lv));
+// Phase table as data (bar 1.5.2, long-play type): 0-8 s the core verb only and safe, then denser; each tier arrives
+// with a notice and the weakest one stops; a surround wave, a comet stream or a boss every 20 to 40 s; past the last
+// row the pace keeps rising (no plateau).
 const PHASES = [
-  { at: 0, rate: 1.2, mix: { kage: 1 } },
-  { at: 8, rate: 1.8, mix: { kage: 1 } },
-  { at: 25, rate: 2.3, mix: { kage: 1 } },
-  { at: 40, rate: 2.7, mix: { kage: 0.78, hitotsu: 0.22 }, note: "nHop" },
-  { at: 60, rate: 3.1, mix: { kage: 0.7, hitotsu: 0.3 } },
-  { at: 80, rate: 3.6, mix: { kage: 0.66, hitotsu: 0.34 }, stream: 24 },
-  { at: 120, rate: 4.4, mix: { kage: 0.56, hitotsu: 0.32, kasa: 0.12 }, stream: 22, note: "nKasa" },
-  { at: 150, rate: 5, mix: { kage: 0.54, hitotsu: 0.32, kasa: 0.14 }, stream: 22 },
-  { at: 210, rate: 5.8, mix: { kage: 0.5, hitotsu: 0.34, kasa: 0.16 }, stream: 20 },
-  { at: 270, rate: 6.6, mix: { kage: 0.44, hitotsu: 0.34, kasa: 0.22 }, stream: 18 },
-  { at: 330, rate: 7.4, mix: { kage: 0.4, hitotsu: 0.34, kasa: 0.26 }, stream: 18 },
-  { at: 420, rate: 9.4, mix: { kage: 0.36, hitotsu: 0.34, kasa: 0.3 }, stream: 16 },
-  { at: 500, rate: 10.6, mix: { kage: 0.34, hitotsu: 0.34, kasa: 0.32 }, stream: 15 },
-  { at: 560, rate: 12, mix: { kage: 0.32, hitotsu: 0.34, kasa: 0.34 }, stream: 14 }
+  { at: 0, rate: 1.8, mix: { kage: 1 } },
+  { at: 8, rate: 2.7, mix: { kage: 1 } },
+  { at: 25, rate: 3.5, mix: { kage: 1 } },
+  { at: 45, rate: 3.9, mix: { kage: 0.75, hitotsu: 0.25 }, note: "nHop" },
+  { at: 75, rate: 4.2, mix: { kage: 0.6, hitotsu: 0.4 }, stream: 24 },
+  { at: 110, rate: 4.5, mix: { kage: 0.45, hitotsu: 0.55 }, stream: 22 },
+  { at: 150, rate: 4.8, mix: { kage: 0.2, hitotsu: 0.55, kasa: 0.25 }, stream: 22, note: "nKasa" },
+  { at: 190, rate: 4.5, mix: { hitotsu: 0.6, kasa: 0.4 }, stream: 22 },
+  { at: 230, rate: 4.5, mix: { hitotsu: 0.4, kasa: 0.45, kurage: 0.15 }, stream: 20, note: "nJelly" },
+  { at: 280, rate: 5.5, mix: { hitotsu: 0.15, kasa: 0.5, kurage: 0.35 }, stream: 18 },
+  { at: 330, rate: 5.1, mix: { kasa: 0.45, kurage: 0.55 }, stream: 18 },
+  { at: 370, rate: 5.1, mix: { kasa: 0.3, kurage: 0.5, yoroi: 0.2 }, note: "nYoroi" },
+  { at: 430, rate: 4.9, mix: { kasa: 0.1, kurage: 0.5, yoroi: 0.4 } },
+  { at: 490, rate: 4.7, mix: { kurage: 0.45, yoroi: 0.55 } },
+  { at: 560, rate: 5.1, mix: { kurage: 0.4, yoroi: 0.6 } }
 ];
 const phaseAt = t => { let i = 0; for (let j = 0; j < PHASES.length; j++) if (t >= PHASES[j].at) i = j; return i; };
-const RING_FROM = 70, RING_EVERY = 30;   // a surround wave every 30 s from 1:10
-// ?demo=1 is a 30 s clip that holds the whole story, scripted by run time, never by luck: kills at once, a level-up
-// card, a surround wave the shockwave clears, the first boss, a near miss with the light almost out, then the light dies.
-const DEMO_SKIP = 167;             // the demo night starts at 2:47, 13 s before the first boss
-const DEMO_SCRIPT = [{ at: 4.6, act: "level" }, { at: 8.2, act: "ring" }, { at: 15.4, act: "stomp" }, { at: 20.6, act: "fail" }];
+const RING_FROM = 90, RING_EVERY = 32;   // a surround wave about every 30 s from 1:30, never while a boss is out
+// ?demo=1 is a 22 s clip that holds the whole story, scripted by run time, never by luck: the beam gun at work, a
+// level-up card, the giant jelly and its jellies, the boss falls and its part turns the child into a robot, a
+// surround wave the robot clears, then the light dies.
+const DEMO_SKIP = 258;             // the demo night starts at 4:18 with the build a player has by then
+const DEMO_SCRIPT = [{ at: 1, act: "warn" }, { at: 2.6, act: "level" }, { at: 3.4, act: "boss" }, { at: 6, act: "summon" }, { at: 10.6, act: "kill" }, { at: 15, act: "ring" }, { at: 18.6, act: "fail" }];
 // AI profiles (attract, ?demo=1, __game.autoplay): think every N steps, aim noise (rad), lapses per s, threat reach
 const BOT = {
   demo: { every: 10, noise: 0.12, lapse: 0, see: 1.1, dash: 0.9, hunt: 0.9 },
@@ -698,34 +735,40 @@ const BOT = {
 const STRINGS = {
   ja: {
     title: "よるの惑星", titleEn: "NIGHT PLANET", start: "スタート",
-    how1: "ドラッグで うごくだけ", how1k: "WASD・矢印で うごくだけ", how2: "光が 消えたら おわり",
+    how1: "ドラッグで うごくだけ", how1k: "WASD・矢印で うごくだけ", how2: "ボスを たおすと パワーアップ",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     lvUp: "レベルアップ!", isNew: "新", lv: "Lv", hint123: "1・2・3 でも えらべる",
-    w_spark: "レーザー", w_fly: "ドローン", w_bell: "しょうげき波", w_fuda: "円ばん", w_oil: "電池", w_wick: "省エネ", w_zori: "ブースター", w_fan: "じしゃく", w_wind: "ターボ", w_candle: "エネルギー",
-    d_spark: "近くの敵に レーザーを うつ", d_fly: "まわりを ドローンが まわる", d_bell: "しょうげき波で まわりを はらう", d_fuda: "すすむ方へ 円ばんを なげる",
-    d_oil: "光の 上限が ふえる", d_wick: "光が へりにくく なる", d_zori: "足が はやく なる", d_fan: "結晶を 遠くから あつめる", d_wind: "こうげきが はやく なる", d_candle: "光が 30 もどる",
-    u_more: "数が ふえる", u_dmg: "つよく なる", u_fast: "はやく なる", u_pierce: "つらぬく",
-    nHop: "三つ目が とんでくる", nOnibi: "すい星の 列!", nKasa: "いわ虫が 来た", nRing: "かこまれた!", nBoss: "{n}が 来る!", nBossDown: "{n}を たおした!", nDawn: "夜が 明ける",
-    b_nyudo: "いわガメ", b_kumo: "ほしグモ", b_oni: "すいしょうゴーレム",
+    w_pow: "パワー", w_wind: "連射", w_bell: "しょうげき波", w_oil: "大きなライト", w_wick: "省エネ", w_zori: "ブースター", w_fan: "じしゃく", w_candle: "エネルギー",
+    d_pow: "こうげきが つよく なる", d_wind: "うつのが はやく なる", d_bell: "しょうげき波で まわりを はらう",
+    d_oil: "光の 上限が ふえる", d_wick: "光が へりにくく なる", d_zori: "足が はやく なる", d_fan: "結晶を 遠くから あつめる", d_candle: "光が 30 もどる",
+    f_gun: "ハンドガン", f_mgun: "マシンガン", f_rocket: "ロケットランチャー", f_beam: "ビームガン", f_robo: "ロボ", f_roboD: "ドローンつきロボ", f_roboM: "ミサイルつきロボ", f_ship: "宇宙船",
+    nHop: "三つ目が とんでくる", nOnibi: "すい星の 列!", nKasa: "いわ虫が 来た", nJelly: "クラゲが ただよってくる", nYoroi: "よろい虫が 来た",
+    nRing: "かこまれた!", nBoss: "{n}が 来る!", nBossDown: "{n}を たおした!", nDawn: "夜が 明ける", nPow: "パワーアップ!", nLife: "予備電池で ふっかつ!",
+    b_nyudo: "いわガメ", b_kumo: "ほしグモ", b_kani: "ほうだいガニ", b_kurageB: "おおクラゲ", b_oni: "すいしょうゴーレム", b_eye: "ビームアイ", b_bird: "メテオバード", b_king: "ほしくい",
     tMove: "ドラッグで うごく", tMoveK: "WASD・矢印で うごく", tLight: "光が 消えたら おわり", tKill: "たおすと 光が もどる", tDash: "タップで ダッシュ", tDashK: "SPACEで ダッシュ",
-    over: "ライトが 消えた", dawn: "夜明け!", rTime: "生きのびた時間", rKills: "たおした数", rLv: "レベル", rBest: "ベスト", newBest: "ベスト更新!", tieBest: "ならんだ!", toBest: "あと {n}",
-    g_time: "{n}まで 生きのびる", g_boss: "{n}を たおす", g_lv: "Lv{n}に とどく", g_kills: "{n}体 たおす",
+    tBoss: "ボスを たおすと パワーアップ",
+    over: "ライトが 消えた", dawn: "夜明け!", rTime: "生きのびた時間", rForm: "すがた", rKills: "たおした数", rLv: "レベル", rBest: "ベスト",
+    newBest: "ベスト更新!", tieBest: "ならんだ!", toBest: "あと {n}",
+    g_time: "{n}まで 生きのびる", g_boss: "{n}を たおす", g_form: "{n}に なる", g_lv: "Lv{n}に とどく",
     best: "ベスト", space: "SPACE", credit: "Made with Claude"
   },
   en: {
     title: "NIGHT PLANET", titleEn: "NIGHT PLANET", start: "START",
-    how1: "JUST DRAG TO MOVE", how1k: "JUST MOVE: WASD OR ARROWS", how2: "IF YOUR LIGHT GOES OUT, IT ENDS",
+    how1: "JUST DRAG TO MOVE", how1k: "JUST MOVE: WASD OR ARROWS", how2: "DEFEAT BOSSES TO POWER UP",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
     lvUp: "LEVEL UP!", isNew: "NEW", lv: "LV", hint123: "KEYS 1, 2, 3 WORK TOO",
-    w_spark: "LASER", w_fly: "DRONES", w_bell: "SHOCKWAVE", w_fuda: "DISCS", w_oil: "BATTERY", w_wick: "POWER SAVER", w_zori: "BOOSTERS", w_fan: "MAGNET", w_wind: "TURBO", w_candle: "ENERGY",
-    d_spark: "LASERS FIRE AT FOES", d_fly: "DRONES CIRCLE YOU", d_bell: "A SHOCKWAVE SWEEPS AROUND", d_fuda: "DISCS FLY AHEAD",
-    d_oil: "MORE MAX LIGHT", d_wick: "LIGHT FADES SLOWER", d_zori: "MOVE FASTER", d_fan: "PULL CRYSTALS FROM AFAR", d_wind: "ATTACK MORE OFTEN", d_candle: "GET 30 LIGHT BACK",
-    u_more: "ONE MORE", u_dmg: "STRONGER", u_fast: "FASTER", u_pierce: "PIERCES",
-    nHop: "HOPPERS INCOMING", nOnibi: "COMET STREAM!", nKasa: "ROCK BUGS ARRIVE", nRing: "SURROUNDED!", nBoss: "{n} IS COMING!", nBossDown: "{n} DEFEATED!", nDawn: "DAWN IS BREAKING",
-    b_nyudo: "ROCK TURTLE", b_kumo: "STAR SPIDER", b_oni: "CRYSTAL GOLEM",
+    w_pow: "POWER", w_wind: "RAPID FIRE", w_bell: "SHOCKWAVE", w_oil: "BIG LIGHT", w_wick: "POWER SAVER", w_zori: "BOOSTERS", w_fan: "MAGNET", w_candle: "ENERGY",
+    d_pow: "MORE DAMAGE", d_wind: "FIRE FASTER", d_bell: "A SHOCKWAVE SWEEPS AROUND",
+    d_oil: "MORE MAX LIGHT", d_wick: "LIGHT FADES SLOWER", d_zori: "MOVE FASTER", d_fan: "PULL CRYSTALS FROM AFAR", d_candle: "GET 30 LIGHT BACK",
+    f_gun: "HAND GUN", f_mgun: "MACHINE GUN", f_rocket: "ROCKET LAUNCHER", f_beam: "BEAM GUN", f_robo: "ROBOT", f_roboD: "DRONE ROBOT", f_roboM: "MISSILE ROBOT", f_ship: "SPACESHIP",
+    nHop: "HOPPERS INCOMING", nOnibi: "COMET STREAM!", nKasa: "ROCK BUGS ARRIVE", nJelly: "JELLIES DRIFT IN", nYoroi: "ARMOR BUGS ARRIVE",
+    nRing: "SURROUNDED!", nBoss: "{n} IS COMING!", nBossDown: "{n} DEFEATED!", nDawn: "DAWN IS BREAKING", nPow: "POWER UP!", nLife: "SPARE BATTERY!",
+    b_nyudo: "ROCK TURTLE", b_kumo: "STAR SPIDER", b_kani: "CANNON CRAB", b_kurageB: "GIANT JELLY", b_oni: "CRYSTAL GOLEM", b_eye: "BEAM EYE", b_bird: "METEOR BIRD", b_king: "STAR EATER",
     tMove: "DRAG TO MOVE", tMoveK: "WASD OR ARROWS TO MOVE", tLight: "YOUR LIGHT IS YOUR LIFE", tKill: "DEFEATS BRING LIGHT BACK", tDash: "TAP TO DASH", tDashK: "SPACE TO DASH",
-    over: "YOUR LIGHT WENT OUT", dawn: "DAWN!", rTime: "SURVIVED", rKills: "DEFEATED", rLv: "LEVEL", rBest: "BEST", newBest: "NEW BEST!", tieBest: "TIED!", toBest: "{n} TO GO",
-    g_time: "SURVIVE TO {n}", g_boss: "DEFEAT THE {n}", g_lv: "REACH LV {n}", g_kills: "DEFEAT {n} CREATURES",
+    tBoss: "DEFEAT BOSSES TO POWER UP",
+    over: "YOUR LIGHT WENT OUT", dawn: "DAWN!", rTime: "SURVIVED", rForm: "FORM", rKills: "DEFEATED", rLv: "LEVEL", rBest: "BEST",
+    newBest: "NEW BEST!", tieBest: "TIED!", toBest: "{n} TO GO",
+    g_time: "SURVIVE TO {n}", g_boss: "DEFEAT THE {n}", g_form: "BECOME THE {n}", g_lv: "REACH LV {n}",
     best: "BEST", space: "SPACE", credit: "Made with Claude"
   }
 };
@@ -759,7 +802,7 @@ function teachEnd(R) { if (R.wt > 25) { if (teach.on) store.set("taught", true);
 function newFx() {
   return { vt: 0, rv: run ? lightR(run.light) : 160, rvv: 0, sa: 0, sv: 0, swing: 0, swingV: 0, walk: 0, face: 1, note: null, line: null, lines: {},
     dashCue: -1e9, fizzle: -1e9, hurtT: -1e9, lvT: -1e9, cardT: 0, pickT: -1e9, pickN: 0, killT: -1e9, killN: 0, shotT: -1e9, hitT: -1e9, heartT: 0,
-    bossWarnT: -1e9, stompT: -1e9, dust: 0, pauseT: 0, deadT: 0 };
+    bossWarnT: -1e9, stompT: -1e9, formT: -1e9, lifeT: -1e9, boomT: -1e9, aim: 0, aimT: -1e9, aimL: 0, dust: 0, pauseT: 0, deadT: 0, beams: [], zaps: [], booms: [] };
 }
 function newRun(mode, seed) {
   const demo = mode === "demo";
@@ -768,8 +811,10 @@ function newRun(mode, seed) {
     offset: T(), holdAt: null, pauseClock: 0, startAt: T(), steps: 0, wt: demo ? DEMO_SKIP : 0,
     p: { x: 0, y: 0, px: 0, py: 0, fx: 0, fy: 1, vx: 0, vy: 0, dash: 0, dashCd: 0, inv: 0 },
     light: LT.start, lmax: LT.max, lv: 1, xp: 0, need: xpNeed(1), kills: 0, score: 0, picks: 0, hurts: 0, moved: false,
-    w: { spark: 1, fly: 0, bell: 0, fuda: 0 }, ps: { oil: 0, wick: 0, zori: 0, fan: 0, wind: 0 }, cd: { spark: 0.3, bell: 1, fuda: 0.6 },
-    flyA: 0, flyPA: 0, foes: [], byId: new Map(), shots: [], motes: [], rings: [], nid: 1, bossAlive: 0, bossNo: 0, bossKills: 0, warned: false,
+    form: 0, formLog: [[0, 0]], lives: demo ? 0 : LIVES, livesUsed: 0, part: null,
+    ps: { pow: 0, wind: 0, bell: 0, oil: 0, wick: 0, zori: 0, fan: 0 }, cd: { main: 0.3, bell: 1, mis: 1 }, dcd: [0.1, 0.22, 0.34, 0.46],
+    drA: 0, drPA: 0, shotN: 0, foes: [], byId: new Map(), shots: [], eb: [], haz: [], motes: [], rings: [], nid: 1,
+    bossAlive: 0, bossNo: 0, bossKills: 0, lastKill: -1e9, warned: false,
     spawnAcc: 0, nextRing: RING_FROM, nextStream: 0, phase: -1, card: null, pend: 0, drainX: 1, winAt: null,
     inp: { x: 0, y: 0 }, dashReq: false, dead: null, result: null, xpAll: 0, xpGot: 0, lostHit: 0, lostDrain: 0, dealt: 0, bossLog: [],
     script: demo ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : []
@@ -792,11 +837,12 @@ const clockNow = () => {
 function opening(R) {
   for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (i - 1) * 2.1 + (R.rnd() - 0.5) * 0.4, d = 118 + i * 16; spawnFoe(R, "kage", 0, Math.cos(a) * d, Math.sin(a) * d); }
 }
-// ?demo=1 starts mid-night with the build a player has by then, so the clip shows the game at its best at once
+// ?demo=1 starts mid-night with the build a player has by then (the beam gun, three bosses down)
 function demoSetup(R) {
-  Object.assign(R.w, { spark: 4, fly: 4, bell: 3, fuda: 3 }); Object.assign(R.ps, { oil: 2, wick: 1, zori: 1, wind: 1 });
-  R.lv = 19; R.need = xpNeed(19); R.xp = 30; R.lmax = 130; R.light = 96; R.nextRing = 999; R.nextStream = 999;
-  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + R.rnd() * 0.3, d = 96 + R.rnd() * 70; spawnFoe(R, i % 4 === 3 ? "hitotsu" : "kage", R.wt, Math.cos(a) * d, Math.sin(a) * d); }
+  R.form = 3; R.formLog = [[3, R.wt]]; R.bossNo = 3; R.bossKills = 3;
+  Object.assign(R.ps, { pow: 2, wind: 2, bell: 2, oil: 1, wick: 1, zori: 1 });
+  R.lv = 14; R.need = xpNeed(14); R.xp = 40; R.lmax = 115; R.light = 100; R.nextRing = 999; R.nextStream = 999;
+  for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + R.rnd() * 0.3, d = 96 + R.rnd() * 70; spawnFoe(R, i % 3 === 2 ? "kurage" : i % 3 ? "kasa" : "hitotsu", R.wt, Math.cos(a) * d, Math.sin(a) * d); }
 }
 
 // ---------- GAME-SPECIFIC: rules (one fixed step) ----------
@@ -819,30 +865,36 @@ function simStep() {
   spawnStep(R);
   gridBuild(R);
   foesStep(R);
+  hazStep(R);
+  ebStep(R);
   weaponsStep(R);
   shotsStep(R);
   sweep(R);
   motesStep(R);
+  partStep(R);
   lightStep(R);
   if (R.winAt != null && R.wt >= R.winAt && !R.dead) die("dawn");
 }
 function keepPrev(R) {
-  const p = R.p; p.px = p.x; p.py = p.y; R.flyPA = R.flyA;
+  const p = R.p; p.px = p.x; p.py = p.y; R.drPA = R.drA;
   for (const e of R.foes) { e.px = e.x; e.py = e.y; }
   for (const m of R.motes) { m.px = m.x; m.py = m.y; }
   for (const s of R.shots) { s.px = s.x; s.py = s.y; }
+  for (const b of R.eb) { b.px = b.x; b.py = b.y; }
   for (const g of R.rings) g.pr = g.r;
+  if (R.part) { R.part.px = R.part.x; R.part.py = R.part.y; }
 }
 function scriptStep(R) {
   const t = R.wt - DEMO_SKIP;
   while (R.script.length && t >= R.script[0].at) {
-    const a = R.script.shift().act, boss = R.foes.find(e => e.boss && !e.dead);
-    if (a === "level") { R.xp = R.need; levelCheck(R); }
+    const a = R.script.shift().act, boss = R.foes.find(e => e.boss && !e.dead), b = BOSSES[R.bossNo];
+    if (a === "warn" && b) { notice("nBoss", S("b_" + b.kind)); fx.bossWarnT = fx.vt; if (loud()) sfx.warn(); }
+    else if (a === "level") { R.xp = R.need; levelCheck(R); }
+    else if (a === "boss" && b) { spawnBoss(R, b.kind); R.bossNo++; }
+    else if (a === "summon" && boss) startAtk(R, boss, "summon");
+    else if (a === "kill" && boss) { boss.demoKill = true; hurt(R, boss, boss.hp / dmgMul(R) + 1, 0, 0); }
     else if (a === "ring") ringWave(R, R.wt);
-    else if (a === "stomp" && boss) { // the boss stomps right next to the child; the AI holds still for it
-      const d = Math.hypot(R.p.x - boss.x, R.p.y - boss.y);
-      startAtk(R, boss, "stomp"); boss.tel.R = Math.max(boss.tel.R, d + 26); boss.demoHit = true; R.bot.noDodge = ATK.stomp.tele + 0.1;
-    } else if (a === "fail") { R.bot.lapseT = 99; R.bot.ix = R.bot.iy = 0; R.drainX = 24; }
+    else if (a === "fail") { R.bot.lapseT = 99; R.bot.ix = R.bot.iy = 0; R.drainX = 24; }
   }
 }
 function playerStep(R) {
@@ -851,7 +903,7 @@ function playerStep(R) {
   if (m > 1) { ix /= m; iy /= m; m = 1; }
   if (m > 0.08) { p.fx = ix / m; p.fy = iy / m; R.moved = true; }
   if (R.dashReq) { R.dashReq = false; if (p.dashCd <= 0 && p.dash <= 0) { p.dash = PL.dashT; p.dashCd = PL.dashCd; p.inv = Math.max(p.inv, PL.dashInv); fxDash(R); } }
-  const spd = PL.spd * (1 + 0.08 * R.ps.zori);
+  const spd = PL.spd * (1 + 0.08 * R.ps.zori) * (FORMS[R.form].move || 1);
   if (p.dash > 0) { p.dash -= DT; p.vx = p.fx * PL.dash; p.vy = p.fy * PL.dash; }
   else { p.vx = ix * spd; p.vy = iy * spd; }
   p.x += p.vx * DT; p.y += p.vy * DT;
@@ -863,29 +915,36 @@ function spawnStep(R) {
   if (R.winAt != null) return;
   const last = PHASES[PHASES.length - 1], lk = clamp(R.light / R.lmax, 0, 1);
   let rate = ph.rate * (0.75 + 0.5 * lk) * (R.bossAlive ? 0.6 : 1); // a brighter light draws more
-  if (t > last.at) rate *= Math.min(1.8, 1 + (t - last.at) / 300);
+  if (t > last.at) rate *= Math.min(1.5, 1 + (t - last.at) / 400);
   R.spawnAcc += rate * DT;
   while (R.spawnAcc >= 1) { R.spawnAcc -= 1; if (R.foes.length < FOE_CAP) spawnFoe(R, pickKind(R, ph.mix), t); }
-  if (t >= R.nextRing) { R.nextRing += RING_EVERY; ringWave(R, t); }
+  if (t >= R.nextRing && !R.bossAlive) { R.nextRing = t + RING_EVERY; ringWave(R, t); }
   if (ph.stream && t >= R.nextStream) { R.nextStream = t + ph.stream; stream(R, t); }
   const b = BOSSES[R.bossNo];
-  if (b && !R.warned && t >= b.at - 2.5) { R.warned = true; notice("nBoss", S("b_" + b.kind)); fx.bossWarnT = fx.vt; if (loud()) sfx.warn(); }
-  if (b && t >= b.at) { spawnBoss(R, b.kind); if (R.mode !== "demo") ringWave(R, t); R.bossNo++; R.warned = false; } // a boss comes with a ring of creatures
+  if (!b || R.mode === "demo" || R.bossAlive || R.part) return; // the demo brings its boss by the script
+  const due = Math.max(b.at, R.lastKill + BOSS_GAP);
+  if (!R.warned && t >= due - 2.5) { R.warned = true; notice("nBoss", S("b_" + b.kind)); fx.bossWarnT = fx.vt; if (loud()) sfx.warn(); }
+  if (t >= due) { spawnBoss(R, b.kind); R.bossNo++; R.warned = false; }
 }
 function pickKind(R, mix) { let r = R.rnd(), k = "kage"; for (const n in mix) { k = n; if ((r -= mix[n]) < 0) break; } return k; }
 function spawnFoe(R, kind, t, x, y) {
   const K = KIND[kind], p = R.p;
   if (x == null) { const a = R.rnd() * TAU, d = lightR(R.light) + 36 + R.rnd() * 80; x = p.x + Math.cos(a) * d; y = p.y + Math.sin(a) * d; }
-  // creatures grow tougher as the night goes on; the child's build grows faster, so the late night is about the build
-  const hp = K.hp * (1 + t / 110 + (t / 320) * (t / 320));
-  const e = { id: R.nid++, kind, x, y, px: x, py: y, hp, max: hp, spd: K.spd * (0.92 + R.rnd() * 0.16) * (1 + t / 1200), r: K.r, dmg: K.dmg * (1 + t / 600), hop: K.hop || 0, ho: R.rnd(),
-    kx: 0, ky: 0, hitT: -9, flyT: 0, dead: false, cell: -1, born: R.wt, ph: R.rnd() * TAU, boss: 0, line: false };
+  // creatures grow a little tougher as the night goes on; the big steps come from the new tiers
+  const hp = K.hp * (1 + t / GROW.hpT);
+  const e = { id: R.nid++, kind, x, y, px: x, py: y, hp, max: hp, spd: K.spd * (0.92 + R.rnd() * 0.16) * (1 + t / GROW.spdT), r: K.r, dmg: K.dmg * (1 + t / GROW.dmgT), hop: K.hop || 0, ho: R.rnd(),
+    drift: K.drift || 0, kx: 0, ky: 0, hitT: -9, crushT: 0, dead: false, cell: -1, born: R.wt, ph: R.rnd() * TAU, boss: 0, line: false };
   R.foes.push(e); R.byId.set(e.id, e);
   return e;
 }
-function ringWave(R, t) { // a circle of creatures closes in from the dark all at once
-  const n = clamp(8 + fl(t / 20), 8, 30), d = lightR(R.light) + 64, a0 = R.rnd() * TAU, p = R.p;
-  for (let i = 0; i < n && R.foes.length < FOE_HARD; i++) { const a = a0 + i / n * TAU; spawnFoe(R, t > 240 && i % 5 === 2 ? "kasa" : t > 120 && i % 3 === 0 ? "hitotsu" : "kage", t, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); }
+function ringWave(R, t) { // a circle of creatures of the hour closes in from the dark all at once
+  const mix = PHASES[phaseAt(t)].mix, n = clamp(Math.round(10 + t / 40), 10, 20), d = lightR(R.light) + 64, a0 = R.rnd() * TAU, p = R.p;
+  let y = 0;
+  for (let i = 0; i < n && R.foes.length < FOE_HARD; i++) {
+    let k = pickKind(R, mix);
+    if (k === "yoroi" && (y++ & 1)) k = "kurage"; // armor bugs are tough: at most every other one
+    const a = a0 + i / n * TAU; spawnFoe(R, k, t, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d);
+  }
   notice("nRing");
 }
 function stream(R, t) { // a line of comets crosses the light; they shine, so they show in the dark before they arrive
@@ -902,8 +961,8 @@ function spawnBoss(R, kind) {
   const K = KIND[kind], p = R.p, demo = R.mode === "demo";
   const a = demo ? -Math.PI / 2 : R.rnd() * TAU, d = demo ? 150 : lightR(R.light) + 110;
   const e = spawnFoe(R, kind, 0, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d);
-  const hp = K.hp * (demo ? 3 : 1); // ?demo=1: the boss outlasts the clip, so it never ends on a defeat by luck
-  Object.assign(e, { hp, max: hp, boss: K.boss, spd: K.spd, st: "walk", t: 0, next: demo ? 99 : 3.5, atk: K.atk, ai: 0, tel: null, lunging: false, demoHit: false });
+  Object.assign(e, { hp: K.hp * GROW.bossHp, max: K.hp * GROW.bossHp, boss: K.boss, spd: K.spd, st: "walk", t: 0, next: demo ? 99 : 3, atk: K.atk, ai: 0, tel: null, act: null, lunging: false,
+    trail: null, combo: 0, side: R.rnd() < 0.5 ? 1 : -1, demoKill: false });
   R.bossAlive++; R.bossLog.push([kind, +R.wt.toFixed(1), null]);
 }
 function relocate(R, e) { // a creature left far behind comes back from the dark ahead
@@ -923,14 +982,15 @@ function gridBuild(R) {
     const c = cy * GN + cx; e.cell = c; gNext[i] = gHead[c]; gHead[c] = i;
   }
 }
-function nearby(R, x, y, fn) { // every live creature whose centre is within about one cell of (x, y), then the bosses
-  const cx = Math.floor((x - gOX) / GS), cy = Math.floor((y - gOY) / GS);
-  for (let j = cy - 1; j <= cy + 1; j++) {
+function around(R, x, y, rad, fn) { // every live creature whose cell is within rad of (x, y) (plus a cell), then the bosses
+  const k = Math.ceil(rad / GS), cx = Math.floor((x - gOX) / GS), cy = Math.floor((y - gOY) / GS);
+  for (let j = cy - k; j <= cy + k; j++) {
     if (j < 0 || j >= GN) continue;
-    for (let i = cx - 1; i <= cx + 1; i++) { if (i < 0 || i >= GN) continue; for (let k = gHead[j * GN + i]; k >= 0; k = gNext[k]) { const e = gList[k]; if (!e.dead) fn(e); } }
+    for (let i = cx - k; i <= cx + k; i++) { if (i < 0 || i >= GN) continue; for (let q = gHead[j * GN + i]; q >= 0; q = gNext[q]) { const e = gList[q]; if (!e.dead) fn(e); } }
   }
   if (R.bossAlive) for (const e of R.foes) if (e.boss && !e.dead) fn(e);
 }
+const nearby = (R, x, y, fn) => around(R, x, y, GS, fn);
 function separate(R) { // creatures push each other apart, so a crowd spreads into a wall instead of one dot
   const F = R.foes;
   for (let i = 0; i < F.length; i++) {
@@ -955,7 +1015,7 @@ function separate(R) { // creatures push each other apart, so a crowd spreads in
   }
 }
 function foesStep(R) {
-  const p = R.p, F = R.foes, flee = R.winAt != null;
+  const p = R.p, F = R.foes, flee = R.winAt != null, crush = FORMS[R.form].crush || 0;
   if ((R.steps & 1) === 0) separate(R);
   for (const e of F) {
     if (e.dead) continue;
@@ -965,51 +1025,140 @@ function foesStep(R) {
       const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
       let s = flee ? -60 : e.spd;
       if (e.hop && !flee) { const ph = (R.wt * e.hop + e.ho) % 1; s *= ph < 0.4 ? 1.8 : 0.2; }
+      if (e.drift && !flee) { const pulse = 0.55 + 0.9 * Math.max(0, Math.sin(R.wt * 3 + e.ph)); s *= pulse; } // a jelly swims in pulses
       e.x += (dx / d * s + e.kx) * DT; e.y += (dy / d * s + e.ky) * DT;
       if (d > 760) { if (flee) { e.dead = e.gone = true; continue; } relocate(R, e); }
     }
     e.kx *= KDAMP; e.ky *= KDAMP;
-    if (p.inv <= 0 && !flee) { const rr = e.r + PL.r, dx = p.x - e.x, dy = p.y - e.y; if (dx * dx + dy * dy < rr * rr) hurtPlayer(R, e.lunging ? ATK.lunge.dmg : e.dmg, e); }
+    if (flee || e.dead) continue;
+    const rr = e.r + PL.r, dx = p.x - e.x, dy = p.y - e.y;
+    if (dx * dx + dy * dy < rr * rr) {
+      if (crush && !e.boss && R.wt >= e.crushT) { // the armour crushes what pushes against it
+        e.crushT = R.wt + 0.25; const d = Math.hypot(dx, dy) || 1; hurt(R, e, crush * 0.25, -dx / d * 220, -dy / d * 220);
+      }
+      if (p.inv <= 0 && !e.dead) hurtPlayer(R, e.boss ? (e.lunging ? ATK.lunge.dmg : e.dmg) * atkScale(R, e) : e.dmg, e);
+    }
   }
 }
 function bossStep(R, e) {
-  const p = R.p, dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const p = R.p, K = KIND[e.kind], dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, rr = lightR(R.light);
+  const fast = e.boss === LAST_BOSS && e.hp < e.max * 0.5; // the final boss gets quicker on its last half
   e.t += DT;
   if (R.winAt != null) return;
   if (e.st === "walk") {
-    const sp = e.spd * (R.mode === "demo" && d > 96 ? 2.6 : 1); // ?demo=1: the boss closes in at once, so the clip shows it in the light
-    e.x += dx / d * sp * DT; e.y += dy / d * sp * DT;
-    if (e.t >= e.next && d < lightR(R.light) + 60) startAtk(R, e, e.atk[e.ai++ % e.atk.length]);
-    if (d > 900) { const a = Math.atan2(-dy, -dx); e.x = p.x + Math.cos(a) * 420; e.y = p.y + Math.sin(a) * 420; e.px = e.x; e.py = e.y; }
-  } else if (e.st === "tele") {
-    const tl = e.tel;
-    if (e.t >= tl.T) {
-      if (tl.kind === "stomp") {
-        if (e.demoHit) p.inv = 0;
-        if (Math.hypot(p.x - tl.x, p.y - tl.y) < tl.R + PL.r) hurtPlayer(R, e.demoHit ? Math.max(0, R.light - 16) : ATK.stomp.dmg + (e.boss === 3 ? 4 : 0), null);
-        if (e.demoHit) p.inv = 1.4; // ?demo=1: the near miss leaves a moment to win some light back
-        e.demoHit = false; fxStomp(tl); e.st = "rest"; e.t = 0; e.tel = null;
-      } else { e.st = "lunge"; e.t = 0; e.lvx = tl.ux * ATK.lunge.spd; e.lvy = tl.uy * ATK.lunge.spd; e.lunging = true; e.trail = tl; e.tel = null; if (loud()) sfx.lunge(); }
+    let vx = dx / d, vy = dy / d;
+    const far = R.mode === "demo" ? (d > 110 ? 2.6 : 1) : 1 + clamp((d - rr * 0.8) / 90, 0, 1.4); // out in the dark it hurries in (?demo=1: at once)
+    const sp = e.spd * far * (fast ? 1.25 : 1);
+    if (K.keep) { // a ranged boss circles at its distance, inside the light where the child can see it
+      const keep = clamp(K.keep, 64, rr - 20), go = clamp((d - keep) / 30, -1, 1);
+      vx = dx / d * go - dy / d * e.side * 0.7; vy = dy / d * go + dx / d * e.side * 0.7;
+      const m = Math.hypot(vx, vy) || 1; vx /= m; vy /= m;
     }
-  } else if (e.st === "lunge") {
-    e.x += e.lvx * DT; e.y += e.lvy * DT;
-    if (e.t >= ATK.lunge.len / ATK.lunge.spd) { e.st = "rest"; e.t = 0; e.lunging = false; e.trail = null; }
-  } else if (e.st === "rest" && e.t >= 0.9) { e.st = "walk"; e.t = 0; e.next = 2.8 + R.rnd() * 1.5; }
+    e.x += vx * sp * DT; e.y += vy * sp * DT;
+    if (e.t >= e.next && d < rr + 60) { e.combo = K.combo || 0; startAtk(R, e, e.atk[e.ai++ % e.atk.length]); }
+    if (d > 900) { const a = Math.atan2(-dy, -dx); e.x = p.x + Math.cos(a) * 420; e.y = p.y + Math.sin(a) * 420; e.px = e.x; e.py = e.y; }
+  } else if (e.st === "tele") { if (e.t >= e.tel.T) atkGo(R, e); }
+  else if (e.st === "act") actStep(R, e);
+  else if (e.st === "rest" && e.t >= (fast ? 0.55 : 0.9)) {
+    e.st = "walk"; e.t = 0; e.side = R.rnd() < 0.5 ? 1 : -1;
+    e.next = R.mode === "demo" ? 99 : (GROW.rest + R.rnd() * GROW.restR) * (e.boss >= 5 ? 0.85 : 1) * (fast ? 0.7 : 1); // ?demo=1: attacks only on the script
+  }
 }
-function startAtk(R, e, kind) { // every boss attack is shown on the ground first (the telegraph), then lands
-  const p = R.p;
-  e.st = "tele"; e.t = 0;
-  if (kind === "stomp") e.tel = { kind, x: e.x, y: e.y, R: ATK.stomp.R + (e.boss === 3 ? 20 : 0), T: ATK.stomp.tele };
-  else { const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1; e.tel = { kind, x: e.x, y: e.y, ux: dx / d, uy: dy / d, len: ATK.lunge.len, w: e.r + 8, T: ATK.lunge.tele }; }
+// the hazards a boss lays down: a zone (circle), a lane (from x, y along u) or a sweep (a beam turning from a0 by
+// spin); each shows from born, lands at at, and hurts once while it is live (until end)
+function startAtk(R, e, kind, tele) {
+  const A = ATK[kind], p = R.p, t = R.wt, sc = atkScale(R, e), dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, T0 = tele || A.tele;
+  e.st = "tele"; e.t = 0; e.tel = { kind, T: T0, ux, uy };
+  const hz = o => R.haz.push(Object.assign({ src: e.id, born: t, at: t + T0, end: t + T0 + 0.05, dmg: 0, hit: false, landed: false }, o));
+  if (kind === "stomp") hz({ k: "zone", mark: "stomp", x: e.x, y: e.y, R: A.R + (e.boss >= 5 ? 20 : 0) + (e.boss === LAST_BOSS ? 15 : 0), dmg: A.dmg * sc });
+  else if (kind === "pulse") hz({ k: "zone", mark: "pulse", x: e.x, y: e.y, R: A.R, dmg: A.dmg * sc });
+  else if (kind === "lunge") hz({ k: "lane", mark: "lunge", x: e.x, y: e.y, ux, uy, len: A.len, w: e.r + 8, end: t + T0 });
+  else if (kind === "spikes") for (const o of [-0.45, 0, 0.45]) { const a = Math.atan2(uy, ux) + o; hz({ k: "lane", mark: "spikes", x: e.x, y: e.y, ux: Math.cos(a), uy: Math.sin(a), len: A.len, w: A.w, dmg: A.dmg * sc, end: t + T0 + A.dur }); }
+  else if (kind === "sweep") { const dir = R.rnd() < 0.5 ? 1 : -1; hz({ k: "sweep", x: e.x, y: e.y, a0: Math.atan2(uy, ux) - dir * A.spin / 2, spin: A.spin, dir, r0: e.r * 0.6, len: A.len, w: A.w, dmg: A.dmg * sc, end: t + T0 + A.dur }); }
+  else if (kind === "summon") for (let i = 0; i < A.n; i++) { const a = i / A.n * TAU + R.rnd() * 0.6, r = 56 + R.rnd() * 50; hz({ k: "zone", mark: "summon", x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, R: A.R, spawn: "kurage" }); }
+  else if (kind === "meteor") for (let i = 0; i < A.n; i++) { const a = R.rnd() * TAU, r = i ? 34 + R.rnd() * A.spread : 0, at = t + T0 + i * 0.16; hz({ k: "zone", mark: "meteor", x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r, R: A.R, dmg: A.dmg * sc, at, end: at + 0.05 }); }
   if (loud()) sfx.tele();
+}
+function atkGo(R, e) { // the telegraph is over: the attack starts (spray, sweep and lunge go on for a while)
+  const k = e.tel.kind, A = ATK[k], tl = e.tel;
+  e.t = 0; e.tel = null; e.st = "rest";
+  if (k === "lunge") { e.st = "act"; e.act = k; e.lvx = tl.ux * A.spd; e.lvy = tl.uy * A.spd; e.lunging = true; e.trail = { x: e.x, y: e.y, ux: tl.ux, uy: tl.uy, len: A.len, w: e.r + 8 }; if (loud()) sfx.lunge(); }
+  else if (k === "spray") { e.st = "act"; e.act = k; e.vol = 0; }
+  else if (k === "sweep") { e.st = "act"; e.act = k; if (loud()) sfx.sweep(); }
+  else if (k === "burst") { for (let i = 0; i < A.n; i++) ebFire(R, e.x, e.y, e.ph + i * TAU / A.n, A.spd, A.dmg * atkScale(R, e), 6); e.ph += 0.22; if (loud()) sfx.burst(); }
+}
+function actStep(R, e) {
+  const A = ATK[e.act], p = R.p;
+  if (e.act === "lunge") {
+    e.x += e.lvx * DT; e.y += e.lvy * DT;
+    if (e.t >= A.len / A.spd) { e.lunging = false; e.trail = null; e.act = null; if (e.combo > 0) { e.combo--; startAtk(R, e, "lunge", 0.55); } else { e.st = "rest"; e.t = 0; } }
+  } else if (e.act === "spray") { // volleys of slow shots in a fan toward the child
+    while (e.vol < A.vol && e.t >= e.vol * A.gap) {
+      const a0 = Math.atan2(p.y - e.y, p.x - e.x);
+      for (let i = 0; i < A.n; i++) ebFire(R, e.x, e.y, a0 + (i - (A.n - 1) / 2) * A.fan / (A.n - 1), A.spd, A.dmg * atkScale(R, e), 5);
+      e.vol++; if (loud()) sfx.spray();
+    }
+    if (e.vol >= A.vol && e.t >= A.vol * A.gap) { e.st = "rest"; e.t = 0; e.act = null; }
+  } else if (e.act === "sweep" && e.t >= A.dur) { e.st = "rest"; e.t = 0; e.act = null; }
+}
+function hazTouch(R, h) {
+  const p = R.p, qx = p.x - h.x, qy = p.y - h.y;
+  if (h.k === "zone") return qx * qx + qy * qy < (h.R + PL.r) * (h.R + PL.r);
+  let ux = h.ux, uy = h.uy, lo = -PL.r;
+  if (h.k === "sweep") { const a = h.a0 + h.dir * h.spin * clamp((R.wt - h.at) / (h.end - h.at), 0, 1); ux = Math.cos(a); uy = Math.sin(a); lo = h.r0; }
+  const along = qx * ux + qy * uy, side = Math.abs(ux * qy - uy * qx);
+  return along > lo && along < h.len + PL.r && side < h.w + PL.r;
+}
+function hazLand(R, h) {
+  if (h.spawn) { if (R.foes.length < FOE_HARD) { const e = spawnFoe(R, h.spawn, R.wt, h.x, h.y); e.hp = e.max = e.hp * 0.6; } fxSummon(h); }
+  else if (h.mark === "stomp" || h.mark === "pulse") fxStomp(h);
+  else if (h.mark === "meteor") fxMeteor(h);
+  else if (h.mark === "spikes") fxSpikes(h);
+}
+function hazStep(R) {
+  const H = R.haz, t = R.wt;
+  for (const h of H) {
+    if (R.haz !== H || R.dead) break; // a spare battery clears the hazards
+    if (!h.landed && t >= h.at) { h.landed = true; hazLand(R, h); }
+    if (h.landed && !h.hit && h.dmg > 0 && t <= h.end + 1e-9 && hazTouch(R, h)) { h.hit = true; hurtPlayer(R, h.dmg, null); }
+  }
+  if (R.haz === H) { let j = 0; for (const h of H) if (t <= h.end) H[j++] = h; H.length = j; }
+}
+function ebFire(R, x, y, a, spd, dmg, r) { R.eb.push({ x, y, px: x, py: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r, dmg, life: 4 }); }
+function ebStep(R) { // the bosses' shots: slow coral orbs that hurt on touch
+  const p = R.p, B = R.eb;
+  let j = 0;
+  for (let i = 0; i < B.length; i++) {
+    const b = B[i];
+    b.x += b.vx * DT; b.y += b.vy * DT; b.life -= DT;
+    const dx = p.x - b.x, dy = p.y - b.y, q = b.r + PL.r - 2;
+    if (dx * dx + dy * dy < q * q && p.inv <= 0 && !R.dead && R.winAt == null) { hurtPlayer(R, b.dmg, null); if (R.eb !== B || !B.length) return; continue; }
+    if (b.life > 0) B[j++] = b;
+  }
+  B.length = j;
 }
 function hurtPlayer(R, dmg, src) {
   const p = R.p;
-  if (p.inv > 0 || R.dead || dmg <= 0) return;
+  if (p.inv > 0 || R.dead || dmg <= 0 || R.winAt != null) return;
+  if (src && !src.boss) dmg *= FORMS[R.form].armor || 1; // the robot's armour is against the creatures, not the bosses
+  if (R.mode === "demo" && R.drainX === 1) dmg = Math.min(dmg * 0.5, Math.max(0, R.light - R.lmax * 0.3)); // ?demo=1 ends only on its script
   R.light -= dmg; p.inv = PL.inv; R.hurts++; R.lostHit += Math.min(dmg, R.light + dmg);
   if (src && !src.boss) { const dx = src.x - p.x, dy = src.y - p.y, d = Math.hypot(dx, dy) || 1; src.kx += dx / d * 150; src.ky += dy / d * 150; }
   fxHurt(R, dmg);
-  if (R.light <= 0) { R.light = 0; die("dark"); }
+  if (R.light <= 0) lightOut(R);
+}
+function lightOut(R) { // a spare battery lights it again at half, pushes the crowd away and calms the boss; else the end
+  if (R.lives <= 0) { R.light = 0; die("dark"); return; }
+  const p = R.p, sc = FORM_SCALE[R.form];
+  R.lives--; R.livesUsed++; R.light = R.lmax * 0.5; p.inv = 2.2;
+  for (const e of R.foes) {
+    if (e.dead) continue;
+    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (e.boss) { if (e.st !== "walk") { e.st = "rest"; e.t = 0; e.act = null; e.tel = null; e.lunging = false; e.trail = null; } if (d < 200) { e.x += dx / d * 40; e.y += dy / d * 40; } continue; }
+    if (d < 240) hurt(R, e, 30 * sc, dx / d * 320, dy / d * 320);
+  }
+  R.haz = R.haz.filter(h => h.spawn); R.eb.length = 0;
+  notice("nLife"); fxRevive(R);
 }
 function nearest(R, n, range) { // the n nearest creatures inside the light (bosses included), nearest first
   const p = R.p, out = [];
@@ -1022,32 +1171,43 @@ function nearest(R, n, range) { // the n nearest creatures inside the light (bos
   }
   return out.map(o => o.e);
 }
-function weaponsStep(R) {
-  const p = R.p, rr = lightR(R.light), cdm = 1 - 0.08 * R.ps.wind;
-  let k = R.w.spark;
-  if (k && (R.cd.spark -= DT) <= 0) {
-    const W = WPN.spark[k - 1], tg = nearest(R, W.n, rr);
-    if (tg.length) { R.cd.spark = W.cd * cdm; tg.forEach((e, i) => fire(R, "spark", e, W.dmg, W.pierce, 300, Math.atan2(e.y - p.y, e.x - p.x) + (i ? (i % 2 ? 0.3 : -0.3) : 0), 1.1)); sndShot(); }
-    else R.cd.spark = 0.06;
+function targets(R, n, range) { // every other volley goes first to a boss inside the light, so a crowd never shields it
+  const tg = nearest(R, n, range);
+  R.shotN++;
+  if (R.bossAlive && (R.shotN & 1)) {
+    const b = R.foes.find(e => e.boss && !e.dead);
+    if (b && tg[0] !== b && Math.hypot(b.x - R.p.x, b.y - R.p.y) - b.r < range) { const i = tg.indexOf(b); if (i > 0) tg.splice(i, 1); tg.unshift(b); if (tg.length > n) tg.pop(); }
   }
-  k = R.w.fly;
-  if (k) {
-    const W = WPN.fly[k - 1], rho = flyR(rr);
-    R.flyA += 2.5 * DT;
-    for (let i = 0; i < W.n; i++) {
-      const a = R.flyA + i * TAU / W.n, x0 = p.x + Math.cos(a) * rho, y0 = p.y + Math.sin(a) * rho;
-      nearby(R, x0, y0, e => { if (e.flyT > R.wt) return; const q = e.r + 6, dx = e.x - x0, dy = e.y - y0; if (dx * dx + dy * dy < q * q) { e.flyT = R.wt + 0.6; hurt(R, e, W.dmg, dx * 4, dy * 4); } });
+  return tg;
+}
+function weaponsStep(R) {
+  const p = R.p, rr = lightR(R.light), F = FORMS[R.form], cdm = 1 - 0.08 * R.ps.wind;
+  if ((R.cd.main -= DT) <= 0) {
+    const tg = targets(R, F.n, rr);
+    if (tg.length) { R.cd.main = F.cd * cdm; fireMain(R, F, tg, rr); }
+    else R.cd.main = 0.06;
+  }
+  if (F.drones) { // drones circle the robot and zap the nearest creature in reach
+    const rho = droneR(rr);
+    R.drA += 2.2 * DT;
+    for (let i = 0; i < F.drones; i++) {
+      if ((R.dcd[i] -= DT) > 0) continue;
+      const a = R.drA + i * TAU / F.drones, x0 = p.x + Math.cos(a) * rho, y0 = p.y + Math.sin(a) * rho;
+      let best = null, bd = DRONE.reach;
+      for (const e of R.foes) { if (e.dead) continue; const d = Math.hypot(e.x - x0, e.y - y0) - e.r; if (d < bd) { bd = d; best = e; } }
+      if (best) { R.dcd[i] = DRONE.cd * cdm; fxZap(x0, y0, best); hurt(R, best, DRONE.dmg, 0, 0); } else R.dcd[i] = 0.1;
     }
   }
-  k = R.w.bell;
-  if (k && (R.cd.bell -= DT) <= 0) { const W = WPN.bell[k - 1]; R.cd.bell = W.cd * cdm; R.rings.push({ r: 14, pr: 14, max: rr, dmg: W.dmg, kb: W.kb, hit: new Set() }); sndBell(); }
-  k = R.w.fuda;
-  if (k && (R.cd.fuda -= DT) <= 0) {
-    const W = WPN.fuda[k - 1], a0 = Math.atan2(p.fy, p.fx);
-    R.cd.fuda = W.cd * cdm;
-    for (let i = 0; i < W.n; i++) fire(R, "fuda", null, W.dmg, W.pierce, 230, a0 + (i - (W.n - 1) / 2) * 0.26, rr * 1.25 / 230 + 0.15);
-    sndFuda();
+  if (F.missiles && (R.cd.mis -= DT) <= 0) { // a salvo goes up from the back, then each missile homes in
+    const tg = targets(R, F.missiles, rr + 40);
+    if (tg.length) {
+      R.cd.mis = MISSILE.cd * cdm;
+      for (let i = 0; i < F.missiles; i++) fire(R, "missile", tg[i % tg.length], MISSILE.dmg, MISSILE.spd, -Math.PI / 2 + (i - (F.missiles - 1) / 2) * 0.32, 2.6, { home: 5, delay: 0.22, blast: MISSILE.blast, bdmg: MISSILE.bdmg, rad: 5 });
+      sndMain("missile");
+    } else R.cd.mis = 0.2;
   }
+  const bl = R.ps.bell;
+  if (bl && (R.cd.bell -= DT) <= 0) { const W = BELL[bl - 1]; R.cd.bell = W.cd * cdm; R.rings.push({ r: 14, pr: 14, max: rr, dmg: W.dmg * BELL_SCALE[R.form], kb: W.kb, hit: new Set() }); sndBell(); }
   for (let i = R.rings.length - 1; i >= 0; i--) { // shockwaves sweep out to the light's edge, centred on the child
     const g = R.rings[i]; g.r += 330 * DT;
     for (const e of R.foes) {
@@ -1058,34 +1218,66 @@ function weaponsStep(R) {
     if (g.r > g.max) R.rings.splice(i, 1);
   }
 }
-function fire(R, kind, tgt, dmg, pierce, spd, a, life) {
-  const p = R.p;
-  R.shots.push({ kind, x: p.x, y: p.y - 4, px: p.x, py: p.y - 4, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, spd, dmg, pierce, tid: tgt ? tgt.id : 0, life, hit: [], a });
+function fireMain(R, F, tg, rr) {
+  const p = R.p, aim = e => Math.atan2(e.y - p.y, e.x - p.x), life = (rr + 40) / (F.spd || 1);
+  if (F.shot === "bolt") fire(R, "bolt", tg[0], F.dmg, F.spd, aim(tg[0]), 1.1, { home: F.home, rad: F.rad });
+  else if (F.shot === "pellet") fire(R, "pellet", null, F.dmg, F.spd, aim(tg[0]) + (R.rnd() - 0.5) * 2 * F.spread, life, { rad: F.rad });
+  else if (F.shot === "rocket") for (let i = 0; i < F.n; i++) { const e = tg[i % tg.length]; fire(R, "rocket", e, F.dmg, F.spd, aim(e) + (i ? 0.3 : -0.3), 1.6, { home: F.home, blast: F.blast, bdmg: F.bdmg, rad: F.rad }); }
+  else if (F.shot === "beam") beamFire(R, aim(tg[0]), rr + 12, F.w, F.dmg);
+  else if (F.shot === "shell") for (let i = 0; i < 2; i++) { // one shell from each shoulder cannon
+    const e = tg[i % tg.length], a = aim(e), s = i ? 1 : -1, ox = -Math.sin(a) * 7 * s, oy = Math.cos(a) * 7 * s;
+    fire(R, "shell", null, F.dmg, F.spd, Math.atan2(e.y - p.y - oy, e.x - p.x - ox), life, { blast: F.blast, bdmg: F.bdmg, rad: F.rad, ox, oy: oy - 6 });
+  }
+  else if (F.shot === "spread") { const a = aim(tg[0]); for (let i = 0; i < F.way; i++) fire(R, "spread", null, F.dmg, F.spd, a + (i - (F.way - 1) / 2) * F.fan / (F.way - 1), life, { pierce: F.pierce, rad: F.rad }); }
+  fxAim(aim(tg[0])); sndMain(F.shot);
+}
+function fire(R, kind, tgt, dmg, spd, a, life, o) {
+  const p = R.p, x = p.x + ((o && o.ox) || 0), y = p.y - 4 + ((o && o.oy) || 0);
+  R.shots.push(Object.assign({ kind, x, y, px: x, py: y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, spd, dmg, pierce: 0, tid: tgt ? tgt.id : 0, life, age: 0, hit: [], home: 0, delay: 0, blast: 0, bdmg: 0, rad: 4 }, o));
+}
+function beamFire(R, a, len, w, dmg) { // the beam gun hits every creature on the line at once
+  const p = R.p, ux = Math.cos(a), uy = Math.sin(a);
+  for (const e of R.foes) {
+    if (e.dead) continue;
+    const qx = e.x - p.x, qy = e.y - p.y, al = qx * ux + qy * uy;
+    if (al < -e.r || al > len + e.r) continue;
+    if (Math.abs(qx * uy - qy * ux) < w + e.r) hurt(R, e, dmg, ux * 70, uy * 70);
+  }
+  fxBeam(p.x, p.y - 4, a, len, w);
 }
 function shotsStep(R) {
   const S = R.shots;
   for (let i = S.length - 1; i >= 0; i--) {
     const s = S[i];
-    s.life -= DT;
-    if (s.tid) { // laser shots home in on their target
-      const t = R.byId.get(s.tid);
-      if (t && !t.dead) { const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 12 * DT); s.vx += (dx / d * s.spd - s.vx) * k; s.vy += (dy / d * s.spd - s.vy) * k; }
+    s.life -= DT; s.age += DT;
+    if (s.tid && s.home && s.age >= s.delay) { // homing shots turn toward their target; a missile picks a new one if it falls
+      let t = R.byId.get(s.tid);
+      if ((!t || t.dead) && s.kind === "missile") { const n = nearest(R, 1, 260); t = n[0]; s.tid = t ? t.id : 0; }
+      if (t && !t.dead) { const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, s.home * DT); s.vx += (dx / d * s.spd - s.vx) * k; s.vy += (dy / d * s.spd - s.vy) * k; }
     }
     s.x += s.vx * DT; s.y += s.vy * DT;
     let gone = s.life <= 0;
     if (!gone) nearby(R, s.x, s.y, e => {
       if (gone || s.hit.includes(e.id)) return;
-      const q = e.r + (s.kind === "fuda" ? 6 : 4), dx = e.x - s.x, dy = e.y - s.y;
-      if (dx * dx + dy * dy < q * q) { s.hit.push(e.id); hurt(R, e, s.dmg, s.vx * 0.25, s.vy * 0.25); if (--s.pierce < 0) gone = true; }
+      const q = e.r + s.rad, dx = e.x - s.x, dy = e.y - s.y;
+      if (dx * dx + dy * dy >= q * q) return;
+      s.hit.push(e.id); hurt(R, e, s.dmg, s.vx * 0.25, s.vy * 0.25);
+      if (s.blast) { explode(R, s.x, s.y, s.blast, s.bdmg); gone = true; }
+      else if (--s.pierce < 0) gone = true;
     });
     if (gone) S.splice(i, 1);
   }
 }
-// damage grows with the light (0.85x when it is almost out, 1.2x when full)
-const dmgMul = R => 0.85 + 0.35 * clamp(R.light / R.lmax, 0, 1);
+function explode(R, x, y, rad, dmg) { // a blast hurts everything inside it and pushes it out
+  around(R, x, y, rad + 16, e => { const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy) || 1; if (d < rad + e.r) hurt(R, e, dmg, dx / d * 120, dy / d * 120); });
+  fxBoom(x, y, rad);
+}
+// damage grows with the light (0.85x when it is almost out, 1.2x when full) and with the power card
+const dmgMul = R => (0.85 + 0.35 * clamp(R.light / R.lmax, 0, 1)) * (1 + 0.2 * R.ps.pow);
 function hurt(R, e, dmg, kx, ky) {
   if (e.dead) return;
   const d = dmg * dmgMul(R); R.dealt += Math.min(d, Math.max(0, e.hp)); e.hp -= d; e.hitT = R.wt;
+  if (e.boss && R.mode === "demo" && !e.demoKill) e.hp = Math.max(e.hp, e.max * 0.15); // ?demo=1: the boss falls on the script's beat
   const k = e.boss ? 0.08 : 1; e.kx += (kx || 0) * k; e.ky += (ky || 0) * k;
   fxHit(e);
   if (e.hp <= 0) killFoe(R, e);
@@ -1094,16 +1286,38 @@ function killFoe(R, e) {
   e.dead = true; R.kills++; R.score = R.kills;
   const K = KIND[e.kind];
   if (e.boss) {
-    R.bossAlive--; R.bossKills++;
+    R.bossAlive--; R.bossKills++; R.lastKill = R.wt;
     const lg = R.bossLog.find(l => l[0] === e.kind && l[2] == null); if (lg) lg[2] = +R.wt.toFixed(1);
-    dropMote(R, e.x, e.y, K.lt, K.xp, 2);
+    dropMote(R, e.x, e.y, K.lt * GROW.lt, K.xp, 2);
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; dropMote(R, e.x + Math.cos(a) * 26, e.y + Math.sin(a) * 26, 2.2, 1, 0); }
     for (const m of R.motes) m.seek = true; // every light crystal left on the ground flies to the child
+    R.haz = R.haz.filter(h => h.src !== e.id || (h.spawn && h.landed)); R.eb.length = 0; // its attacks end with it
     notice("nBossDown", S("b_" + e.kind));
-    if (e.boss === 3) { R.winAt = R.wt + 2.4; fx.winT = fx.vt; }
+    if (e.boss === LAST_BOSS) { R.winAt = R.wt + 2.4; fx.winT = fx.vt; }
+    else if (R.form < FORMS.length - 1) R.part = { x: e.x, y: e.y, px: e.x, py: e.y, t: 0, sp: 0 }; // the part it leaves
     fxBossDown(R, e);
-  } else dropMote(R, e.x, e.y, K.lt, K.xp, e.kind === "kasa" ? 1 : 0);
+  } else dropMote(R, e.x, e.y, K.lt * GROW.lt, K.xp, K.xp >= 3 ? 1 : 0);
   fxKill(e);
+}
+function partStep(R) { // the part pops up, then flies to the child; on arrival the child becomes the next form
+  const P = R.part; if (!P) return;
+  P.t += DT;
+  if (P.t < 0.35) { P.y -= 70 * DT; return; }
+  const p = R.p, dx = p.x - P.x, dy = p.y - P.y, d = Math.hypot(dx, dy) || 1;
+  P.sp = Math.min(640, P.sp + 1500 * DT); const st = Math.min(d, (P.sp + 40) * DT); P.x += dx / d * st; P.y += dy / d * st;
+  if (d < 12) { R.part = null; transform(R); }
+}
+function transform(R) {
+  const p = R.p, F = FORMS[++R.form], sc = FORM_SCALE[R.form];
+  R.formLog.push([R.form, +R.wt.toFixed(1)]); R.cd.main = 0.25; R.cd.mis = 0.6; p.inv = Math.max(p.inv, 1.2);
+  for (const e of R.foes) { // a burst of power clears the space around the new form
+    if (e.dead || e.boss) continue;
+    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (d < 150) hurt(R, e, 12 * sc, dx / d * 360, dy / d * 360);
+  }
+  R.eb.length = 0;
+  notice("nForm", F.k); fxTransform(R);
+  if (R.mode === "play") platform("happytime");
 }
 function sweep(R) {
   let j = 0;
@@ -1139,13 +1353,12 @@ function lightStep(R) {
   if (R.winAt != null || R.dead) return;
   const dr = (LT.drain + LT.ramp * R.wt / 60) * (1 - 0.1 * R.ps.wick) * R.drainX * DT;
   R.light -= dr; R.lostDrain += dr;
-  if (R.light <= 0) { R.light = 0; die("dark"); }
+  if (R.light <= 0) lightOut(R);
 }
 // ---------- GAME-SPECIFIC: level-up cards (the world waits; three choices) ----------
 function cardOpts(R) {
-  const lvOf = k => isWpn(k) ? R.w[k] : R.ps[k];
-  if (R.lv === 2 && R.mode !== "demo") return ["fly", "bell", "spark"]; // the first card shows two new weapons
-  const pool = OPTS.filter(k => lvOf(k) < maxLv(k)).map(k => ({ k, w: isWpn(k) ? (lvOf(k) ? 1.1 : 1.3) : 0.8 })), out = [];
+  if (R.lv === 2 && R.mode !== "demo") return ["bell", "pow", "wind"]; // the first card: the shockwave and the two plain boosts
+  const pool = CARDS.filter(k => R.ps[k] < CMAX).map(k => ({ k, w: CARD_W[k] || 0.9 })), out = [];
   while (out.length < 3 && pool.length) {
     let sum = 0; for (const o of pool) sum += o.w;
     let r = R.rnd() * sum, j = 0;
@@ -1163,9 +1376,8 @@ function chooseCard(i) {
   const R = run; if (!R || !R.card || R.dead) return;
   const k = R.card.opts[clamp(i, 0, 2)];
   R.card = null; R.pend = Math.max(0, R.pend - 1);
-  if (isWpn(k)) { R.w[k]++; if (R.w[k] === 1 && R.cd[k] != null) R.cd[k] = 0.2; }
-  else if (k === "candle") R.light = Math.min(R.lmax, R.light + 30);
-  else { R.ps[k]++; if (k === "oil") { R.lmax += 15; R.light += 15; } }
+  if (k === "candle") R.light = Math.min(R.lmax, R.light + 30);
+  else { R.ps[k]++; if (k === "oil") { R.lmax += 15; R.light += 15; } if (k === "bell" && R.ps.bell === 1) R.cd.bell = 0.2; }
   fxChoose(R, k);
   if (R.pend > 0) openCard(R);
 }
@@ -1185,27 +1397,37 @@ function botThink(R, b, P) {
   if (P.kind === "idle") { b.ix = b.iy = 0; return; }
   if (P.kind === "wander") { if (R.rAI() < 0.08) b.wa = R.rAI() * TAU; b.ix = Math.cos(b.wa); b.iy = Math.sin(b.wa); return; }
   if (P.kind === "circle") { b.wa += 0.9 * P.every * DT; b.ix = Math.cos(b.wa); b.iy = Math.sin(b.wa); return; }
-  if (b.noDodge > 0) { b.ix = b.iy = 0; return; }   // ?demo=1: holds still for the scripted near miss
+  if (b.noDodge > 0) { b.ix = b.iy = 0; return; }
   if (P.lapse && R.rAI() < P.lapse * P.every * DT) { b.lapseT = 0.45 + R.rAI() * 0.5; return; }
-  let ax = 0, ay = 0, threat = 0, hx = 0, hy = 0, hd = 1e9;
+  let ax = 0, ay = 0, threat = 0, hx = 0, hy = 0, hd = 1e9, bx = 0, by = 0, bd = 1e9;
   for (const e of R.foes) {
     if (e.dead) continue;
     const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
     if (d < hd) { hd = d; hx = dx; hy = dy; }
-    const rch = 70 * P.see + e.r + (e.boss ? (R.mode === "demo" ? 0 : 40) : 0); // the demo lets the boss come close
+    if (e.boss) { bd = d; bx = dx; by = dy; }
+    // keep a boss at a distance, but inside the light where the weapons reach it (the demo lets it come close)
+    const rch = e.boss ? (R.mode === "demo" ? 70 * P.see + e.r : Math.min(70 * P.see + e.r + 40, rr * 0.7 + e.r * 0.4)) : 70 * P.see + e.r;
     if (d < rch) { const w = 1 - d / rch, k = (e.boss ? 5 : 1.5) * w * w / d; ax -= dx * k; ay -= dy * k; if (d < e.r + PL.r + 16) threat++; }
-    const t = e.tel;
-    if (t && t.kind === "stomp") { const qx = p.x - t.x, qy = p.y - t.y, q = Math.hypot(qx, qy) || 1; if (q < t.R + 24) { const k = 6 * (1.3 - q / (t.R + 24)) / q; ax += qx * k; ay += qy * k; threat++; } }
-    else if (t) {
-      const qx = p.x - t.x, qy = p.y - t.y, along = qx * t.ux + qy * t.uy, side = t.ux * qy - t.uy * qx;
-      if (along > -20 && along < t.len + 30 && Math.abs(side) < t.w + 22) { const s = side >= 0 ? 1 : -1; ax -= t.uy * s * 6; ay += t.ux * s * 6; threat++; }
-    }
+  }
+  for (const h of R.haz) { // marks on the ground: step out before they land
+    if (h.dmg <= 0 && h.mark !== "lunge") continue;
+    if (h.k === "zone") { if (h.landed) continue; const qx = p.x - h.x, qy = p.y - h.y, q = Math.hypot(qx, qy) || 1, rz = h.R + 24; if (q < rz) { const k = 6 * (1.3 - q / rz) / q; ax += qx * k; ay += qy * k; threat++; } }
+    else if (h.k === "lane") {
+      const qx = p.x - h.x, qy = p.y - h.y, along = qx * h.ux + qy * h.uy, side = h.ux * qy - h.uy * qx;
+      if (along > -20 && along < h.len + 30 && Math.abs(side) < h.w + 22) { const s = side >= 0 ? 1 : -1; ax -= h.uy * s * 6; ay += h.ux * s * 6; threat++; }
+    } else { const qx = p.x - h.x, qy = p.y - h.y, q = Math.hypot(qx, qy) || 1; if (q < h.len + 30) { ax -= qy / q * h.dir * 5; ay += qx / q * h.dir * 5; threat++; } } // run the way the beam turns
+  }
+  for (const s of R.eb) { // a shot coming this way: step off its line
+    const qx = p.x - s.x, qy = p.y - s.y; if (qx * qx + qy * qy > 4900) continue;
+    const v = Math.hypot(s.vx, s.vy) || 1, ux = s.vx / v, uy = s.vy / v, along = qx * ux + qy * uy, side = ux * qy - uy * qx;
+    if (along > -8 && Math.abs(side) < 22) { const sg = side >= 0 ? 1 : -1; ax -= uy * sg * 4; ay += ux * sg * 4; if (along < 34) threat++; }
   }
   let m0 = null, md = 220;
   for (const m of R.motes) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < md) { md = d; m0 = m; } }
   const need = 1 - R.light / R.lmax;
   if (m0) { const k = (0.6 + 1.4 * need) / Math.max(24, md); ax += (m0.x - p.x) * k; ay += (m0.y - p.y) * k; }
   if (hd > rr * 0.85 && hd < 1e9) { const k = 0.45 * P.hunt / hd; ax += hx * k; ay += hy * k; } // walk toward creatures when none are in reach
+  if (R.mode !== "demo" && bd > rr * 0.8 && bd < 1e9) { const k = 0.6 * P.hunt / bd; ax += bx * k; ay += by * k; } // and toward a boss out of reach
   b.wa += 0.5 * P.every * DT; ax += Math.cos(b.wa) * 0.18; ay += Math.sin(b.wa) * 0.18; // keep moving in a slow circle
   const mag = Math.hypot(ax, ay);
   if (mag < 0.02) { b.ix = b.iy = 0; return; }
@@ -1214,11 +1436,10 @@ function botThink(R, b, P) {
   if (threat && p.dashCd <= 0 && R.rAI() < P.dash) b.dash = true;
 }
 function botPick(R) {
-  const o = R.card.opts, owned = Object.keys(WPN).filter(k => R.w[k]).length;
+  const o = R.card.opts;
   let best = 0, bs = -1;
   o.forEach((k, i) => {
-    const lv = isWpn(k) ? R.w[k] : (R.ps[k] || 0);
-    let s = k === "candle" ? 0.5 : isWpn(k) ? (lv ? 3 + (maxLv(k) - lv) * 0.1 : owned < 3 ? 5 : 2.5) : ({ oil: 2.6, wick: 2.4, wind: 2.2, fan: 1.8, zori: 1.6 })[k];
+    let s = k === "candle" ? 0.5 : k === "bell" ? (R.ps.bell ? 2.2 : 3.2) : ({ pow: 3, wind: 2.8, oil: 2.5, wick: 2.3, fan: 1.8, zori: 1.6 })[k];
     s += R.rAI() * 0.6;
     if (s > bs) { bs = s; best = i; }
   });
@@ -1238,7 +1459,7 @@ function die(reason) {
 function notice(key, n) { fx.note = { key, n, t: T() }; if (loud()) sfx.notice(); }
 
 // ---------- GAME-SPECIFIC: feedback the rules call (visuals and sound only; the rules never read fx) ----------
-const BITS = { kage: CO.slime, hitotsu: CO.hop, onibi: CO.crysL, kasa: CO.beetle }; // what a defeated creature breaks into
+const BITS = { kage: CO.slime, hitotsu: CO.hop, onibi: CO.crysL, kasa: CO.beetle, kurage: CO.jelly, yoroi: CO.armor }; // what a defeated creature breaks into
 function splash(x, y, n, spd, o) { // a top-down burst: no gravity, the bits spread and fade where they land
   for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.3 + rnd() * 0.8), life = 0.28 + rnd() * 0.3; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 10 }, o)); }
 }
@@ -1256,16 +1477,29 @@ function fxPick(R, m) {
   fx.pickT = fx.vt; fx.pickN++;
 }
 function fxChoose(R, k) { fx.chooseT = fx.vt; splash(R.p.x, R.p.y - 10, 12, 140, { col: CO.goldL, kind: "star", s: 2.6 }); if (loud()) sfx.choose(); }
-function fxStomp(tl) { fx.stompT = fx.vt; addTrauma(0.6); splash(tl.x, tl.y, 18, 210, { col: CO.pebble, kind: "chip", s: 3 }); if (loud()) sfx.stomp(); }
+function fxStomp(h) { fx.stompT = fx.vt; addTrauma(0.6); splash(h.x, h.y, 18, 210, { col: h.mark === "pulse" ? CO.jelly : CO.pebble, kind: "chip", s: 3 }); fx.booms.push({ x: h.x, y: h.y, r: h.R, t: fx.vt, big: 1 }); if (loud()) sfx.stomp(); }
+function fxMeteor(h) { addTrauma(0.3); splash(h.x, h.y, 10, 170, { col: CO.beetle, kind: "chip", s: 2.8 }); fx.booms.push({ x: h.x, y: h.y, r: h.R, t: fx.vt, big: 1 }); if (loud() && fx.vt - fx.boomT > 60) { fx.boomT = fx.vt; sfx.meteor(); } }
+function fxSpikes(h) { for (let i = 1; i <= 4; i++) splash(h.x + h.ux * h.len * i / 4, h.y + h.uy * h.len * i / 4, 3, 110, { col: CO.crys, kind: "chip", s: 2.4 }); if (loud() && fx.vt - fx.boomT > 60) { fx.boomT = fx.vt; sfx.spikes(); } }
+function fxSummon(h) { splash(h.x, h.y, 8, 120, { col: CO.jelly, kind: "dot", s: 2.2 }); if (loud()) sfx.summon(); }
+function fxBoom(x, y, r) { if (fx.booms.length < 40) fx.booms.push({ x, y, r, t: fx.vt }); splash(x, y, r > 25 ? 6 : 3, 120, { col: CO.gold, kind: "chip", s: 2 }); if (loud() && fx.vt - fx.boomT > 80) { fx.boomT = fx.vt; sfx.boom(); } }
+function fxBeam(x, y, a, len, w) { if (fx.beams.length < 12) fx.beams.push({ x, y, a, len, w, t: fx.vt }); }
+function fxZap(x0, y0, e) { if (fx.zaps.length < 24) fx.zaps.push({ x0, y0, x1: e.x, y1: e.y, t: fx.vt }); if (loud() && fx.vt - fx.shotT > 70) { fx.shotT = fx.vt; sfx.zap(); } }
+function fxTransform(R) {
+  fx.formT = fx.vt; addTrauma(0.5); hitstop(0.1);
+  splash(R.p.x, R.p.y - 8, 22, 230, { col: CO.goldL, kind: "star", s: 3 }); splash(R.p.x, R.p.y, 18, 260, { col: CO.text, kind: "chip", s: 2.6 });
+  if (loud()) sfx.transform();
+}
+function fxRevive(R) { fx.lifeT = fx.vt; addTrauma(0.45); splash(R.p.x, R.p.y - 6, 18, 240, { col: CO.crysL, kind: "star", s: 2.8 }); if (loud()) sfx.revive(); }
 function fxBossDown(R, e) {
   addTrauma(0.85); hitstop(0.12);
   splash(e.x, e.y, 30, 240, { col: CO.crys, kind: "chip", s: 3.4 }); splash(e.x, e.y, 14, 200, { col: CO.goldL, kind: "star", s: 3 });
   if (loud()) sfx.bossDown();
   if (R.mode === "play") platform("happytime");
 }
-function sndShot() { if (loud() && fx.vt - fx.shotT > 70) { fx.shotT = fx.vt; sfx.shot(); } }
+const SHOT_SFX = { bolt: ["shot", 70], pellet: ["mg", 55], rocket: ["rocket", 120], beam: ["beam", 90], shell: ["cannon", 90], spread: ["laser", 80], missile: ["missile", 200] };
+function sndMain(k) { const s = SHOT_SFX[k]; fx.shotK = k; if (s && loud() && fx.vt - fx.shotT > s[1]) { fx.shotT = fx.vt; sfx[s[0]](); } }
+function fxAim(a) { fx.aim = a; fx.aimT = fx.vt; }
 function sndBell() { fx.bellT = fx.vt; if (loud()) sfx.bell(); }
-function sndFuda() { if (loud()) sfx.fuda(); }
 
 // ---------- KEEP: audio. SFX are data-like functions (w = start time); every voice goes through the kit bus ----------
 const SCL = [146.83, 174.61, 196.0, 220.0, 261.63];         // D minor pentatonic (D F G A C) for the night side
@@ -1286,7 +1520,22 @@ const SFX = {
   fizzle(w) { hiss("bandpass", 500, 2, 0.06, 0.06, w); },
   hurt(w) { tone("sine", 120, 50, 0.25, 0.45, w); hiss("highpass", 2400, 1, 0.08, 0.18, w); tone("triangle", 233, 220, 0.25, 0.09, w + 0.02); tone("triangle", 247, 247, 0.25, 0.07, w + 0.02); },
   bell(w) { tone("sine", 180, 70, 0.4, 0.14, w); hiss("bandpass", 500, 1.4, 0.35, 0.07, w, null, 2200); tone("sine", 900, 450, 0.18, 0.02, w); }, // the shockwave
-  fuda(w) { hiss("highpass", 3200, 1, 0.07, 0.07, w, null, 6000); },
+  mg(w) { const q = vary(60, 0.15); tone("square", 1250 * q.f, 520 * q.f, 0.035, 0.022 * q.g, w, null, 0.001, 2400); hiss("highpass", 2600, 1, 0.025, 0.03, w); },
+  rocket(w) { hiss("bandpass", 900, 1.4, 0.26, 0.11, w, null, 2600); tone("sawtooth", 140, 90, 0.2, 0.04, w, null, 0.01, 700); },
+  boom(w) { const q = vary(40, 0.15); tone("sine", 120 * q.f, 42, 0.26, 0.24 * q.g, w); hiss("lowpass", 900, 1, 0.2, 0.17, w, null, 160); },
+  beam(w) { tone("sawtooth", 900, 420, 0.17, 0.045, w, null, 0.003, 2600); tone("sine", 1800, 900, 0.12, 0.03, w); hiss("highpass", 3600, 1, 0.08, 0.035, w); },
+  cannon(w) { const q = vary(50, 0.15); tone("sine", 190 * q.f, 70, 0.1, 0.13 * q.g, w); hiss("lowpass", 1500, 1, 0.06, 0.07, w, null, 400); },
+  laser(w) { const q = vary(40, 0.1); tone("square", 1500 * q.f, 820 * q.f, 0.07, 0.024 * q.g, w, null, 0.002, 3000); },
+  zap(w) { hiss("highpass", 4200, 1, 0.04, 0.05, w); tone("square", 2400, 1700, 0.03, 0.012, w, null, 0.001, 4000); },
+  missile(w) { for (let i = 0; i < 3; i++) hiss("bandpass", 1100 + i * 300, 1.3, 0.24, 0.06, w + i * 0.05, null, 3200); },
+  transform(w) { tone("sine", 95, 40, 0.5, 0.42, w); hiss("lowpass", 1400, 1, 0.3, 0.2, w, null, 200); [0, 2, 4, 7, 9, 12, 14].forEach((n, i) => pluck(pz(n + 5), w + 0.06 + i * 0.05, 0.1, null, 0.6)); tone("sine", pz(19), pz(19), 0.5, 0.04, w + 0.42); },
+  revive(w) { tone("sine", 220, 660, 0.35, 0.18, w, null, 0.01); [0, 4, 7, 12].forEach((n, i) => pluck(pz(n + 5), w + 0.12 + i * 0.06, 0.09, null, 0.5)); hiss("highpass", 3000, 1, 0.3, 0.05, w + 0.1); },
+  spray(w) { const q = vary(40, 0.1); tone("triangle", 430 * q.f, 250 * q.f, 0.11, 0.13 * q.g, w); hiss("bandpass", 700, 1.5, 0.06, 0.06, w); },
+  burst(w) { tone("sine", 320, 110, 0.3, 0.2, w); hiss("bandpass", 800, 1.2, 0.2, 0.12, w, null, 2000); },
+  sweep(w) { tone("sawtooth", 210, 250, 1.15, 0.07, w, null, 0.05, 900); hiss("bandpass", 1500, 1.2, 1.1, 0.05, w, null, 900); },
+  meteor(w) { tone("sine", 95, 34, 0.35, 0.3, w); hiss("lowpass", 700, 1, 0.3, 0.24, w, null, 120); },
+  spikes(w) { hiss("highpass", 3000, 1, 0.14, 0.11, w, null, 6000); tone("triangle", 900, 600, 0.1, 0.05, w); },
+  summon(w) { tone("sine", 300, 520, 0.14, 0.07, w); tone("sine", 420, 700, 0.1, 0.05, w + 0.08); },
   tele(w) { tone("sawtooth", 82, 78, 0.6, 0.12, w, null, 0.02, 500); hiss("lowpass", 400, 1, 0.5, 0.1, w); },
   stomp(w) { tone("sine", 75, 32, 0.6, 0.55, w); hiss("lowpass", 600, 1, 0.4, 0.4, w, null, 90); },
   lunge(w) { hiss("bandpass", 400, 1, 0.35, 0.28, w, null, 1800); tone("sawtooth", 110, 70, 0.3, 0.08, w, null, 0.01, 600); },
@@ -1305,7 +1554,7 @@ const SFX = {
 };
 const sfx = {};
 for (const k in SFX) sfx[k] = n => { if (audioOn()) SFX[k](AU.ctx.currentTime, n); };
-const PEAK_SET = ["stomp", "bossDown", "warn", "hurt", "dawn", "fail", "choose", "lvup"]; // the 8 loudest, for the peak test
+const PEAK_SET = ["stomp", "bossDown", "warn", "hurt", "transform", "revive", "meteor", "dawn"]; // the 8 loudest, for the peak test
 // Music: a slow night loop in D minor pentatonic on the audio clock: a low drone, synth plucks, a far sonar ping. Drums
 // join as the crowd grows and double while a boss is out; it ducks on failure and softens on title and result.
 const MEL = [7, -1, 8, 10, -1, 9, 8, -1, 7, -1, 5, 6, -1, 7, -1, -1], MSTEP = 0.3;
@@ -1350,11 +1599,11 @@ function musicStep() {
 const RES = { drop: 300, head: 220, count: 420, countDur: 650, rows: 1150, best: 1300, goal: 1450 };
 function makeResult(now) {
   const R = run, play = R.mode === "play", best = bestOf(), runs = runsOf(), time = fl(R.wt), won = !!R.dead.won;
-  const r = { at: now, time, kills: R.kills, lv: R.lv, best, newBest: play && time > best && time > 0, won, ticks: 0, stamped: false, goal: null };
-  // one concrete next goal from a small rotating pool (bar 1.6.1)
-  const nb = BOSSES[R.bossKills], pool = [
-    won ? null : { k: "g_time", n: mmss(Math.min(600, (fl(time / 60) + 1) * 60)) }, nb && !won ? { k: "g_boss", b: nb.kind } : null,
-    { k: "g_lv", n: R.lv + 3 }, { k: "g_kills", n: (fl(R.kills / 50) + 1) * 50 }
+  const r = { at: now, time, kills: R.kills, lv: R.lv, form: R.form, best, newBest: play && time > best && time > 0, won, ticks: 0, stamped: false, goal: null };
+  // one concrete next goal from a small rotating pool (bar 1.6.1): a time, the next boss, the next form, a level
+  const nb = BOSSES[R.bossKills], nf = FORMS[R.form + 1], pool = [
+    won ? null : { k: "g_time", n: mmss((fl(time / 60) + 1) * 60) }, nb && !won ? { k: "g_boss", b: nb.kind } : null,
+    nf && !won ? { k: "g_form", f: nf.k } : null, { k: "g_lv", n: R.lv + 3 }
   ];
   for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
   return r;
@@ -1478,29 +1727,135 @@ function darkArt(x, T) {
 }
 
 // ---------- GAME-SPECIFIC: sprites (made once per size by the kit's sprite cache) ----------
+// ---------- GAME-SPECIFIC: sprites (made once per size by the kit's sprite cache) ----------
 const shadowSpr = r => bake("sh" + r, r * 2 + 4, r * 0.8 + 4, r + 2, r * 0.4 + 2, q => { q.fillStyle = C(CO.shadow); q.fill(pEll(0, 0, r, r * 0.36)); });
-// the child astronaut, three-quarter view facing right (flipped for left): a round helmet with a blue visor and an
-// antenna, a white suit with a coral chest plate, a backpack, and the hand lamp held out in front (it makes the light)
-function kidSpr(f) {
-  return bake("kid" + f, 36, 40, 12, 27, q => {
-    const step = [0, 1.8, 0, -1.8][f], b = f % 2 ? -0.8 : 0;
-    q.scale(0.86, 0.86);
-    shape(q, pSmooth([[-12, -6 + b], [-7, -8 + b], [-6, 4 + b], [-11, 5 + b]]), CO.pack, 1.1, CO.craterD, 0.8, 1);               // backpack
-    for (const s of [-1, 1]) { const lx = s * (3.4 + step * 0.7); shape(q, pSmooth([[lx - 3, 6], [lx + 3, 6], [lx + 3.4, 13], [lx - 3.4, 13]]), CO.suit, 1.1, CO.suitD, 1, 0); }
-    shape(q, pSmooth([[-7.6, -5 + b], [7.6, -5 + b], [8.4, 4 + b], [7, 8 + b], [-7, 8 + b], [-8.4, 4 + b]]), CO.suit, 1.4, CO.suitD, 1.6, 1.6);
-    shape(q, pCut(-3.6, -1 + b, 7.2, 5.4, 1.2), CO.accent, 0.9);                                                                  // chest plate
-    q.fillStyle = C(CO.text); q.fill(pEll(-1.4, 1.6 + b, 0.9, 0.9)); q.fill(pEll(1.4, 1.6 + b, 0.9, 0.9));
-    shape(q, pBlob(0, -13 + b, 10.4, 9.6, 0.04, 6), CO.suit, 1.5, CO.suitD, 1.6, 1.8);                                             // helmet
-    shape(q, pSmooth([[-6.6, -15 + b], [-4, -19 + b], [5, -19 + b], [7.4, -14.6 + b], [5, -9.6 + b], [-4.4, -9.6 + b]]), CO.visor, 1.2, CO.ink, 1.2, 1.4);
-    q.fillStyle = C(CO.visorL); q.fill(pSmooth([[-4.6, -15.4 + b], [-2.6, -18 + b], [0, -17.4 + b], [-3, -14 + b]]));
-    ST.line(q, pSmooth([[6, -21 + b], [8, -26 + b]], true), 1.2, CO.suitD); shape(q, pBlob(8.4, -27 + b, 1.8, 1.8, 0.1, 2), CO.accent, 0.8); // antenna
-    shape(q, pSmooth([[6, -3 + b], [13, -2.4 + b], [15, 0.4 + b], [13, 2.4 + b], [6, 2 + b]]), CO.suit, 1.1, CO.suitD, 0.8, 1);     // the arm
-    at(q, 18, b, 1, 0, () => { shape(q, pCut(-4, -3, 8, 6, 1.4), CO.accent, 1, CO.accentD, 0.6, 0.8); shape(q, pSmooth([[3.6, -4], [7, -4.6], [7, 4.6], [3.6, 4]]), CO.lamp, 0.9); });
-  });
+// The child's forms (FORMS in the rules): the child astronaut with a weapon (0-3), the robot (4-6), the spaceship (7).
+// Everything faces right and is flipped for left; the weapon or the cannon turns toward what it shoots. The light comes
+// from the lamp on the helmet (on the robot's head, on the ship's nose).
+const KID_K = 0.86, KID_SH = [4.6, -2];          // the child's drawing scale and its shoulder (the weapon's pivot)
+const ROBO_SH = [14, -27];                      // the robot's cannon pivot (on its near shoulder)
+function kidBody(q, f) { // the child astronaut, three-quarter view: round helmet, blue visor, white suit, coral chest plate
+  const step = [0, 1.8, 0, -1.8][f], b = f % 2 ? -0.8 : 0;
+  shape(q, pSmooth([[-12, -6 + b], [-7, -8 + b], [-6, 4 + b], [-11, 5 + b]]), CO.pack, 1.1, CO.craterD, 0.8, 1);               // backpack
+  for (const s of [-1, 1]) { const lx = s * (3.4 + step * 0.7); shape(q, pSmooth([[lx - 3, 6], [lx + 3, 6], [lx + 3.4, 13], [lx - 3.4, 13]]), CO.suit, 1.1, CO.suitD, 1, 0); }
+  shape(q, pSmooth([[-7.6, -5 + b], [7.6, -5 + b], [8.4, 4 + b], [7, 8 + b], [-7, 8 + b], [-8.4, 4 + b]]), CO.suit, 1.4, CO.suitD, 1.6, 1.6);
+  shape(q, pCut(-3.6, -1 + b, 7.2, 5.4, 1.2), CO.accent, 0.9);                                                                  // chest plate
+  q.fillStyle = C(CO.text); q.fill(pEll(-1.4, 1.6 + b, 0.9, 0.9)); q.fill(pEll(1.4, 1.6 + b, 0.9, 0.9));
+  ST.line(q, pSmooth([[-5, -20 + b], [-7, -26 + b]], true), 1.2, CO.suitD); shape(q, pBlob(-7.4, -27 + b, 1.8, 1.8, 0.1, 2), CO.accent, 0.8); // antenna
+  shape(q, pBlob(0, -13 + b, 10.4, 9.6, 0.04, 6), CO.suit, 1.5, CO.suitD, 1.6, 1.8);                                             // helmet
+  shape(q, pSmooth([[-6.6, -15 + b], [-4, -19 + b], [5, -19 + b], [7.4, -14.6 + b], [5, -9.6 + b], [-4.4, -9.6 + b]]), CO.visor, 1.2, CO.ink, 1.2, 1.4);
+  q.fillStyle = C(CO.visorL); q.fill(pSmooth([[-4.6, -15.4 + b], [-2.6, -18 + b], [0, -17.4 + b], [-3, -14 + b]]));
+  at(q, 6.6, -20.6 + b, 1, 0.7, () => { shape(q, pCut(-3.2, -2.4, 6.4, 4.8, 1.2), CO.accent, 1); q.fillStyle = C(CO.lamp); q.fill(pRR(2.2, -1.9, 2.2, 3.8, 0.8)); }); // the helmet lamp
 }
+function armArt(q) { shape(q, pSmooth([[-1.6, -2.6], [7, -2.2], [9.6, 0], [7, 2.4], [-1.6, 2.8]]), CO.suit, 1.1, CO.suitD, 0.8, 1); }
+const handArt = (q, X, Y) => shape(q, pBlob(X, Y, 2.6, 2.6, 0.05, 3), CO.suit, 1);
+// the weapons, drawn from the shoulder along +x (arm: with the child's arm and hand holding it)
+const WEAPON_ART = [
+  (q, arm) => { // hand gun: a white blaster with a coral stripe and a teal cell
+    if (arm) armArt(q);
+    shape(q, pRR(9.6, -1, 3, 6, 1), CO.off, 1);
+    shape(q, pRR(7.4, -3.8, 11.4, 5.4, 2), CO.suit, 1.2, CO.suitD, 0.8, 1);
+    shape(q, pRR(18, -2.8, 5.4, 3.2, 1), CO.pack, 1);
+    q.fillStyle = C(CO.accent); q.fill(pRR(8.6, -3.8, 8.6, 1.6, 0.6)); q.fillStyle = C(CO.crys); q.fill(pRR(9.4, -1.4, 3.8, 2, 0.6));
+    if (arm) handArt(q, 10.6, 1.4);
+  },
+  (q, arm) => { // machine gun: a long dark body, a ribbed barrel and a gold drum
+    if (arm) armArt(q);
+    shape(q, pPoly([[0, -2.6], [5, -3.4], [5, 1.6], [1, 2.6]]), CO.off, 1);
+    shape(q, pRR(4, -4.4, 19.6, 6.6, 2), CO.off, 1.3, CO.panel, 1, 1);
+    q.fillStyle = C(CO.pack); q.fill(pRR(5, -4.4, 17, 1.8, 0.8));
+    shape(q, pRR(23, -3, 9.6, 3.6, 1), CO.pack, 1.1);
+    for (const X of [25.6, 28.4]) ST.line(q, pLine(X, -3, X, 0.6), 0.9, CO.ink);
+    shape(q, pEll(13, 3.8, 4.4, 4.2), CO.gold, 1.2, CO.goldD, 1, 1);
+    if (arm) handArt(q, 9.4, 1.6);
+  },
+  (q, arm) => { // rocket launcher: a coral tube on the shoulder with a rocket in its mouth
+    if (arm) armArt(q);
+    shape(q, pRR(7.2, -3, 3, 6.4, 1), CO.off, 1);
+    shape(q, pRR(-12.6, -9.4, 4, 6.4, 1), CO.off, 1);
+    shape(q, pRR(-10, -10.6, 30.6, 8.4, 3.4), CO.accent, 1.4, CO.accentD, 1.2, 1.4);
+    q.fillStyle = C(CO.text); q.fill(pRR(3, -10.6, 3.6, 8.4, 0)); ST.edge(q, pRR(-10, -10.6, 30.6, 8.4, 3.4), 1.4);
+    shape(q, pPoly([[19.6, -9], [25.6, -6.4], [19.6, -3.8]]), CO.gold, 1);
+    shape(q, pEll(20.4, -6.4, 2.2, 4.2), CO.off, 1.1);
+    if (arm) handArt(q, 8.6, 1.4);
+  },
+  (q, arm) => { // beam gun: a sleek white rifle with a crystal core and a gold emitter
+    if (arm) armArt(q);
+    shape(q, pPoly([[-2, -1.6], [5, -2.4], [6, 2], [-1, 3]]), CO.suitD, 1);
+    const body = pSmooth([[3, -1.6], [7, -4.8], [21, -4.4], [27, -2.4], [27, 1.2], [19, 2.8], [6, 2.8]]);
+    shape(q, body, CO.suit, 1.3, CO.suitD, 1, 1.2);
+    shape(q, pPoly([[9.4, -2.8], [17, -3], [18.2, 0.6], [10, 1]]), CO.crys, 1, CO.crysD, 0.8, 0);
+    q.fillStyle = C(CO.crysL); q.fill(pPoly([[10.6, -2.2], [14, -2.4], [11.4, 0]]));
+    shape(q, pEll(28.4, -0.6, 1.8, 3.8), CO.gold, 1.1);
+    if (arm) handArt(q, 9.4, 2);
+  }
+];
+const ROBO_GUN = q => { // the robot's twin shoulder cannon
+  shape(q, pRR(3, -6, 16, 4, 1.4), CO.off, 1.2); shape(q, pRR(3, 1.6, 16, 4, 1.4), CO.off, 1.2);
+  q.fillStyle = C(CO.ink); q.fill(pRR(17, -5.4, 2, 2.8, 0.6)); q.fill(pRR(17, 2.2, 2, 2.8, 0.6));
+  q.fillStyle = C(CO.accent); q.fill(pRR(9, -6, 2.4, 4, 0)); q.fill(pRR(9, 1.6, 2.4, 4, 0));
+  shape(q, pBlob(0, 0, 5.4, 5.2, 0.05, 4), CO.gold, 1.3, CO.goldD, 1, 1);
+};
+function roboBody(q, f, form) { // the armour robot, about 1.4x the child: a cockpit dome with the child inside, a lamp on top
+  const step = [0, 2.6, 0, -2.6][f], b = f % 2 ? -1 : 0;
+  if (form >= 6) { // missile pods on the back
+    shape(q, pCut(-23, -36 + b, 12, 17, 2), CO.panelL, 1.3, CO.panel, 1.4, 1.4);
+    for (let i = 0; i < 3; i++) shape(q, pPoly([[-21.8 + i * 3.6, -36 + b], [-20.2 + i * 3.6, -41 + b], [-18.6 + i * 3.6, -36 + b]]), CO.accent, 0.9);
+  }
+  shape(q, pRR(-20, -26 + b, 8.4, 15, 3.8), CO.suitD, 1.2); shape(q, pBlob(-16, -9.4 + b, 4.6, 4.4, 0.06, 5), CO.off, 1.2);       // the far arm
+  for (const s of [-1, 1]) {
+    const lx = s * (6.4 + step * 0.8), near = s > 0;
+    shape(q, pRR(lx - 4.6, -6, 9.2, 11, 3), near ? CO.suit : CO.suitD, 1.3, near ? CO.suitD : null, 1, 1);
+    shape(q, pCut(lx - 6, 4, 13, 7, 2.2), CO.pack, 1.3, CO.craterD, 1, 1);
+  }
+  const torso = pSmooth([[-15, -6 + b], [-16.4, -22 + b], [-11, -32 + b], [10, -32 + b], [16.4, -22 + b], [15, -6 + b], [9, -2 + b], [-9, -2 + b]]);
+  shape(q, torso, CO.suit, 1.7, CO.suitD, 2.4, 2.4);
+  shape(q, pBlob(3, -21 + b, 8.6, 7.2, 0.03, 4), CO.visorL, 1.3);                                                             // the cockpit glass
+  shape(q, pBlob(2.6, -20 + b, 4.6, 4.4, 0.04, 6), CO.suit, 1);                                                                 // the child inside
+  q.fillStyle = C(CO.visor); q.fill(pSmooth([[0.6, -21 + b], [1.8, -23 + b], [6.2, -22.6 + b], [6.4, -19.4 + b], [1.6, -18.4 + b]]));
+  q.fillStyle = C(CO.text); q.fill(pSmooth([[-3, -23.4 + b], [-1, -26.2 + b], [2.4, -26.8 + b], [-1.4, -23.6 + b]]));
+  shape(q, pCut(-9, -12 + b, 14, 7, 2), CO.accent, 1.1, CO.accentD, 0.8, 0.8);                                                  // chest plate
+  q.fillStyle = C(CO.goldL); q.fill(pEll(-5.6, -8.6 + b, 1.2, 1.2)); q.fill(pEll(-1.6, -8.6 + b, 1.2, 1.2));
+  shape(q, pCut(-4, -37.6 + b, 8, 6, 1.6), CO.accent, 1.1); q.fillStyle = C(CO.lamp); q.fill(pRR(3.2, -36.8 + b, 2.6, 4.4, 0.8));   // the lamp
+  if (form >= 5) { ST.line(q, pLine(-9, -31 + b, -12, -38 + b), 1.4, CO.pack); shape(q, pEll(-12.6, -39 + b, 3.6, 1.8, -0.4), CO.gold, 1); } // the drones' dish
+  shape(q, pRR(9.4, -24 + b, 8.4, 16, 3.8), CO.suit, 1.3, CO.suitD, 1, 1); shape(q, pBlob(13.6, -7 + b, 5, 4.8, 0.06, 8), CO.pack, 1.3, CO.craterD, 0.8, 0.8); // the near arm
+}
+function shipArt(q, f) { // the spaceship, side view: the child under the canopy, a lamp in the nose, a flat engine flame
+  const fl0 = f ? 5 : 0;
+  shape(q, pSmooth([[-25, -4.6], [-38 - fl0, 0], [-25, 4.6]]), CO.gold, 1);
+  q.fillStyle = C(CO.goldL); q.fill(pSmooth([[-25, -2.4], [-32 - fl0 * 0.6, 0], [-25, 2.4]]));
+  shape(q, pPoly([[-8, -3], [-19, -16], [-12, -16], [3, -4]]), CO.off, 1.2);                                                    // the far wing
+  shape(q, pRR(-28.4, -4.6, 6, 9.2, 2), CO.off, 1.2);                                                                           // the nozzle
+  const hull = pSmooth([[-24, -6.6], [-12, -10.4], [8, -9.4], [22, -4.6], [27, 0], [22, 4.6], [8, 8.4], [-12, 9.4], [-24, 6.6]]);
+  shape(q, hull, CO.suit, 1.6, CO.suitD, 2, 2.2);
+  q.save(); q.clip(hull); q.fillStyle = C(CO.accent); q.fillRect(17, -12, 14, 24); q.fill(pRR(-22, 0.8, 30, 2.8, 1)); q.restore(); ST.edge(q, hull, 1.6);
+  shape(q, pPoly([[-21, -7], [-26, -18], [-18, -18], [-11, -9]]), CO.accent, 1.3, CO.accentD, 1, 1);                            // the tail fin
+  shape(q, pSmooth([[-5, -8.6], [0, -16.4], [10, -15.4], [16, -7.6]]), CO.visorL, 1.3);                                         // the canopy
+  shape(q, pBlob(4.6, -11, 4.2, 4, 0.04, 6), CO.suit, 1); q.fillStyle = C(CO.visor); q.fill(pSmooth([[5.4, -13], [8.8, -12.4], [8.6, -9.6], [5.6, -9.4]]));
+  shape(q, pPoly([[-6, 4], [-17, 16], [-9, 16], [5, 6]]), CO.pack, 1.3, CO.craterD, 1, 1);                                      // the near wing
+  q.fillStyle = C(CO.accent); q.fill(pPoly([[-17, 16], [-15.6, 13.4], [-8.4, 13.4], [-9, 16]]));
+  shape(q, pRR(-16, 17, 11, 3.4, 1.4), CO.gold, 1);                                                                             // a missile pod
+  q.fillStyle = C(CO.lamp); q.fill(pEll(25.4, 0, 1.3, 2.2));                                                                    // the headlight
+}
+const kidSpr = f => bake("kid" + f, 36, 40, 12, 27, q => { q.scale(KID_K, KID_K); kidBody(q, f); });
+const weaponSpr = (form, arm) => bake("wp" + form + (arm ? "a" : ""), 50, 30, 15, 15, q => { if (arm) q.scale(KID_K, KID_K); WEAPON_ART[form](q, arm); });
+const roboSpr = (f, form) => bake("robo" + form + "-" + f, 50, 62, 26, 47, q => roboBody(q, f, form));
+const roboGunSpr = () => bake("robogun", 26, 18, 7, 9, ROBO_GUN);
+const shipSpr = f => bake("ship" + f, 78, 46, 45, 23, q => shipArt(q, f));
+// a round badge with a picture of a form: the boss panel shows the next one (what defeating this boss gives)
+const formIcon = form => bake("fi" + form, 40, 40, 20, 20, q => {
+  shape(q, pEll(0, 0, 17, 17), CO.panelD, 1.3); cordLine(q, pEll(0, 0, 14.4, 14.4), 1.8, CO.gold, 0.4);
+  if (form < 0) { at(q, 0, 4, 1, 0, () => { const sun = P2(); sun.arc(0, 0.6, 8, Math.PI, TAU); sun.closePath(); shape(q, sun, CO.goldL, 1.1); for (let i = 0; i < 5; i++) { const a = -Math.PI + 0.25 + i * 0.66; ST.line(q, pLine(Math.cos(a) * 10.4, Math.sin(a) * 10.4, Math.cos(a) * 13, Math.sin(a) * 13), 1.4, CO.goldL); } ST.line(q, pLine(-11, 0.6, 11, 0.6), 1.4, CO.ink); }); return; } // the dawn
+  if (form <= 3) at(q, -12.4, 3, 0.86, -0.3, () => WEAPON_ART[form](q, false));
+  else if (form <= 6) at(q, 0, 10, 0.5, 0, () => roboBody(q, 0, form));
+  else at(q, 1, 0, 0.42, 0, () => shipArt(q, 0));
+});
 // the creatures of the night side (all face right; flipped toward the child). Rule names: kage = blob, hitotsu =
-// hopper, onibi = comet, kasa = rock bug; bosses nyudo = rock turtle, kumo = star spider, oni = crystal golem
-const FOE_BOX = { kage: [30, 32, 15, 17], hitotsu: [30, 34, 15, 19], onibi: [22, 32, 11, 17], kasa: [36, 34, 18, 19], nyudo: [100, 100, 50, 62], kumo: [72, 52, 37, 27], oni: [104, 112, 52, 66] };
+// hopper, onibi = comet, kasa = rock bug, kurage = jelly, yoroi = armor bug; bosses nyudo = rock turtle, kumo = star
+// spider, kani = cannon crab, kurageB = giant jelly, oni = crystal golem, eye = beam eye, bird = meteor bird, king = star eater
+const FOE_BOX = { kage: [30, 32, 15, 17], hitotsu: [30, 34, 15, 19], onibi: [22, 32, 11, 17], kasa: [36, 34, 18, 19], kurage: [32, 38, 16, 18], yoroi: [50, 40, 24, 21],
+  nyudo: [100, 100, 50, 62], kumo: [72, 52, 37, 27], kani: [118, 80, 52, 42], kurageB: [86, 64, 43, 42], oni: [104, 112, 52, 66], eye: [82, 82, 41, 41],
+  bird: [98, 98, 50, 56], king: [128, 126, 64, 74] };
 const FOE_ART = {
   kage(q, h) { // a blob: a green dome with one big eye, a frown and a drip
     shape(q, pSmooth([[-11, 8], [-9, -2], [-3, -10], [4, -10], [10, -2], [11.4, 8], [5, 6.6], [2, 9], [-2, 7]]), h ? CO.text : CO.slime, 1.4, h ? CO.suitD : CO.slimeD, 1.6, 1.4);
@@ -1531,13 +1886,35 @@ const FOE_ART = {
     at(q, 1, -2, 1, 0.15, () => shape(q, pPoly([[-3.4, 2], [-3.4, -6], [0, -12], [3.4, -6.4], [3, 2]]), CO.crys, 1.1, CO.crysD, 1.4, 0));
     q.fillStyle = C(CO.eye); q.fill(pEll(-4.6, 6.4, 1.4, 1.2)); q.fill(pEll(4.6, 6.4, 1.4, 1.2));
   },
+  kurage(q, h) { // a jelly: a pink bell with a frilled hem, four short tentacles, two round eyes
+    const c = h ? CO.text : CO.jelly, cD = h ? CO.suitD : CO.jellyD;
+    for (const x0 of [-7, -2.4, 2.4, 7]) ST.line(q, pSmooth([[x0, 3], [x0 + 2, 8], [x0 - 1.4, 12], [x0 + 1, 16]], true), 1.6, cD);
+    shape(q, pSmooth([[-12.4, 3], [-12, -5], [-7, -12], [0, -14], [7, -12], [12, -5], [12.4, 3], [8, 5.6], [4, 3], [0, 5.6], [-4, 3], [-8, 5.6]]), c, 1.4, cD, 1.6, 1.8);
+    if (h) return;
+    q.fillStyle = C(CO.jellyL); q.fill(pEll(-5, -8, 2.8, 1.6, -0.5));
+    for (const s of [-1, 1]) { q.fillStyle = C(CO.eye); q.fill(pEll(s * 3.6, -3, 2.2, 2.5)); q.fillStyle = C(CO.ink); q.fill(pEll(s * 3.6 + 0.6, -2.6, 1.1, 1.3)); }
+  },
+  yoroi(q, h) { // an armor bug: a heavy blue shell of three plates, two pale horns, six legs
+    const c = h ? CO.text : CO.armor, cD = h ? CO.suitD : CO.armorD;
+    for (const s of [-1, 1]) for (const dx of [-9, -1, 7]) ST.line(q, pSmooth([[dx, 6], [dx + s * 1.5 - 2, 12 + (s > 0 ? 0 : -2)], [dx - 4, 15 + (s > 0 ? 0 : -2)]], true), 1.8, cD);
+    shape(q, pSmooth([[11, -9], [21, -15], [17, -6]]), CO.suit, 1.1); shape(q, pSmooth([[13, -6], [24, -7], [17, -2]]), CO.suitD, 1);   // horns
+    shape(q, pBlob(15, 1, 7.4, 6.6, 0.05, 9), cD, 1.4);                                                                             // head
+    const shell = pBlob(-3, 0, 17, 12.6, 0.05, 3);
+    shape(q, shell, c, 1.6, cD, 2.2, 2.4);
+    if (h) return;
+    q.save(); q.clip(shell);
+    for (const X of [-10, 2]) ST.line(q, pSmooth([[X, -14], [X + 3, 0], [X, 14]], true), 1.5, CO.ink);
+    q.fillStyle = C(CO.armorL); q.fill(pSmooth([[-16, -6], [-8, -10.6], [6, -10], [-2, -7.4], [-14, -3.6]]));
+    q.restore(); ST.edge(q, shell, 1.6);
+    q.fillStyle = C(CO.accent); q.fill(pEll(18.4, 0, 1.6, 1.8)); q.fill(pEll(14.6, -0.6, 1.3, 1.5));
+  },
   nyudo(q, h) { // the rock turtle: a domed shell of stone with crystals growing on it, stubby legs, a grey head
     const sk = h ? CO.text : CO.pack, skD = h ? CO.suitD : CO.craterD;
-    for (const [X, Y, s] of [[-24, 20, 0.8], [14, 22, 0.8]]) shape(q, pBlob(X, Y, 8 * s, 8.5 * s, 0.08, X & 7), sk, 1.2, skD, 1.2, 1.4);         // the far legs
-    shape(q, pBlob(36, 4, 11, 9.5, 0.05, 9), sk, 1.4, skD, 1.4, 1.6);                                                                          // the head
+    for (const [X, Y, s] of [[-24, 20, 0.8], [14, 22, 0.8]]) shape(q, pBlob(X, Y, 8 * s, 8.5 * s, 0.08, X & 7), sk, 1.2, skD, 1.2, 1.4);
+    shape(q, pBlob(36, 4, 11, 9.5, 0.05, 9), sk, 1.4, skD, 1.4, 1.6);
     const shell = pSmooth([[-40, 22], [-38, 0], [-28, -22], [-8, -32], [14, -30], [31, -18], [38, 2], [38, 20], [0, 26]]);
     shape(q, shell, h ? CO.text : CO.beetle, 1.8, h ? CO.suitD : CO.beetleD, 3, 3.4);
-    for (const [X, s] of [[-30, 1], [22, 1]]) shape(q, pBlob(X, 27, 8.6 * s, 8 * s, 0.08, X & 5), sk, 1.4, skD, 1.4, 1.6);                     // the near legs
+    for (const [X, s] of [[-30, 1], [22, 1]]) shape(q, pBlob(X, 27, 8.6 * s, 8 * s, 0.08, X & 5), sk, 1.4, skD, 1.4, 1.6);
     if (!h) {
       q.save(); q.clip(shell);
       const plate = pPoly([[-12, -18], [4, -22], [17, -11], [10, 4], [-9, 5], [-19, -6]]);
@@ -1565,31 +1942,97 @@ const FOE_ART = {
       q.fillStyle = C(CO.text); q.fill(pPoly([[23, 4], [26.4, 8.8], [21.6, 6.2]])); q.fill(pPoly([[19, 5.6], [21, 10.2], [17.4, 7.2]]));
     }
   },
+  kani(q) { // the cannon crab: a wide coral shell, eyes on stalks, a pincer behind and a cannon for a front claw
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) brush(q, [[s * (12 + k * 6), 8], [s * (24 + k * 6), 2 + k * 3], [s * (28 + k * 5), 19 + k * 3]], 3.2);
+    for (const s of [-1, 1]) { ST.line(q, pSmooth([[s * 7, -14], [s * 8, -22], [s * 9, -28]], true), 2.2, CO.ink); shape(q, pBlob(s * 9, -30, 4.6, 5, 0.05, 4 + s), CO.eye, 1.2); q.fillStyle = C(CO.ink); q.fill(pEll(s * 9 + 1.4, -29.4, 2, 2.4)); }
+    shape(q, pSmooth([[-26, -2], [-36, -6], [-46, -16], [-40, -21], [-33, -14], [-38, -27], [-29, -22], [-24, -9]]), CO.accent, 1.6, CO.accentD, 1.4, 1.6); // the pincer
+    const body = pSmooth([[-30, 6], [-28, -8], [-16, -18], [0, -20], [16, -18], [28, -8], [30, 6], [18, 14], [0, 16], [-18, 14]]);
+    shape(q, body, CO.accent, 1.8, CO.accentD, 2.6, 3);
+    q.fillStyle = C(CO.accentL); for (const [X, Y, r] of [[-12, -8, 3.4], [2, -12, 2.6], [12, -4, 2.2], [-4, 2, 2]]) q.fill(pEll(X, Y, r, r * 0.8));
+    brush(q, [[-8, 5], [0, 3], [8, 5]], 2);
+    shape(q, pRR(22, -14, 12, 12, 4), CO.accent, 1.6, CO.accentD, 1.2, 1.2);                                                       // the cannon arm
+    shape(q, pRR(30, -20, 24, 12, 3.6), CO.off, 1.7, CO.panel, 1.4, 1.6);
+    q.fillStyle = C(CO.gold); q.fill(pRR(38, -20, 3, 12, 0.6));
+    shape(q, pEll(54, -14, 3.6, 6.4), CO.gold, 1.4, CO.goldD, 1, 0); q.fillStyle = C(CO.ink); q.fill(pEll(55, -14, 1.8, 3.6));
+  },
+  kurageB(q) { // the giant jelly: a pink bell with a crystal core and a frilled hem (its tentacles move, drawn per frame)
+    const bell = pSmooth([[-36, 8], [-35, -12], [-24, -30], [0, -37], [24, -30], [35, -12], [36, 8], [28, 13], [20, 9], [12, 14], [4, 9], [-4, 14], [-12, 9], [-20, 14], [-28, 9]]);
+    shape(q, bell, CO.jelly, 2, CO.jellyD, 3, 3.4);
+    q.save(); q.clip(bell); q.fillStyle = C(CO.jellyL); q.fill(pBlob(-2, -10, 20, 15, 0.06, 3)); q.restore(); ST.edge(q, bell, 2);
+    shape(q, pPoly([[0, -26], [8.6, -13], [0, 0], [-8.6, -13]]), CO.crys, 1.4, CO.crysD, 2, 0);
+    q.fillStyle = C(CO.crysL); q.fill(pPoly([[-4.4, -13], [0, -21], [0.8, -13]]));
+    for (const s of [-1, 1]) { shape(q, pEll(s * 16, -2, 4.6, 5.2), CO.eye, 1.2); q.fillStyle = C(CO.ink); q.fill(pEll(s * 16 + 1.2, -1.4, 2.3, 2.7)); brush(q, [[s * 10, -10], [s * 16, -9], [s * 22, -11.6]], 2.4); }
+  },
   oni(q, h) { // the crystal golem: a body of stone round a crystal heart, boulder fists, a crown of crystals
     const st = h ? CO.text : CO.beetle, stD = h ? CO.suitD : CO.beetleD;
-    for (const s of [-1, 1]) shape(q, pSmooth([[s * 6, 20], [s * 20, 20], [s * 22, 41], [s * 5, 40]]), stD, 1.4, h ? CO.suitD : CO.panelD, 1.5, 1.5);   // legs
-    for (const s of [-1, 1]) shape(q, pSmooth([[s * 20, -16], [s * 32, -10], [s * 38, 8], [s * 30, 12], [s * 26, -2]]), st, 1.4, stD, 1.6, 1.6);   // arms
+    for (const s of [-1, 1]) shape(q, pSmooth([[s * 6, 20], [s * 20, 20], [s * 22, 41], [s * 5, 40]]), stD, 1.4, h ? CO.suitD : CO.panelD, 1.5, 1.5);
+    for (const s of [-1, 1]) shape(q, pSmooth([[s * 20, -16], [s * 32, -10], [s * 38, 8], [s * 30, 12], [s * 26, -2]]), st, 1.4, stD, 1.6, 1.6);
     const torso = pSmooth([[-26, 24], [-30, 2], [-24, -16], [-8, -22], [8, -22], [24, -16], [30, 2], [26, 24], [0, 28]]);
     shape(q, torso, st, 1.8, stD, 3, 3);
-    for (const s of [-1, 1]) shape(q, pBlob(s * 35, 17, 9.4, 8.6, 0.08, 7 + s), stD, 1.5, h ? CO.suitD : CO.panelD, 1.6, 1.8);                   // fists
-    shape(q, pBlob(0, -32, 15, 13, 0.04, 9), st, 1.6, stD, 2, 2.4);                                                                              // head
+    for (const s of [-1, 1]) shape(q, pBlob(s * 35, 17, 9.4, 8.6, 0.08, 7 + s), stD, 1.5, h ? CO.suitD : CO.panelD, 1.6, 1.8);
+    shape(q, pBlob(0, -32, 15, 13, 0.04, 9), st, 1.6, stD, 2, 2.4);
     if (h) return;
     ST.line(q, pSmooth([[-18, -10], [-12, -2], [-16, 8]], true), 1.4, CO.beetleD); ST.line(q, pSmooth([[16, 10], [12, 17], [18, 22]], true), 1.4, CO.beetleD);
-    shape(q, pPoly([[0, -9], [7.4, 1], [0, 11.4], [-7.4, 1]]), CO.crys, 1.2, CO.crysD, 1.8, 0);                                                   // the crystal heart
+    shape(q, pPoly([[0, -9], [7.4, 1], [0, 11.4], [-7.4, 1]]), CO.crys, 1.2, CO.crysD, 1.8, 0);
     q.fillStyle = C(CO.crysL); q.fill(pPoly([[-3.6, 0.6], [0, -5.4], [0.6, 0]]));
     for (const s of [-1, 1]) crystal(q, s * 25, -15, 14, s * 0.62);
     for (const [X, hh, a] of [[-8, 11, -0.36], [0, 18, 0], [8, 11, 0.36]]) crystal(q, X, -42, hh, a);
     q.fillStyle = C(CO.accent); q.fill(pPoly([[-8, -35.4], [-1.6, -34.4], [-1.6, -31], [-8, -32]])); q.fill(pPoly([[3.6, -34.4], [10, -35.4], [10, -32], [3.6, -31]]));
     brush(q, [[-10, -38], [1, -36.4], [12, -38]], 2.4);
     q.fillStyle = C(CO.ink); q.fill(pRR(-4, -26, 10, 2.6, 1));
+  },
+  eye(q) { // the beam eye: one great eyeball in a purple rim with eight spikes (the iris is drawn per frame, looking)
+    for (let i = 0; i < 8; i++) at(q, 0, 0, 1, i * TAU / 8 + 0.39, () => shape(q, pPoly([[21, -6.4], [37, 0], [21, 6.4]]), CO.hopD, 1.3));
+    shape(q, pBlob(0, 0, 28, 27, 0.05, 7), CO.hop, 1.8, CO.hopD, 2.6, 3);
+    shape(q, pEll(0, 1, 21, 19), CO.eye, 1.6, CO.suitD, 1.6, 2);
+    for (const [a, l] of [[2.5, 8], [3.4, 6], [-0.5, 7], [0.6, 6]]) ST.line(q, pSmooth([[Math.cos(a) * 20, 1 + Math.sin(a) * 18], [Math.cos(a + 0.12) * (20 - l * 0.5), 1 + Math.sin(a + 0.12) * (18 - l * 0.5)], [Math.cos(a - 0.04) * (20 - l), 1 + Math.sin(a - 0.04) * (18 - l)]], true), 1, CO.accent);
+    shape(q, pSmooth([[-24, -8], [-14, -22], [14, -22], [24, -8], [12, -14], [-12, -14]]), CO.hop, 1.5, CO.hopD, 0, 1.6);           // the brow lid
+  },
+  king(q) { // the star eater: a huge round body, a crown of crystal horns, and a mouth full of stars
+    for (const s of [-1, 1]) for (const dx of [12, 32]) shape(q, pBlob(s * dx, 40, 9.6, 7.6, 0.08, dx + s), CO.hopD, 1.5, CO.paneT, 0.8, 1.2);
+    for (const [X, hh, a] of [[-30, 22, -0.75], [-16, 28, -0.36], [0, 34, 0], [16, 28, 0.36], [30, 22, 0.75]]) crystal(q, X, -34 + Math.abs(X) * 0.3, hh, a);
+    for (const s of [-1, 1]) shape(q, pSmooth([[s * 40, 2], [s * 55, 8], [s * 58, 20], [s * 47, 18], [s * 38, 14]]), CO.hopD, 1.5);
+    const body = pBlob(0, -2, 48, 42, 0.04, 12);
+    shape(q, body, CO.hop, 2.2, CO.hopD, 3.4, 3.8);
+    q.save(); q.clip(body); q.fillStyle = C(CO.hopL); for (const [X, Y, r] of [[-28, -20, 6], [24, -26, 4.6], [-36, 8, 4], [36, 6, 3.4]]) q.fill(pEll(X, Y, r, r * 0.8)); q.restore(); ST.edge(q, body, 2.2);
+    const mouth = pSmooth([[-30, 4], [-20, -4], [0, -6], [20, -4], [30, 4], [22, 22], [0, 28], [-22, 22]]);
+    shape(q, mouth, CO.ink, 1.4);
+    q.save(); q.clip(mouth);
+    for (const [X, Y, r, a] of [[-12, 12, 4, 0.2], [8, 8, 3, -0.3], [-2, 20, 2.4, 0.5], [16, 16, 2, 0]]) shape(q, pStar(X, Y, r, r * 0.45, 5, a), CO.gold, 0.8);
+    shape(q, pEll(-18, 6, 3.4, 3.4), CO.crys, 0.9);
+    q.restore();
+    for (let i = 0; i < 7; i++) { const X = -21 + i * 7, top = -4.6 + Math.abs(X) * 0.1; shape(q, pPoly([[X - 3, top], [X, top + 6.6], [X + 3, top]]), CO.text, 1); }
+    for (let i = 0; i < 5; i++) { const X = -14 + i * 7, bot = 26 - Math.abs(X) * 0.2; shape(q, pPoly([[X - 2.6, bot], [X, bot - 5.6], [X + 2.6, bot]]), CO.text, 1); }
+    for (const s of [-1, 1]) { shape(q, pBlob(s * 15, -22, 7, 6, 0.05, 3 + s), CO.accent, 1.4); q.fillStyle = C(CO.text); q.fill(pEll(s * 15 - 2, -24, 1.8, 1.8)); brush(q, [[s * 6, -28], [s * 15, -32], [s * 25, -34]], 3.2); }
   }
 };
 function foeSpr(kind, hit) { const b = FOE_BOX[kind]; return bake("f" + kind + (hit ? "h" : ""), b[0], b[1], b[2], b[3], q => FOE_ART[kind](q, hit)); }
+function birdArt(q, up) { // the meteor bird, wings up or down: a gold body, a crest of crystal feathers, a coral beak
+  shape(q, up ? pSmooth([[-2, -10], [-14, -36], [-30, -44], [-20, -26], [-12, -8]]) : pSmooth([[-2, 0], [-18, 12], [-34, 14], [-20, 4], [-10, -6]]), CO.goldD, 1.4); // the far wing
+  for (const [a, l] of [[2.75, 22], [2.98, 27], [3.22, 21]]) shape(q, pSmooth([[-16, 2], [-16 + Math.cos(a) * l, 2 + Math.sin(a) * l - 4], [-16 + Math.cos(a) * (l + 7), 2 + Math.sin(a) * (l + 7)], [-16 + Math.cos(a) * l + 2, 2 + Math.sin(a) * l + 4]]), CO.accent, 1.2, CO.accentD, 0.8, 0.8);
+  shape(q, pBlob(0, 2, 21, 17, 0.05, 5), CO.gold, 1.8, CO.goldD, 2.4, 2.8);
+  q.fillStyle = C(CO.goldL); q.fill(pEll(5, 8, 11, 7.6, -0.2));
+  for (const s of [-1, 1]) ST.line(q, pSmooth([[2 + s * 5, 17], [3 + s * 5, 24], [6 + s * 5, 26]], true), 2.2, CO.pack);
+  shape(q, pBlob(17, -13, 11, 10, 0.05, 9), CO.gold, 1.6, CO.goldD, 1.4, 1.8);
+  for (const [X, Y, a] of [[10, -21, -0.9], [14, -22, -0.5], [18, -22, -0.15]]) at(q, X, Y, 1, a, () => shape(q, pPoly([[-2.4, 0], [0, -12], [2.4, 0]]), CO.crys, 1, CO.crysD, 1, 0));
+  shape(q, pPoly([[25, -16.4], [37, -12], [25, -8.6]]), CO.accent, 1.3, CO.accentD, 0, 1.4);
+  q.fillStyle = C(CO.eye); q.fill(pEll(20, -15, 3.4, 3.6)); q.fillStyle = C(CO.ink); q.fill(pEll(21, -14.6, 1.7, 2.1)); brush(q, [[15.6, -20.4], [20, -19.6], [24.4, -17]], 2.4);
+  const wing = up ? pSmooth([[-6, -4], [4, -30], [-6, -48], [-22, -46], [-16, -26], [-14, -6]]) : pSmooth([[-6, 4], [-4, 22], [-16, 32], [-30, 26], [-22, 12], [-16, 0]]);
+  shape(q, wing, CO.gold, 1.6, CO.goldD, 1.6, 1.8);
+  for (let i = 0; i < 3; i++) ST.line(q, up ? pLine(-8 - i * 4, -10, -6 - i * 5, -34 + i * 4) : pLine(-8 - i * 5, 4, -10 - i * 6, 22 - i * 2), 1.1, CO.goldD);
+}
+const birdSpr = up => bake("fbird" + (up ? 1 : 0), 98, 98, 50, 56, q => birdArt(q, up));
 function kumoLegs(x, X, Y, face, t) { // eight jointed legs as heavy ink strokes, walking in two alternating sets
   for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
     const ph = Math.sin(t * 9 + k * 1.7 + (s > 0 ? Math.PI : 0)) * 3, hx = X + face * (6 - k * 7), hy = Y + s * 5;
     const kx = hx + face * (8 - k * 6) + ph, ky = hy + s * 16, ex = kx + face * (6 - k * 4) + ph * 0.5, ey = hy + s * 29;
     brush(x, [[hx, hy], [kx, ky - s * 2], [ex, ey]], 3.4);
+  }
+}
+function jellyTent(x, X, Y, t, k) { // the giant jelly's tentacles: dark pink ribbons swaying under the bell (k: its size)
+  for (let i = 0; i < 6; i++) {
+    const x0 = X + (-25 + i * 10) * k, w = t * 2.2 + i * 1.3;
+    brush(x, [[x0, Y + 8 * k], [x0 + Math.sin(w) * 5 * k, Y + 24 * k], [x0 + Math.sin(w + 1) * 7 * k, Y + 40 * k], [x0 + Math.sin(w + 2) * 8 * k, Y + 54 * k]], 4.4 * k, i % 2 ? CO.jellyD : CO.jelly);
   }
 }
 // eyes in the dark: one big eye (blob), two (rock bug), three (hopper); a boss's two are coral
@@ -1598,8 +2041,8 @@ const eyesSpr = (n, red) => bake("ey" + n + red, 16, 12, 8, 6, q => {
   if (n === 1) { q.fill(pEll(0, 0, 2.6, 2.8)); q.fillStyle = C(CO.ink); q.fill(pEll(0.6, 0.3, 1.2, 1.3)); }
   else for (const [dx, dy] of n === 3 ? [[-3, 0.6], [3, 0.6], [0, -2.8]] : [[-3.2, 0], [3.2, 0]]) q.fill(pEll(dx, dy, 1.4, 1.7));
 });
-const EYES = { kage: 1, hitotsu: 3, kasa: 2 };
-// a light crystal (size 0, 1 a rock bug's, 2 a boss's)
+const EYES = { kage: 1, hitotsu: 3, kasa: 2, kurage: 2, yoroi: 2 };
+// a light crystal (size 0, 1 a bigger creature's, 2 a boss's)
 function moteSpr(size) {
   const s = [1, 1.35, 2.1][size];
   return bake("mote" + size, 12 * s, 16 * s, 6 * s, 8.5 * s, q => {
@@ -1609,25 +2052,51 @@ function moteSpr(size) {
   });
 }
 function boltArt(q) { shape(q, pRR(-8, -2.4, 13, 4.8, 2.4), CO.accent, 1); q.fillStyle = C(CO.accentL); q.fill(pRR(-5, -1, 8, 2, 1)); }
-function discArt(q) { shape(q, pPolar(0, 0, 6.4, 6.4, t => 0.78 + 0.22 * Math.cos(3 * t), 48), CO.gold, 1.1, CO.goldD, 0.8, 0.8); q.fillStyle = C(CO.ink); q.fill(pEll(0, 0, 1.4, 1.4)); }
 function droneArt(q) {
   ST.line(q, pLine(-2.6, -3.4, -4.6, -7), 1, CO.goldD);
   shape(q, pBlob(0, 0, 4.4, 4.2, 0.05, 7), CO.goldL, 1, CO.goldD, 0.8, 1);
   q.fillStyle = C(CO.ink); q.fill(pEll(0.6, 0.2, 1.6, 1.6)); q.fillStyle = C(CO.visorL); q.fill(pEll(0.2, -0.2, 0.6, 0.6));
 }
-const sparkSpr = () => bake("spark", 26, 10, 18, 5, q => { ST.line(q, pLine(-16, 0, -8, 0), 1.2, CO.accent); boltArt(q); }); // a laser shot, flying along +x
-const fudaSpr = () => bake("fuda", 18, 18, 9, 9, discArt);                                                               // a spinning disc
-const flySpr = () => bake("fly", 16, 18, 8, 9, droneArt);                                                                // a little drone
+// the child's shots, each flying along +x
+const SHOT_SPR = {
+  bolt: () => bake("spark", 26, 10, 18, 5, q => { ST.line(q, pLine(-16, 0, -8, 0), 1.2, CO.accent); boltArt(q); }),
+  pellet: () => bake("pellet", 14, 8, 8, 4, q => { ST.line(q, pLine(-6, 0, -2, 0), 1, CO.goldD); shape(q, pEll(0.6, 0, 3, 1.8), CO.goldL, 0.9); }),
+  rocket: () => bake("rocket", 26, 12, 15, 6, q => {
+    shape(q, pSmooth([[-8, -2], [-14, 0], [-8, 2]]), CO.gold, 0.8);
+    shape(q, pPoly([[-7, -2.6], [-9.4, -4.6], [-5, -2.6]]), CO.gold, 0.8); shape(q, pPoly([[-7, 2.6], [-9.4, 4.6], [-5, 2.6]]), CO.gold, 0.8);
+    shape(q, pSmooth([[-8, -2.6], [4, -2.6], [8, 0], [4, 2.6], [-8, 2.6]]), CO.accent, 1, CO.accentD, 0.6, 0.8);
+    q.fillStyle = C(CO.text); q.fill(pRR(-3, -2.6, 2, 5.2, 0));
+  }),
+  shell: () => bake("shell", 14, 12, 7, 6, q => { shape(q, pEll(0, 0, 3.8, 3.4), CO.accent, 1); q.fillStyle = C(CO.accentL); q.fill(pEll(-1, -1, 1.4, 1)); }),
+  spread: () => bake("spread", 22, 10, 13, 5, q => { ST.line(q, pLine(-11, 0, -5, 0), 1.2, CO.crys); shape(q, pRR(-6, -1.8, 12, 3.6, 1.8), CO.crysL, 0.9); }),
+  missile: () => bake("missile", 22, 10, 12, 5, q => {
+    shape(q, pSmooth([[-6, -1.4], [-11, 0], [-6, 1.4]]), CO.goldL, 0.7);
+    shape(q, pSmooth([[-6, -2], [3, -2], [6.4, 0], [3, 2], [-6, 2]]), CO.text, 1);
+    q.fillStyle = C(CO.accent); q.fill(pSmooth([[2, -2], [3, -2], [6.4, 0], [3, 2], [2, 2]])); q.fill(pPoly([[-6, -2], [-7.4, -3.6], [-4, -2]]));
+  })
+};
+const flySpr = () => bake("fly", 16, 18, 8, 9, droneArt);                                                // a drone
+const ebSpr = r => bake("eb" + r, r * 2 + 6, r * 2 + 6, r + 3, r + 3, q => { shape(q, pEll(0, 0, r, r), CO.accent, 1.4); q.fillStyle = C(CO.accentL); q.fill(pEll(-r * 0.25, -r * 0.25, r * 0.42, r * 0.42)); });
+const meteorSpr = () => bake("meteor", 30, 44, 15, 30, q => { // a rock falling with a flat flame above it
+  shape(q, pSmooth([[-8, -2], [-4, -20], [0, -12], [3, -24], [8, -2]]), CO.accent, 1.1); q.fillStyle = C(CO.gold); q.fill(pSmooth([[-4.6, -2], [-1.6, -12], [2, -6], [4.6, -2]]));
+  shape(q, pBlob(0, 2, 9, 8, 0.12, 5), CO.beetle, 1.4, CO.beetleD, 1.4, 1.6);
+});
+// the part a boss leaves: a gold gear with a crystal in the middle
+const partSpr = () => bake("part", 34, 34, 17, 17, q => { shape(q, pPolar(0, 0, 13, 13, t => 0.84 + 0.16 * Math.sign(Math.cos(8 * t)), 64), CO.gold, 1.4, CO.goldD, 1.4, 1.6); shape(q, pEll(0, 0, 5.6, 5.6), CO.crys, 1.2); q.fillStyle = C(CO.crysL); q.fill(pEll(-1.6, -1.6, 1.6, 1.6)); });
 // card pictures, drawn in a 21 px window
 const ICON = {
-  spark(q) { for (const [X, Y, s] of [[-4, 4, 1.5], [7, -6, 1.05]]) at(q, X, Y, s, -0.7, () => boltArt(q)); },
-  fly(q) { q.fillStyle = C(CO.goldD); for (let i = 0; i < 5; i++) { const a = -2.7 + i * 0.5; q.fill(pEll(Math.cos(a) * 13, Math.sin(a) * 13 + 3, 0.9, 0.9)); } for (const [X, Y, s] of [[-6, 4, 1.6], [8, -5, 1.2]]) at(q, X, Y, s, 0, () => droneArt(q)); },
+  pow(q) { // power: a gold star with a coral arrow going up
+    shape(q, pStar(-4, 3, 12, 5.4, 5, 0.1), CO.gold, 1.2, CO.goldD, 1, 1.2);
+    shape(q, pPoly([[9, -15], [16, -6], [12, -6], [12, 6], [6, 6], [6, -6], [2, -6]]), CO.accent, 1.2, CO.accentD, 0.8, 0.8);
+  },
+  wind(q) { // rapid fire: three shots in a row with speed lines
+    for (const [X, Y] of [[-10, 8], [0, 0], [10, -8]]) at(q, X, Y, 1.1, -0.67, () => { ST.line(q, pLine(-14, 0, -8, 0), 1.3, CO.goldD); shape(q, pSmooth([[-7, -3], [3, -3], [7, 0], [3, 3], [-7, 3]]), CO.goldL, 1.1); });
+  },
   bell(q) { for (const r of [15, 9]) cordLine(q, pPolar(0, 0, r, r, t => 1 + 0.025 * Math.sin(5 * t + r), 48), 2.2, CO.crys, 0.6); shape(q, pBlob(0, 0, 3.4, 3.4, 0.05, 3), CO.text, 1); },
-  fuda(q) { for (const d of [-4, 3]) ST.line(q, pLine(-17, 12 + d, -10, 7 + d), 1.4, CO.ink); at(q, -2, 3, 1.8, 0.3, () => discArt(q)); at(q, 10, -9, 1.05, 1.2, () => discArt(q)); },
-  oil(q) { // a battery with a bolt on it
-    shape(q, pCut(-3.6, -15, 7.2, 4.4, 1), CO.pack, 1);
-    shape(q, pCut(-7.5, -11.4, 15, 25, 2.4), CO.crys, 1.2, CO.crysD, 1.6, 1.6);
-    shape(q, pPoly([[1.6, -8], [-4, 2.4], [-0.4, 2.4], [-1.6, 9.4], [4, -1], [0.4, -1]]), CO.text, 0.9);
+  oil(q) { // big light: the helmet lamp with its beam opening wide
+    shape(q, pPoly([[2, -6], [17, -15], [17, 15], [2, 6]]), CO.lamp, 1);
+    for (const y of [-8, 0, 8]) ST.line(q, pLine(9, y * 0.6, 15, y), 1.2, CO.gold);
+    shape(q, pCut(-14, -7, 16, 14, 3), CO.accent, 1.2, CO.accentD, 1, 1); q.fillStyle = C(CO.lamp); q.fill(pRR(-1, -5, 3.4, 10, 1));
   },
   wick(q) { // power saver: a leaf and a small bolt
     shape(q, pSmooth([[-11, 10], [-10, -2], [-3, -11], [8, -13], [7, -3], [0, 7]]), CO.slime, 1.2, CO.slimeD, 1.4, 1.6);
@@ -1643,10 +2112,6 @@ const ICON = {
     shape(q, pSmooth([[-11, -11], [-4, -11], [-4, 2], [0, 6], [4, 2], [4, -11], [11, -11], [11, 3], [0, 14], [-11, 3]]), CO.accent, 1.2, CO.accentD, 1.4, 1.4);
     for (const s of [-1, 1]) shape(q, pCut(s * 7.5 - 3.6, -15.6, 7.2, 5.2, 1), CO.pack, 1);
   },
-  wind(q) { // turbo: a fan wheel with four blades
-    for (let i = 0; i < 4; i++) at(q, 0, 0, 1, i * Math.PI / 2 + 0.3, () => shape(q, pSmooth([[0, 0], [3.4, -6], [3, -15], [-3, -15.4], [-4, -6]]), CO.gold, 1, CO.goldD, 0.8, 0.8));
-    shape(q, pBlob(0, 0, 4, 4, 0.04, 2), CO.panelL, 1);
-  },
   candle(q) { // energy: a small cell with a plus
     shape(q, pCut(-3.6, -12, 7.2, 3.8, 1), CO.pack, 1);
     shape(q, pCut(-8, -8.6, 16, 21, 2), CO.goldL, 1.2, CO.goldD, 1.4, 1.4);
@@ -1657,6 +2122,12 @@ const iconSpr = k => bake("ic" + k, 56, 56, 28, 28, q => {
   shape(q, pBlob(0, 0, 24, 23.4, 0.02, 11), CO.panelL, 1.2);
   shape(q, pBlob(0, 0, 20.5, 20, 0.02, 12), CO.ground, 1, CO.groundD, -1.4, -1.6);
   (ICON[k] || ICON.candle)(q);
+});
+// a spare battery on the HUD (spent ones are dark)
+const battSpr = full => bake("batt" + (full ? 1 : 0), 18, 28, 9, 14, q => {
+  shape(q, pCut(-2.8, -12, 5.6, 3.4, 0.8), full ? CO.pack : CO.off, 0.9);
+  shape(q, pCut(-6, -9, 12, 20, 2.2), full ? CO.crys : CO.panelD, 1.2, full ? CO.crysD : null, 1.2, 1.2);
+  if (full) shape(q, pPoly([[1.4, -6], [-3.2, 1.8], [-0.3, 1.8], [-1.4, 8], [3.2, -0.6], [0.3, -0.6]]), CO.text, 0.7);
 });
 // a panel of the station: a dark plate with cut corners, one shade tone, a frame line just inside and, where its rods
 // hold it, small clips on the top edge (origin = top centre). Every board, button and sign of the game is one.
@@ -1674,7 +2145,8 @@ function truss(q, W) { // two rails and zigzag struts across the top of the scre
   for (const y of [-6.5, 6.5]) shape(q, pPoly([[-W / 2, y - 1.9], [W / 2, y - 1.9], [W / 2, y + 1.9], [-W / 2, y + 1.9]]), CO.panelL, 1.1);
 }
 const cardSpr = () => bake("card", 306, 92, 153, 3, q => panelArt(q, 300, 84, { frame: CO.panelL, fw: 1.6 }));
-const signSpr = () => bake("sign", 180, 76, 90, 4, q => panelArt(q, 172, 66, { clips: [-60, 60] }));
+const HUD_W = 200;
+const signSpr = () => bake("sign" + HUD_W, HUD_W + 8, 76, HUD_W / 2 + 4, 4, q => panelArt(q, HUD_W, 66, { clips: [-70, 70] }));
 const plankSpr = (w, h = 34) => bake("plank" + w + "x" + h, w + 6, h + 8, w / 2 + 3, 4, q => panelArt(q, w, h, { frame: CO.panelL, fw: 1.4, cut: 6 }));
 const beamSpr = () => { const W = Math.ceil(L.W) + 12; return bake("beam" + W, W, 22, W / 2, 11, q => truss(q, W)); };
 const btnSpr = (w, h, sub) => bake("btn" + w + "x" + h + (sub ? "s" : ""), w + 6, h + 8, w / 2 + 3, 4, q => panelArt(q, w, h, sub ? { frame: CO.panelL, fw: 1.6, cut: 7 } : { clips: [-w / 2 + 16, w / 2 - 16], cut: 8 }));
@@ -1694,7 +2166,6 @@ function sysBtn(x, kind, w, label) {
   }), 0, 0);
   if (label) text(x, label, 0, 25, 16, CO.text, {});
 }
-
 // ---------- GAME-SPECIFIC: drawing ----------
 const cam = { x: 0, y: 0, sx: 180, sy: 320 };
 let A = 1;   // where this frame falls between the last two rule steps (0..1): smooth motion at any refresh rate
@@ -1739,44 +2210,108 @@ function drawFoe(x, e, now) {
   const hit = R.wt - e.hitT < 0.07;
   if (e.kind === "onibi") { a = Math.atan2(e.vy || 0, e.vx || 1) - Math.PI / 2; flip = 1; sx = 1 + Math.sin(now / 70 + e.ph) * 0.08; }
   else if (e.hop) { const ph = (R.wt * e.hop + e.ho) % 1, sq = ph >= 0.4 && ph < 0.52 ? 0.14 : 0; oy = ph < 0.4 ? -Math.sin(ph / 0.4 * Math.PI) * 6 : 0; sx = 1 + sq; sy = 1 - sq; }
+  else if (e.drift) { const w = Math.sin(R.wt * 3 + e.ph); sy = 1 + 0.1 * w; sx = 1 - 0.07 * w; oy = -3 - 2 * w; } // a jelly pulses as it swims
   else { const w = Math.sin(now / 150 + e.ph) * 0.06; sx = 1 + w; sy = 1 - w; }
   if (e.kind !== "onibi") put(x, shadowSpr(e.r), X, Y + e.r * 0.8);
   put(x, foeSpr(e.kind, hit), X, Y + oy, a, flip * sx, sy);
 }
 function drawBoss(x, e, X, Y, flip, now) {
-  const tele = e.st === "tele", k = tele ? clamp(e.t / e.tel.T, 0, 1) : 0;
+  const R = run, tele = e.st === "tele", k = tele ? clamp(e.t / e.tel.T, 0, 1) : 0, kind = e.kind, fly = kind === "eye" || kind === "bird";
   put(x, shadowSpr(Math.round(e.r * 1.2)), X, Y + e.r * 0.9);
-  if (e.kind === "kumo") kumoLegs(x, X - flip * 4, Y + 4, flip, e.st === "walk" || e.st === "lunge" ? now / 1000 : 0);
-  let sx = 1, sy = 1, oy = 0;
-  if (tele && e.tel.kind === "stomp") { sy = 1 - 0.12 * k; sx = 1 + 0.08 * k; oy = 4 * k; }               // it crouches, then slams
+  let sx = 1, sy = 1, oy = fly ? -16 + (reduceMotion ? 0 : Math.sin(now / 300 + e.ph) * 3) : 0, ox = 0;
+  if (tele && (e.tel.kind === "stomp" || e.tel.kind === "pulse")) { sy = 1 - 0.12 * k; sx = 1 + 0.08 * k; oy += 4 * k; } // it crouches, then slams
+  else if (tele && !reduceMotion) ox = Math.sin(e.t * 46) * 1.8 * k;                                                    // it shakes while it charges
   else if (e.st === "rest" && e.t < 0.2) { const r = 1 - e.t / 0.2; sy = 1 + 0.1 * r; sx = 1 - 0.06 * r; }
-  else if (e.st === "walk") oy = -Math.abs(Math.sin(now / 180)) * 2;
-  put(x, foeSpr(e.kind, false), X, Y + oy, 0, flip * sx, sy);
+  else if (e.st === "walk" && !fly) oy = -Math.abs(Math.sin(now / 180)) * 2;
+  if (kind === "kumo") kumoLegs(x, X - flip * 4, Y + 4, flip, e.st === "walk" || e.lunging ? now / 1000 : 0);
+  if (kind === "kurageB") jellyTent(x, X + ox, Y + oy, reduceMotion ? 0 : now / 1000 + e.ph, 1);
+  if (kind === "bird") put(x, birdSpr(!reduceMotion && (fl(now / (e.lunging ? 90 : 170)) & 1)), X + ox, Y + oy, 0, flip * sx, sy);
+  else put(x, foeSpr(kind, false), X + ox, Y + oy, 0, flip * sx, sy);
+  if (kind === "eye") { // the iris looks at the child, or along its beam; it turns coral while the beam is coming
+    const h = R.haz.find(z => z.src === e.id && z.k === "sweep");
+    let ax = R.p.x - e.x, ay = R.p.y - e.y;
+    if (h) { const a = h.landed ? h.a0 + h.dir * h.spin * clamp((R.wt - h.at) / (h.end - h.at), 0, 1) : h.a0; ax = Math.cos(a); ay = Math.sin(a); }
+    const m = Math.hypot(ax, ay) || 1, ix = X + ox + ax / m * 7, iy = Y + oy + 1 + ay / m * 6, red = !!h || (tele && e.tel.kind === "burst");
+    shape(x, pEll(ix, iy, 9.4, 9.4), red ? CO.accent : CO.visor, 1.3);
+    x.fillStyle = C(CO.ink); x.fill(pEll(ix + ax / m * 1.6, iy + ay / m * 1.4, 4.4, 4.8));
+    x.fillStyle = C(CO.text); x.fill(pEll(ix - 3, iy - 3.4, 1.8, 1.8));
+  }
 }
+// the child in its current form; the weapon (or the robot's cannon) turns toward what it shoots
 function drawKid(x, now) {
-  const R = run, p = R.p, X = IX(p), Y = IY(p), moving = Math.hypot(p.vx, p.vy) > 5 && !R.dead && !R.card;
-  const f = moving ? fl(fx.walk) % 4 : 0;
-  put(x, shadowSpr(8), X, Y + 11.5);
+  const R = run, p = R.p, X = IX(p), Y = IY(p), moving = Math.hypot(p.vx, p.vy) > 5 && !R.dead && !R.card, form = R.form;
+  const f = moving ? fl(fx.walk) % 4 : 0, face = fx.face, la = fx.aimL;
+  const pop = fx.vt - fx.formT < 320 && !reduceMotion ? 1 + 0.35 * (1 - easeOut((fx.vt - fx.formT) / 320)) : 1;
+  put(x, shadowSpr(form >= 7 ? 14 : form >= 4 ? 12 : 8), X, Y + (form >= 4 && form < 7 ? 12.5 : 11.5));
   if (fx.vt - fx.dashCue < 200) { // thruster streaks behind a dash
     const k = (fx.vt - fx.dashCue) / 200;
     for (const d of [-6, 0, 6]) brush(x, [[X - p.fx * (12 + 20 * k) + d * p.fy, Y - p.fy * (12 + 20 * k) - d * p.fx], [X - p.fx * 9 + d * p.fy * 0.8, Y - p.fy * 9 - d * p.fx * 0.8]], 1.8 * (1 - k) + 0.3, CO.craterD);
   }
   const blink = p.inv > 0 && fx.vt - fx.hurtT < PL.inv * 1000 && !reduceMotion && (fl(fx.vt / 70) & 1);
-  if (!blink) put(x, kidSpr(f), X, Y, 0, fx.face, 1);
-}
-function drawTele(x, t, k, trail) { // a boss attack shown on the ground before it lands: a ring for a stomp, a lane for a charge
-  k = clamp(k, 0, 1);
-  if (t.kind === "stomp") {
-    x.fillStyle = rgba(CO.accent, 0.16 + 0.14 * k); x.fill(pEll(t.x, t.y, t.R * k, t.R * k * 0.92));
-    cordLine(x, pEll(t.x, t.y, t.R, t.R * 0.92), 1.8, CO.accent, 0.6);
-  } else at(x, t.x, t.y, 1, Math.atan2(t.uy, t.ux), () => {
-    x.fillStyle = rgba(CO.accent, trail ? 0.12 : 0.16 + 0.14 * k); x.fillRect(0, -t.w, t.len * (trail ? 1 : k), 2 * t.w);
-    if (!trail) { cordLine(x, pRR(0, -t.w, t.len, 2 * t.w, 6), 1.8, CO.accent, 0.6); for (let i = 1; i < 4; i++) { const X = t.len * i / 4; ST.line(x, pPoly([[X - 8, -t.w * 0.5], [X, 0], [X - 8, t.w * 0.5]], true), 2, CO.accent); } }
+  if (!blink) at(x, X, Y, pop, 0, () => {
+    x.scale(face, 1);
+    if (form >= 7) { // the ship hovers and tilts toward its aim
+      const hov = -12 + (reduceMotion ? 0 : Math.sin(now / 260) * 1.6);
+      put(x, shipSpr(!reduceMotion && (fl(now / 90) & 1)), 0, hov, la * 0.4);
+    } else if (form >= 4) {
+      const b = f % 2 ? -1 : 0;
+      put(x, roboSpr(f, form), 0, 0);
+      put(x, roboGunSpr(), ROBO_SH[0], ROBO_SH[1] + b, la);
+    } else {
+      const b = f % 2 ? -0.8 : 0;
+      put(x, kidSpr(f), 0, 0);
+      put(x, weaponSpr(form, true), KID_SH[0] * KID_K, (KID_SH[1] + b) * KID_K, la);
+    }
   });
+  if (fx.vt - fx.lifeT < 2200 && !R.dead) { // a spare battery's shield while it lasts
+    const k = (fx.vt - fx.lifeT) / 2200, r = (form >= 4 ? 30 : 22) + (reduceMotion ? 0 : Math.sin(now / 120) * 1.2);
+    x.globalAlpha = k > 0.8 && !reduceMotion ? (fl(now / 90) & 1 ? 0.3 : 0.8) : 0.85;
+    cordLine(x, pEll(X, Y - (form >= 4 ? 14 : 8), r, r), 1.8, CO.crysL, 0.5); x.globalAlpha = 1;
+  }
 }
-function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, comets, light crystals, the child's weapons
+function drawHaz(x, h, now) { // a boss attack shown on the ground before it lands (coral), then the attack itself
+  const t = run.wt, k = clamp((t - h.born) / Math.max(0.01, h.at - h.born), 0, 1);
+  if (h.k === "zone") {
+    if (h.landed) return;
+    if (h.mark === "summon") { const r = h.R * (0.7 + 0.3 * k); cordLine(x, pEll(h.x, h.y, r, r * 0.8), 1.8, CO.jelly, 0.5); return; } // a jelly comes out here
+    x.fillStyle = rgba(CO.accent, 0.14 + 0.16 * k); x.fill(pEll(h.x, h.y, h.R * k, h.R * k * 0.92));
+    cordLine(x, pEll(h.x, h.y, h.R, h.R * 0.92), 1.8, CO.accent, 0.6);
+    if (h.mark === "meteor") { const s = 0.7 + 0.3 * k; put(x, meteorSpr(), h.x + (1 - k) * 40, h.y - (1 - k) * 170, 0, s, s); } // the rock falls on its mark
+  } else if (h.k === "lane") {
+    if (!h.landed) at(x, h.x, h.y, 1, Math.atan2(h.uy, h.ux), () => {
+      x.fillStyle = rgba(CO.accent, 0.14 + 0.16 * k); x.fillRect(0, -h.w, h.len * k, 2 * h.w);
+      cordLine(x, pRR(0, -h.w, h.len, 2 * h.w, Math.min(6, h.w)), 1.8, CO.accent, 0.6);
+      for (let i = 1; i < 4; i++) { const X = h.len * i / 4, w = Math.min(h.w * 0.5, 9); ST.line(x, pPoly([[X - 8, -w], [X, 0], [X - 8, w]], true), 2, CO.accent); }
+    });
+    else if (h.mark === "spikes") for (let i = 0; i < 8; i++) { const d = 26 + i * (h.len - 30) / 7, s = i & 1 ? 1 : -1; crystal(x, h.x + h.ux * d - h.uy * s * 4, h.y + h.uy * d + h.ux * s * 4, 15 + (i % 3) * 5, s * 0.2); }
+  } else { // the beam sweep: a coral fan with an arrow the way it turns, then the beam itself
+    if (!h.landed) {
+      const a1 = h.a0 + h.dir * h.spin, lo = Math.min(h.a0, a1), hi = Math.max(h.a0, a1), fan = P2();
+      fan.moveTo(h.x, h.y); fan.arc(h.x, h.y, h.len, lo, hi); fan.closePath();
+      x.fillStyle = rgba(CO.accent, 0.1 + 0.12 * k); x.fill(fan);
+      cordLine(x, pLine(h.x + Math.cos(h.a0) * h.r0, h.y + Math.sin(h.a0) * h.r0, h.x + Math.cos(h.a0) * h.len, h.y + Math.sin(h.a0) * h.len), 2.2, CO.accent, 0.6);
+      const ra = h.len * 0.6, arc = P2(); arc.arc(h.x, h.y, ra, h.a0 + h.dir * 0.12, a1 - h.dir * 0.12, h.dir < 0);
+      cordLine(x, arc, 2.2, CO.accent, 0.6);
+      const ae = a1 - h.dir * 0.12; at(x, h.x + Math.cos(ae) * ra, h.y + Math.sin(ae) * ra, 1, ae + h.dir * Math.PI / 2, () => shape(x, pPoly([[9, 0], [-5, -7], [-5, 7]]), CO.accent, 1.2));
+    } else {
+      const a = h.a0 + h.dir * h.spin * clamp((t - h.at) / (h.end - h.at), 0, 1);
+      at(x, h.x, h.y, 1, a, () => { shape(x, pRR(h.r0, -h.w, h.len - h.r0, 2 * h.w, h.w), CO.accent, 1.4); x.fillStyle = C(CO.accentL); x.fill(pRR(h.r0 + 4, -h.w * 0.32, h.len - h.r0 - 8, h.w * 0.64, h.w * 0.32)); });
+    }
+  }
+}
+function drawAbove(x, now) { // what shows in the dark: boss attacks, eyes, comets, light crystals, the child's weapons
   const R = run, cx = cam.x, cy = cam.y, rv = fx.rv, wr = wRect(), on = (X, Y, m) => X > wr.x - m && X < wr.x + wr.w + m && Y > wr.y - m && Y < wr.y + wr.h + m;
-  for (const e of R.foes) if (e.boss && !e.dead) { if (e.tel) drawTele(x, e.tel, e.t / e.tel.T); if (e.trail) drawTele(x, e.trail, 1, true); }
+  for (const h of R.haz) drawHaz(x, h, now);
+  for (const e of R.foes) { // a volley about to come: coral arrowheads move out the way its shots will fly
+    if (!e.boss || e.dead || e.st !== "tele" || (e.tel.kind !== "spray" && e.tel.kind !== "burst")) continue;
+    const k = clamp(e.t / e.tel.T, 0, 1), A = ATK[e.tel.kind], X = IX(e), Y = IY(e) - (e.kind === "eye" || e.kind === "bird" ? 16 : 0), sp = e.tel.kind === "spray";
+    const a0 = Math.atan2(run.p.y - e.y, run.p.x - e.x), w = sp ? 6.5 : 5;
+    for (let i = 0; i < A.n; i++) {
+      const a = sp ? a0 + (i - (A.n - 1) / 2) * A.fan / (A.n - 1) : e.ph + i * TAU / A.n;
+      for (const r of sp ? [e.r + 14 + 30 * k, e.r + 30 + 30 * k] : [e.r + 10 + 16 * k]) at(x, X + Math.cos(a) * r, Y + Math.sin(a) * r, 1, a, () => ST.line(x, pPoly([[-w, -w], [0, 0], [-w, w]], true), 2.2, CO.accent));
+    }
+  }
+  for (const e of R.foes) if (e.boss && !e.dead && e.trail) { const t = e.trail; at(x, t.x, t.y, 1, Math.atan2(t.uy, t.ux), () => { x.fillStyle = rgba(CO.accent, 0.12); x.fillRect(0, -t.w, t.len, 2 * t.w); }); }
   for (const e of R.foes) {
     if (e.dead) continue;
     const X = IX(e), Y = IY(e);
@@ -1789,8 +2324,6 @@ function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, comets
     else put(x, eyesSpr(EYES[e.kind] || 2, 0), X, Y - 1.6);
   }
   for (const m of R.motes) { const X = IX(m), Y = IY(m); if (on(X, Y, 20)) put(x, moteSpr(m.size), X, Y + Math.sin(now / 240 + m.ph) * 1.5); }
-  for (const s of R.shots) { const X = IX(s), Y = IY(s); if (s.kind === "spark") put(x, sparkSpr(), X, Y, Math.atan2(s.vy || 0, s.vx || 1)); else put(x, fudaSpr(), X, Y, reduceMotion ? 0 : now / 60); }
-  if (R.w.fly && !R.dead) { const W = WPN.fly[R.w.fly - 1], rho = flyR(lightR(R.light)), a0 = R.flyPA + (R.flyA - R.flyPA) * A; for (let i = 0; i < W.n; i++) { const a = a0 + i * TAU / W.n; put(x, flySpr(), cx + Math.cos(a) * rho, cy + Math.sin(a) * rho); } }
   for (const g of R.rings) { // the shockwave: a teal ring between an ink edge and a light inner line, fading as it spreads
     const r = g.pr + (g.r - g.pr) * A, k = clamp(r / g.max, 0, 1);
     x.globalAlpha = 1 - 0.65 * k;
@@ -1798,7 +2331,32 @@ function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, comets
     x.lineWidth = 2.4; x.strokeStyle = C(CO.crys); x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.stroke();
     x.lineWidth = 1; x.strokeStyle = C(CO.text); x.beginPath(); x.arc(cx, cy, Math.max(0, r - 2.2), 0, TAU); x.stroke(); x.globalAlpha = 1;
   }
+  for (const b of fx.beams) { // the beam gun's line, thinning away
+    const k = (fx.vt - b.t) / 150; if (k < 0 || k > 1) continue;
+    const w = b.w * (1 - 0.7 * k);
+    at(x, b.x, b.y, 1, b.a, () => { shape(x, pRR(8, -w, b.len - 8, 2 * w, w), CO.crys, 1.2); x.fillStyle = C(CO.text); x.fill(pRR(12, -w * 0.35, b.len - 16, w * 0.7, w * 0.35)); });
+  }
+  for (const s of R.shots) { const X = IX(s), Y = IY(s); put(x, SHOT_SPR[s.kind](), X, Y, Math.atan2(s.vy || 0, s.vx || 1)); }
+  const F = FORMS[R.form];
+  if (F.drones && !R.dead) { const rho = droneR(lightR(R.light)), a0 = R.drPA + (R.drA - R.drPA) * A; for (let i = 0; i < F.drones; i++) { const a = a0 + i * TAU / F.drones; put(x, flySpr(), cx + Math.cos(a) * rho, cy + Math.sin(a) * rho - 8, 0, 1.4, 1.4); } }
+  for (const z of fx.zaps) { // a drone's zap: a gold zigzag to its target
+    const k = (fx.vt - z.t) / 110; if (k < 0 || k > 1) continue;
+    const dx = z.x1 - z.x0, dy = z.y1 - z.y0 + 8, d = Math.hypot(dx, dy) || 1, nx = -dy / d * 3.4, ny = dx / d * 3.4, pts = [[z.x0, z.y0 - 8]];
+    for (let i = 1; i < 4; i++) pts.push([z.x0 + dx * i / 4 + nx * (i % 2 ? 1 : -1), z.y0 - 8 + dy * i / 4 + ny * (i % 2 ? 1 : -1)]);
+    pts.push([z.x1, z.y1]); cordLine(x, pPoly(pts, true), 1.6, CO.goldL, 0.5);
+  }
+  for (const b of fx.booms) { // a blast: a small flat flash, then a ring that opens and fades (a landing boss attack: a pale disc)
+    const k = (fx.vt - b.t) / (b.big ? 300 : 220); if (k < 0 || k > 1) continue;
+    const r = b.r * (0.45 + 0.55 * easeOut(k)), ry = r * (b.big ? 0.92 : 1);
+    if (b.big) { x.globalAlpha = 0.5 * (1 - k); x.fillStyle = C(CO.text); x.fill(pEll(b.x, b.y, r, ry)); }
+    else if (k < 0.3) { const q = Math.max(2, b.r * 0.42 * (1 - k / 0.3)); shape(x, pEll(b.x, b.y, q, q), CO.goldL, 1); }
+    x.globalAlpha = 1 - k; cordLine(x, pEll(b.x, b.y, r, ry), b.big ? 1.4 : 1.1, b.big ? CO.pebble : CO.gold, 0.4); x.globalAlpha = 1;
+  }
+  for (const b of R.eb) { const X = IX(b), Y = IY(b); if (on(X, Y, 10)) put(x, ebSpr(b.r), X, Y); }
+  if (R.part) { const P = R.part, X = IX(P), Y = IY(P); put(x, partSpr(), X, Y - 10, reduceMotion ? 0 : now / 160); }
   partsDraw(x);
+  if (fx.vt - fx.formT < 380) { const k = (fx.vt - fx.formT) / 380, r = 18 + 140 * easeOut(k); x.globalAlpha = 1 - k; cordLine(x, pEll(cx, cy - 8, r, r), 3, CO.goldL, 0.6); x.globalAlpha = 1; }
+  if (fx.vt - fx.lifeT < 460) { const k = (fx.vt - fx.lifeT) / 460, r = 18 + 230 * easeOut(k); x.globalAlpha = 1 - k; cordLine(x, pEll(cx, cy - 6, r, r), 3, CO.crysL, 0.6); x.globalAlpha = 1; }
   const b = R.foes.find(e => e.boss && !e.dead); // eye guidance: an arrow at the light's edge points at a boss in the dark
   if (b && !R.dead) {
     const dx = IX(b) - cx, dy = IY(b) - cy, d = Math.hypot(dx, dy) || 1;
@@ -1816,36 +2374,45 @@ function drawCues(x) { // input feedback drawn at once: the stick under the fing
   const fk = (fx.vt - fx.fizzle) / 160;
   if (fk >= 0 && fk < 1) cordLine(x, pEll(cam.sx, cam.sy, 15, 15), 1.2, CO.pack, 0.5);
 }
-function drawHud(x, now) { // one panel on two rods: the night's clock, the level and its bar; a boss's name and life under it
+function drawHud(x, now) { // one panel on two rods: the night's clock, the spare batteries, the level and its bar; a boss under it
   const R = run, s = hudS(), wide = L.wide, sx = wide ? sideX(-1) : 180, sy = vTop() + (wide ? 64 : 22), a = fx.sa;
-  for (const hx of [-60, 60]) strut(x, sx + s * (hx * Math.cos(a) - 2 * Math.sin(a)), beamY(), sy + s * (hx * Math.sin(a) + 2 * Math.cos(a)));
+  for (const hx of [-70, 70]) strut(x, sx + s * (hx * Math.cos(a) - 2 * Math.sin(a)), beamY(), sy + s * (hx * Math.sin(a) + 2 * Math.cos(a)));
   at(x, sx, sy, s, a, () => {
     put(x, signSpr(), 0, 0);
-    text(x, mmss(R.wt), 0, 27, 30, CO.text, { w: 900, deep: CO.panelD });
-    text(x, S("lv") + R.lv, -68, 50, 15, CO.text, { a: "left", w: 800 });
-    const bx = -28, bw = 98, k = R.card ? 1 : clamp(R.xp / R.need, 0, 1), bar = pCut(bx, 45, bw, 10, 2);
+    text(x, mmss(R.wt), -22, 27, 30, CO.text, { w: 900, deep: CO.panelD });
+    for (let i = 0; i < LIVES; i++) { // a spent battery goes dark with a little drop
+      const full = i < R.lives, k = !full && i === R.lives && fx.vt - fx.lifeT < 400 ? 1 - (fx.vt - fx.lifeT) / 400 : 0;
+      put(x, battSpr(full), 56 + i * 20, 26 - 6 * k);
+    }
+    text(x, S("lv") + R.lv, -86, 50, 15, CO.text, { a: "left", w: 800 });
+    const bx = -46, bw = 132, k = R.card ? 1 : clamp(R.xp / R.need, 0, 1), bar = pCut(bx, 45, bw, 10, 2);
     x.fillStyle = C(CO.panelD); x.fill(bar);
     if (k > 0.02) { x.fillStyle = C(R.card && !reduceMotion && (fl(now / 160) & 1) ? CO.goldL : CO.crys); x.fill(pCut(bx + 2, 47, (bw - 4) * k, 6, 1.5)); }
     ST.edge(x, bar, 1.1);
   });
   const b = R.foes.find(e => e.boss && !e.dead);
-  if (b) {
-    const by = sy + 76 * s;
+  if (b) { // the boss: its name, its life, and the badge of what defeating it gives (the next form, or the dawn)
+    const by = sy + 76 * s, nf = b.boss === LAST_BOSS ? -1 : Math.min(R.form + 1, FORMS.length - 1);
     for (const hx of [-76, 76]) strut(x, sx + hx * s, sy + 66 * s, by + 4 * s);
     at(x, sx, by, s, 0, () => {
       put(x, plankSpr(212, 44), 0, 0);
-      text(x, S("b_" + b.kind), -94, 14, 15, CO.text, { a: "left", w: 800, max: 188 });
-      const k = clamp(b.hp / b.max, 0, 1), bar = pCut(-94, 26, 188, 10, 2);
-      x.fillStyle = C(CO.panelD); x.fill(bar); if (k > 0.01) { x.fillStyle = C(CO.accent); x.fill(pCut(-92, 28, 184 * k, 6, 1.5)); } ST.edge(x, bar, 1.1);
+      text(x, S("b_" + b.kind), -94, 14, 15, CO.text, { a: "left", w: 800, max: 148 });
+      const k = clamp(b.hp / b.max, 0, 1), bar = pCut(-94, 26, 156, 10, 2);
+      x.fillStyle = C(CO.panelD); x.fill(bar); if (k > 0.01) { x.fillStyle = C(CO.accent); x.fill(pCut(-92, 28, 152 * k, 6, 1.5)); } ST.edge(x, bar, 1.1);
+      put(x, formIcon(nf), 86, 22, 0, 0.92, 0.92);
     });
   }
 }
-function drawNote(x, now) { // one short line at the top of the light, where the eyes already are
+function drawNote(x, now) { // one short line at the top of the light, where the eyes already are (a new form gets two)
   const n = fx.note; if (!n) return;
   const age = now - n.t; if (age > 2000 || age < 0) { if (age > 2000) fx.note = null; return; }
-  const u = L.u, s = u * (age < 180 ? lerp(0.85, 1, easeBack(age / 180)) : 1), y = cam.sy - clamp(fx.rv * 0.6, 70, 130);
+  const u = L.u, s = u * (age < 180 ? lerp(0.85, 1, easeBack(age / 180)) : 1), y = cam.sy - clamp(fx.rv * 0.6, 70, 130) - (n.key === "nForm" ? 10 : 0);
+  const o = { f: ST.title, w: 900, ol: CO.ink, ow: 0.26, deep: CO.ink, max: 330 };
   x.globalAlpha = age > 1700 ? 1 - (age - 1700) / 300 : 1;
-  at(x, 180, y, s, 0, () => text(x, S(n.key, n.n), 0, 0, 24, n.key === "nBoss" ? CO.accent : CO.text, { f: ST.title, w: 900, ol: CO.ink, ow: 0.26, deep: CO.ink, max: 330 }));
+  at(x, 180, y, s, 0, () => {
+    if (n.key === "nForm") { text(x, S("nPow"), 0, -14, 26, CO.goldL, o); text(x, S("f_" + n.n), 0, 16, 22, CO.text, o); }
+    else text(x, S(n.key, n.n), 0, 0, 24, n.key === "nBoss" ? CO.accent : n.key === "nLife" ? CO.crysL : CO.text, o);
+  });
   x.globalAlpha = 1;
 }
 function teachStep(R) { // first-run lines, each once per run, shown under the child
@@ -1856,6 +2423,7 @@ function teachStep(R) { // first-run lines, each once per run, shown under the c
   if (teach.on && R.wt > 3) show("tLight");
   if (teach.on && R.picks > 0 && L0.tLight && (!fx.line || fx.vt - fx.line.t > 3200)) show("tKill");
   if (teach.dash && R.wt > 5) show(finePointer ? "tDashK" : "tDash");
+  if (R.bossNo === 1 && R.bossAlive && runsOf() < 3 && (!fx.line || fx.vt - fx.line.t > 3000)) show("tBoss"); // the first boss of a new player's first runs
 }
 function drawTeach(x, now) {
   const l = fx.line; if (!l || state !== "play") return;
@@ -1876,14 +2444,14 @@ function drawCards(x, now) { // the level-up choice: three panels over a dimmed 
   if (finePointer) text(x, S("hint123"), 180, cardBox(2).y + 106 * u, 15 * u, CO.text, { ol: CO.ink, ow: 0.3 });
 }
 function drawCard(x, k, sel, now) {
-  const R = run, lv = isWpn(k) ? R.w[k] : (R.ps[k] || 0), isNew = k !== "candle" && lv === 0;
+  const R = run, lv = R.ps[k] || 0, isNew = k !== "candle" && lv === 0;
   put(x, cardSpr(), 0, 0);
   put(x, iconSpr(k), -112, 42);
-  const n = k === "candle" ? 0 : maxLv(k), x0 = 140 - (n - 1) * 10.5; // level pips end at the same edge on every card
-  text(x, S("w_" + k), -78, 27, 22, CO.text, { a: "left", f: ST.title, w: 900, max: Math.min(140, x0 - 4.5 - 4 + 78) });
-  text(x, isWpn(k) && lv > 0 ? S(GAIN[k][lv]) : S("d_" + k), -78, 58, 15, CO.sub, { a: "left", w: 800, max: 222 });
+  const n = k === "candle" ? 0 : CMAX, x0 = 140 - (n - 1) * 10.5; // level pips end at the same edge on every card
+  text(x, S("w_" + k), -78, 27, 22, CO.text, { a: "left", f: ST.title, w: 900, max: Math.min(150, x0 - 4.5 - 4 + 78) });
+  text(x, S("d_" + k), -78, 58, 15, CO.sub, { a: "left", w: 800, max: 222 });
   if (isNew) seal(x, 108, 27, S("isNew"), 999, 14); // something new: a coral tag where the level pips would be
-  else for (let i = 0; i < n; i++) { // level pips: owned ones gold, the one this card adds coral, the rest dark (eight for a weapon)
+  else for (let i = 0; i < n; i++) { // level pips: owned ones gold, the one this card adds coral, the rest dark
     const X = x0 + i * 10.5, p = pPoly([[X, 20.5], [X + 4.5, 26], [X, 31.5], [X - 4.5, 26]]);
     x.fillStyle = C(i < lv ? CO.gold : i === lv ? CO.accent : CO.off); x.fill(p); ST.edge(x, p, 0.8);
   }
@@ -1905,7 +2473,7 @@ function drawTitle(x, now) { // the title hangs from the truss on two rods; the 
     text(x, ja ? S("titleEn") : STRINGS.ja.title, 0, 88, 16, CO.accent, { w: 800 });
     ST.line(x, pLine(-80, 106, 80, 106), 1.4, CO.panelL);
     text(x, S(finePointer ? "how1k" : "how1"), 0, 130, 17, CO.text, { max: 262 });
-    text(x, S("how2"), 0, 154, 16, CO.accent, { max: 262 });
+    text(x, S("how2"), 0, 154, 16, CO.goldL, { max: 262 });
   });
   const b = bestOf();
   if (b > 0) { // the longest night so far: a small panel under the title, or in the right side area
@@ -1934,18 +2502,21 @@ function drawOver(x, now) {
     if (age > RES.head) text(x, S(r.won ? "dawn" : "over"), 0, 40, 30, r.won ? CO.goldL : CO.text, Object.assign({ max: 272 }, big));
     if (age > RES.count) { text(x, S("rTime"), 0, 74, 16, CO.sub, {}); text(x, mmss(r.time * easeOut((age - RES.count) / RES.countDur)), 0, 116, 52, CO.text, big); }
     if (age > RES.rows) {
-      const row = (ry, k, v) => { text(x, S(k), -134, ry, 17, CO.sub, { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, CO.text, { a: "right", f: ST.title, w: 900 }); x.fillStyle = C(CO.panelL); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 15, 2, 2); };
-      row(170, "rKills", r.kills); row(204, "rLv", r.lv);
+      const row = (ry, k, v, max) => { const lw = textW(x, S(k), 17, { w: 700 }); text(x, S(k), -134, ry, 17, CO.sub, { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, CO.text, { a: "right", f: ST.title, w: 900, max: max || 268 - lw - 12 }); x.fillStyle = C(CO.panelL); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 14, 2, 2); };
+      row(158, "rForm", S("f_" + FORMS[r.form].k)); row(188, "rKills", r.kills); row(218, "rLv", r.lv);
       if (play && (r.newBest || r.best > 0)) { // no "BEST 0:00" on a first record
-        row(238, "rBest", r.newBest ? null : mmss(r.best));
-        if (r.newBest) { if (age > RES.best) seal(x, 70, 238, S("newBest"), age - RES.best); }
+        row(248, "rBest", r.newBest ? null : mmss(r.best));
+        if (r.newBest) { if (age > RES.best) seal(x, 70, 248, S("newBest"), age - RES.best); }
         else { // right-aligned just left of the best time, so a long English line never runs into it
           const bw = textW(x, mmss(r.best), 20, { f: ST.title, w: 900 });
-          text(x, r.time === r.best ? S("tieBest") : S("toBest", mmss(r.best - r.time)), 134 - bw - 14, 238, 17, CO.accent, { a: "right", max: 150 });
+          text(x, r.time === r.best ? S("tieBest") : S("toBest", mmss(r.best - r.time)), 134 - bw - 14, 248, 17, CO.accent, { a: "right", max: 150 });
         }
       }
     }
-    if (play && age > RES.goal && r.goal) { const gt = S(r.goal.k, r.goal.b ? S("b_" + r.goal.b) : r.goal.n), tw = textW(x, gt, 17); hand(x, -tw / 2 - 6, 290, Math.PI / 2, 0.75); text(x, gt, -tw / 2 + 6, 290, 17, CO.goldL, { a: "left" }); }
+    if (play && age > RES.goal && r.goal) {
+      const g = r.goal, gt = S(g.k, g.b ? S("b_" + g.b) : g.f ? S("f_" + g.f) : g.n), tw = Math.min(250, textW(x, gt, 17));
+      hand(x, -tw / 2 - 6, 296, Math.PI / 2, 0.75); text(x, gt, -tw / 2 + 6, 296, 17, CO.goldL, { a: "left", max: 250 });
+    }
   });
   if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, 1); if (retryReady()) pointAt(x, UI.retry, now); }
 }
@@ -1976,16 +2547,20 @@ function draw(now) {
   if (DEMO) drawDemoLabel(x); else drawPlaques(x);
   textEnd();
 }
-function visualStep(dt) { // springs, the walk cycle, the heartbeat, teaching lines (the rules never read them)
+function visualStep(dt) { // springs, the walk cycle, the aim, the heartbeat, teaching lines (the rules never read them)
   if (!dt || !run) return;
   const R = run, dead = R.dead, p = R.p;
   // the light on screen follows the rule value with a spring; the death pulls it to nothing, the dawn opens it wide
   const tgt = dead ? (dead.won ? Math.max(L.W, L.H) * 1.3 : 0) : lightR(R.light) + (!reduceMotion && fx.vt - fx.lvT < 420 ? 10 * Math.sin(Math.PI * (fx.vt - fx.lvT) / 420) : 0);
   const kk = dead && !dead.won ? 260 : dead ? 14 : 120, dd = dead && !dead.won ? 30 : dead ? 6 : 19;
   fx.rvv += ((tgt - fx.rv) * kk - fx.rvv * dd) * dt; fx.rv += fx.rvv * dt; if (fx.rv < 0) { fx.rv = 0; fx.rvv = 0; }
-  const sp = Math.hypot(p.vx, p.vy);
-  if (sp > 5 && !R.card && !dead) { fx.walk += dt * sp / 9; if (Math.abs(p.vx) > 4) fx.face = p.vx < 0 ? -1 : 1; }
+  const sp = Math.hypot(p.vx, p.vy), aiming = fx.vt - fx.aimT < 450;
+  if (sp > 5 && !R.card && !dead) fx.walk += dt * sp / 9;
+  if (!dead && !R.card) { if (aiming) fx.face = Math.cos(fx.aim) < 0 ? -1 : 1; else if (Math.abs(p.vx) > 4) fx.face = p.vx < 0 ? -1 : 1; } // face what it shoots, else where it goes
+  const la = fx.vt - fx.aimT < 900 ? clamp(Math.atan2(Math.sin(fx.aim), Math.abs(Math.cos(fx.aim))), -1.1, 1.1) : 0;
+  fx.aimL += (la - fx.aimL) * Math.min(1, dt * 16);
   fx.sv += (-50 * fx.sa - 3.5 * fx.sv) * dt; fx.sa += fx.sv * dt;
+  for (const k of ["beams", "zaps", "booms"]) { const a = fx[k]; let j = 0; for (const b of a) if (fx.vt - b.t < 300) a[j++] = b; a.length = j; }
   if (loud() && !dead && !R.card && (state === "play" || state === "demo") && R.light < R.lmax * 0.25) { // a heartbeat while the light is low
     fx.heartT -= dt; if (fx.heartT <= 0) { fx.heartT = 0.5 + 1.2 * R.light / (R.lmax * 0.25); sfx.heart(); }
   } else fx.heartT = 0;
@@ -2218,7 +2793,7 @@ window.__game = {
   info() { // for balance probes: the run in plain numbers
     const R = run; if (!R) return null;
     return { mode: R.mode, wt: +R.wt.toFixed(2), light: +R.light.toFixed(1), lmax: R.lmax, lv: R.lv, kills: R.kills, foes: R.foes.length, hurts: R.hurts, picks: R.picks,
-      w: Object.assign({}, R.w), ps: Object.assign({}, R.ps), bossKills: R.bossKills, dead: R.dead && R.dead.reason, card: !!R.card,
+      form: R.form, lives: R.lives, livesUsed: R.livesUsed, formLog: R.formLog.map(l => l.slice()), ps: Object.assign({}, R.ps), bossKills: R.bossKills, dead: R.dead && R.dead.reason, card: !!R.card,
       xpAll: R.xpAll, xpGot: R.xpGot, lostHit: Math.round(R.lostHit), lostDrain: Math.round(R.lostDrain), dealt: Math.round(R.dealt), bossLog: R.bossLog.map(l => l.slice()) };
   }
 };

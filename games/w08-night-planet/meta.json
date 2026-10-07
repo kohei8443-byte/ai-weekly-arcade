@@ -3,10 +3,10 @@
   "week": 8,
   "title_ja": "よるの惑星",
   "title_en": "Night Planet",
-  "tagline_ja": "手に持ったライトは、命で、武器。夜の惑星で、夜明けまで生きのびる。",
-  "tagline_en": "Your lamp is your life and your weapon. Survive the night planet until dawn.",
-  "how_to_play_ja": "ドラッグ（PC はマウスを押したまま、または WASD・矢印キー）で歩くだけで、ライトの光と武器が近くの生きものを自動で倒します。生きものが落とす光の結晶を拾うと光がもどり、たまると 3 枚の札から 1 枚えらんで強くなれます。光が消えたら終わりです。",
-  "how_to_play_en": "Just drag to walk (on PC, hold the mouse or use WASD / arrows); your lamp's light and weapons hit nearby creatures on their own. Pick up the light crystals they drop to refill your light, and when the bar fills, choose one of three cards to grow stronger. If your light goes out, the run ends; last until dawn to win.",
+  "tagline_ja": "手に持ったライトは、命で、武器。ボスをたおして変身しながら、夜明けまで生きのびる。",
+  "tagline_en": "Your lamp is your life and your weapon. Defeat bosses, transform, and survive the night planet until dawn.",
+  "how_to_play_ja": "ドラッグ（PC はマウスを押したまま、または WASD・矢印キー）で歩くだけで、ライトの光と武器が近くの生きものを自動で倒します。光の結晶を拾うと光がもどり、レベルアップで札をえらび、ボスをたおすと部品で変身して強くなります（最後は宇宙船）。光が消えても予備の電池が 2 個あり、最後のボスをたおすと夜明けで勝ちです。",
+  "how_to_play_en": "Just drag to walk (on PC, hold the mouse or use WASD / arrows); your lamp's light and weapons hit nearby creatures on their own. Pick up light crystals to refill your light, choose a card at each level-up, and grab the part each boss drops to transform, all the way up to a spaceship. You have two spare batteries if your light goes out; defeat the final boss to reach dawn and win.",
   "controls": [
     "drag to move",
     "hold the mouse to walk toward the cursor",
@@ -21,6 +21,7 @@
     "survivor",
     "horde-survival",
     "auto-attack",
+    "boss-fights",
     "roguelite",
     "space",
     "sci-fi",
@@ -28,6 +29,6 @@
     "mobile-friendly"
   ],
   "session_length_sec": 600,
-  "video_hook_ja": "このライトが消えたら、終わり。",
+  "video_hook_ja": "ボスをたおすたびに変身。最後は宇宙船。",
   "quality_bar": 1
 }
