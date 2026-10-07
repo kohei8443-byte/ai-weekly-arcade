@@ -603,35 +603,45 @@ const store = makeStore(SLUG + "-");
 
 // The rules run in fixed steps of 1/120 s counted from the run clock, so a run replays the same at any frame rate.
 const HZ = 120, DT = 1 / HZ;
-const PL = { spd: 74, r: 8, dash: 260, dashT: 0.17, dashInv: 0.3, dashCd: 1.3, inv: 0.75 };
+const PL = { spd: 74, r: 8, dash: 260, dashT: 0.17, dashInv: 0.3, dashCd: 1.3, inv: 0.9 };
 // The lantern's light is health, sight and weapon reach at once: it drains all the time and comes back from the
 // light drops of defeated yokai. Its radius on screen is lightR(light).
-const LT = { start: 100, max: 100, drain: 1.6, ramp: 0.25, r0: 52, rk: 1.16, cap: 214 };
+const LT = { start: 100, max: 100, drain: 1.6, ramp: 0.2, r0: 52, rk: 1.16, cap: 214 };
 const lightR = l => Math.min(LT.cap, LT.r0 + LT.rk * Math.max(0, l));
 const KIND = {
-  kage: { hp: 3, spd: 38, r: 9, dmg: 5, xp: 1, lt: 1.2 },
-  hitotsu: { hp: 5, spd: 44, r: 10, dmg: 6, xp: 1, lt: 1.4, hop: 1.1 },
-  onibi: { hp: 2, spd: 96, r: 7, dmg: 5, xp: 1, lt: 0.9 },
-  kasa: { hp: 16, spd: 32, r: 12, dmg: 9, xp: 3, lt: 3.4, hop: 1.4 },
-  nyudo: { hp: 260, spd: 24, r: 30, dmg: 10, xp: 20, lt: 30, boss: 1, atk: ["stomp"] },
-  kumo: { hp: 600, spd: 36, r: 28, dmg: 10, xp: 20, lt: 30, boss: 2, atk: ["lunge"] },
-  oni: { hp: 1300, spd: 30, r: 34, dmg: 12, xp: 30, lt: 40, boss: 3, atk: ["stomp", "lunge"] }
+  kage: { hp: 3, spd: 38, r: 9, dmg: 4, xp: 1, lt: 1.2 },
+  hitotsu: { hp: 5, spd: 44, r: 10, dmg: 5, xp: 1, lt: 1.4, hop: 1.1 },
+  onibi: { hp: 2, spd: 96, r: 7, dmg: 4, xp: 1, lt: 0.9 },
+  kasa: { hp: 16, spd: 32, r: 12, dmg: 8, xp: 3, lt: 3.4, hop: 1.4 },
+  nyudo: { hp: 300, spd: 24, r: 30, dmg: 10, xp: 20, lt: 30, boss: 1, atk: ["stomp"] },
+  kumo: { hp: 1000, spd: 36, r: 28, dmg: 10, xp: 20, lt: 30, boss: 2, atk: ["lunge"] },
+  oni: { hp: 2400, spd: 30, r: 34, dmg: 12, xp: 30, lt: 40, boss: 3, atk: ["stomp", "lunge"] }
 };
 const BOSSES = [{ at: 180, kind: "nyudo" }, { at: 360, kind: "kumo" }, { at: 600, kind: "oni" }];
-const ATK = { stomp: { tele: 1.1, R: 110, dmg: 22 }, lunge: { tele: 0.9, len: 300, spd: 430, dmg: 20 } };
+const ATK = { stomp: { tele: 1, R: 110, dmg: 28 }, lunge: { tele: 0.9, len: 300, spd: 430, dmg: 26 } };
 const FOE_CAP = 220, FOE_HARD = 400;
-// Weapons fire by themselves and only reach inside the light; five levels each (index = level - 1)
+// Weapons fire by themselves and only reach inside the light; eight levels each (index = level - 1). The last three
+// levels are big steps, so a long night ends with the lantern far stronger than the yokai (kouhei, 2026-10-07)
 const WPN = {
-  spark: [{ n: 1, cd: 0.85, dmg: 4, pierce: 0 }, { n: 1, cd: 0.75, dmg: 5, pierce: 0 }, { n: 2, cd: 0.72, dmg: 5, pierce: 0 }, { n: 2, cd: 0.62, dmg: 6, pierce: 1 }, { n: 3, cd: 0.52, dmg: 7, pierce: 1 }],
-  fly: [{ n: 2, dmg: 2 }, { n: 3, dmg: 2 }, { n: 3, dmg: 3 }, { n: 4, dmg: 3 }, { n: 5, dmg: 4 }],
-  bell: [{ cd: 3.4, dmg: 4, kb: 120 }, { cd: 3.2, dmg: 5, kb: 130 }, { cd: 3, dmg: 6, kb: 140 }, { cd: 2.6, dmg: 7, kb: 150 }, { cd: 2.4, dmg: 9, kb: 170 }],
-  fuda: [{ n: 1, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 11, pierce: 3 }, { n: 3, cd: 1.15, dmg: 11, pierce: 3 }, { n: 3, cd: 0.9, dmg: 13, pierce: 4 }]
+  spark: [{ n: 1, cd: 0.85, dmg: 4, pierce: 0 }, { n: 1, cd: 0.75, dmg: 5, pierce: 0 }, { n: 2, cd: 0.72, dmg: 5, pierce: 0 }, { n: 2, cd: 0.62, dmg: 6, pierce: 1 }, { n: 3, cd: 0.52, dmg: 7, pierce: 1 },
+    { n: 3, cd: 0.48, dmg: 10, pierce: 1 }, { n: 4, cd: 0.44, dmg: 12, pierce: 2 }, { n: 5, cd: 0.4, dmg: 15, pierce: 2 }],
+  fly: [{ n: 2, dmg: 2 }, { n: 3, dmg: 2 }, { n: 3, dmg: 3 }, { n: 4, dmg: 3 }, { n: 5, dmg: 4 }, { n: 5, dmg: 6 }, { n: 6, dmg: 8 }, { n: 7, dmg: 11 }],
+  bell: [{ cd: 3.4, dmg: 4, kb: 120 }, { cd: 3.2, dmg: 5, kb: 130 }, { cd: 3, dmg: 6, kb: 140 }, { cd: 2.6, dmg: 7, kb: 150 }, { cd: 2.4, dmg: 9, kb: 170 },
+    { cd: 2.3, dmg: 12, kb: 180 }, { cd: 1.9, dmg: 14, kb: 190 }, { cd: 1.7, dmg: 18, kb: 210 }],
+  fuda: [{ n: 1, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 8, pierce: 2 }, { n: 2, cd: 1.3, dmg: 11, pierce: 3 }, { n: 3, cd: 1.15, dmg: 11, pierce: 3 }, { n: 3, cd: 0.9, dmg: 13, pierce: 4 },
+    { n: 4, cd: 0.88, dmg: 15, pierce: 4 }, { n: 4, cd: 0.8, dmg: 19, pierce: 5 }, { n: 5, cd: 0.72, dmg: 24, pierce: 6 }]
 };
-const GAIN = { spark: [0, "u_dmg", "u_more", "u_pierce", "u_more"], fly: [0, "u_more", "u_dmg", "u_more", "u_more"], bell: [0, "u_dmg", "u_dmg", "u_fast", "u_dmg"], fuda: [0, "u_more", "u_dmg", "u_more", "u_fast"] };
+// what the next level adds, by the level owned now (the card's second line)
+const GAIN = { spark: [0, "u_dmg", "u_more", "u_pierce", "u_more", "u_dmg", "u_more", "u_more"], fly: [0, "u_more", "u_dmg", "u_more", "u_more", "u_dmg", "u_more", "u_more"],
+  bell: [0, "u_dmg", "u_dmg", "u_fast", "u_dmg", "u_dmg", "u_fast", "u_dmg"], fuda: [0, "u_more", "u_dmg", "u_more", "u_fast", "u_more", "u_dmg", "u_more"] };
+const PMAX = 5; // passives have five levels
 const PASSIVE = ["oil", "wick", "zori", "fan", "wind"];
 const OPTS = ["spark", "fly", "bell", "fuda", ...PASSIVE];
 const isWpn = k => Object.prototype.hasOwnProperty.call(WPN, k);
-const xpNeed = lv => Math.round(5 + 3 * lv + 0.45 * lv * lv);
+const maxLv = k => isWpn(k) ? WPN[k].length : PMAX;
+// experience: about a card every 12 s at first and every 20 s near dawn; kills grow richer as the night fills up,
+// so the level keeps pace with the crowd (about Lv 6, 14, 25 and 34 at 1, 3, 6 and 9 minutes)
+const xpNeed = lv => Math.round(5 + 3 * lv + 0.3 * lv * lv);
 const flyR = rr => clamp(rr * 0.55, 44, 118);
 // Phase table as data (bar 1.5.2, long-play type): 0-8 s the core verb only and safe, then denser; a new yokai, a
 // surround wave, a wisp stream or a boss every 20 to 40 s; past the last row the pace keeps rising (no plateau).
@@ -645,14 +655,14 @@ const PHASES = [
   { at: 120, rate: 4.4, mix: { kage: 0.56, hitotsu: 0.32, kasa: 0.12 }, stream: 22, note: "nKasa" },
   { at: 150, rate: 5, mix: { kage: 0.54, hitotsu: 0.32, kasa: 0.14 }, stream: 22 },
   { at: 210, rate: 5.8, mix: { kage: 0.5, hitotsu: 0.34, kasa: 0.16 }, stream: 20 },
-  { at: 270, rate: 6.6, mix: { kage: 0.48, hitotsu: 0.34, kasa: 0.18 }, stream: 18 },
-  { at: 330, rate: 7.4, mix: { kage: 0.46, hitotsu: 0.34, kasa: 0.2 }, stream: 18 },
-  { at: 420, rate: 9.4, mix: { kage: 0.44, hitotsu: 0.34, kasa: 0.22 }, stream: 16 },
-  { at: 500, rate: 10.6, mix: { kage: 0.42, hitotsu: 0.34, kasa: 0.24 }, stream: 15 },
-  { at: 560, rate: 12, mix: { kage: 0.4, hitotsu: 0.34, kasa: 0.26 }, stream: 14 }
+  { at: 270, rate: 6.6, mix: { kage: 0.44, hitotsu: 0.34, kasa: 0.22 }, stream: 18 },
+  { at: 330, rate: 7.4, mix: { kage: 0.4, hitotsu: 0.34, kasa: 0.26 }, stream: 18 },
+  { at: 420, rate: 9.4, mix: { kage: 0.36, hitotsu: 0.34, kasa: 0.3 }, stream: 16 },
+  { at: 500, rate: 10.6, mix: { kage: 0.34, hitotsu: 0.34, kasa: 0.32 }, stream: 15 },
+  { at: 560, rate: 12, mix: { kage: 0.32, hitotsu: 0.34, kasa: 0.34 }, stream: 14 }
 ];
 const phaseAt = t => { let i = 0; for (let j = 0; j < PHASES.length; j++) if (t >= PHASES[j].at) i = j; return i; };
-const RING_FROM = 50, RING_EVERY = 30;   // a surround wave every 30 s from 0:50
+const RING_FROM = 70, RING_EVERY = 30;   // a surround wave every 30 s from 1:10
 // ?demo=1 is a 30 s clip that holds the whole story, scripted by run time, never by luck: kills at once, a level-up
 // card, a surround wave the bell clears, the first boss, a near miss with the light almost out, then the light dies.
 const DEMO_SKIP = 167;             // the demo night starts at 2:47, 13 s before the first boss
@@ -744,7 +754,7 @@ function newRun(mode, seed) {
     w: { spark: 1, fly: 0, bell: 0, fuda: 0 }, ps: { oil: 0, wick: 0, zori: 0, fan: 0, wind: 0 }, cd: { spark: 0.3, bell: 1, fuda: 0.6 },
     flyA: 0, flyPA: 0, foes: [], byId: new Map(), shots: [], motes: [], rings: [], nid: 1, bossAlive: 0, bossNo: 0, bossKills: 0, warned: false,
     spawnAcc: 0, nextRing: RING_FROM, nextStream: 0, phase: -1, card: null, pend: 0, drainX: 1, winAt: null,
-    inp: { x: 0, y: 0 }, dashReq: false, dead: null, result: null,
+    inp: { x: 0, y: 0 }, dashReq: false, dead: null, result: null, xpAll: 0, xpGot: 0, lostHit: 0, lostDrain: 0, dealt: 0, bossLog: [],
     script: demo ? DEMO_SCRIPT.map(e => Object.assign({}, e)) : []
   };
   const P = BOT[mode === "play" ? (botName || "play") : mode] || BOT.play;
@@ -765,10 +775,10 @@ const clockNow = () => {
 function opening(R) {
   for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (i - 1) * 2.1 + (R.rnd() - 0.5) * 0.4, d = 118 + i * 16; spawnFoe(R, "kage", 0, Math.cos(a) * d, Math.sin(a) * d); }
 }
-// ?demo=1 starts mid-night with a few weapons, so the clip shows the game at its best at once
+// ?demo=1 starts mid-night with the build a player has by then, so the clip shows the game at its best at once
 function demoSetup(R) {
-  Object.assign(R.w, { spark: 3, fly: 2, bell: 2, fuda: 1 }); Object.assign(R.ps, { oil: 1, zori: 1 });
-  R.lv = 9; R.need = xpNeed(9); R.xp = 12; R.lmax = 115; R.light = 82; R.nextRing = 999; R.nextStream = 999;
+  Object.assign(R.w, { spark: 4, fly: 4, bell: 3, fuda: 3 }); Object.assign(R.ps, { oil: 2, wick: 1, zori: 1, wind: 1 });
+  R.lv = 19; R.need = xpNeed(19); R.xp = 30; R.lmax = 130; R.light = 96; R.nextRing = 999; R.nextStream = 999;
   for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + R.rnd() * 0.3, d = 96 + R.rnd() * 70; spawnFoe(R, i % 4 === 3 ? "hitotsu" : "kage", R.wt, Math.cos(a) * d, Math.sin(a) * d); }
 }
 
@@ -843,21 +853,22 @@ function spawnStep(R) {
   if (ph.stream && t >= R.nextStream) { R.nextStream = t + ph.stream; stream(R, t); }
   const b = BOSSES[R.bossNo];
   if (b && !R.warned && t >= b.at - 2.5) { R.warned = true; notice("nBoss", S("b_" + b.kind)); fx.bossWarnT = fx.vt; if (loud()) sfx.warn(); }
-  if (b && t >= b.at) { spawnBoss(R, b.kind); R.bossNo++; R.warned = false; }
+  if (b && t >= b.at) { spawnBoss(R, b.kind); if (R.mode !== "demo") ringWave(R, t); R.bossNo++; R.warned = false; } // a boss comes with a ring of yokai
 }
 function pickKind(R, mix) { let r = R.rnd(), k = "kage"; for (const n in mix) { k = n; if ((r -= mix[n]) < 0) break; } return k; }
 function spawnFoe(R, kind, t, x, y) {
   const K = KIND[kind], p = R.p;
   if (x == null) { const a = R.rnd() * TAU, d = lightR(R.light) + 36 + R.rnd() * 80; x = p.x + Math.cos(a) * d; y = p.y + Math.sin(a) * d; }
-  const hp = K.hp * (1 + t / 110 + (t / 320) * (t / 320)); // yokai grow tougher and hit harder as the night goes on
-  const e = { id: R.nid++, kind, x, y, px: x, py: y, hp, max: hp, spd: K.spd * (0.92 + R.rnd() * 0.16) * (1 + t / 1200), r: K.r, dmg: K.dmg * (1 + t / 240), hop: K.hop || 0, ho: R.rnd(),
+  // yokai grow tougher as the night goes on; the lantern's build grows faster, so the late night is about the build
+  const hp = K.hp * (1 + t / 110 + (t / 320) * (t / 320));
+  const e = { id: R.nid++, kind, x, y, px: x, py: y, hp, max: hp, spd: K.spd * (0.92 + R.rnd() * 0.16) * (1 + t / 1200), r: K.r, dmg: K.dmg * (1 + t / 600), hop: K.hop || 0, ho: R.rnd(),
     kx: 0, ky: 0, hitT: -9, flyT: 0, dead: false, cell: -1, born: R.wt, ph: R.rnd() * TAU, boss: 0, line: false };
   R.foes.push(e); R.byId.set(e.id, e);
   return e;
 }
 function ringWave(R, t) { // a circle of yokai closes in from the dark all at once
-  const n = clamp(10 + fl(t / 15), 10, 36), d = lightR(R.light) + 64, a0 = R.rnd() * TAU, p = R.p;
-  for (let i = 0; i < n && R.foes.length < FOE_HARD; i++) { const a = a0 + i / n * TAU; spawnFoe(R, t > 120 && i % 3 === 0 ? "hitotsu" : "kage", t, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); }
+  const n = clamp(8 + fl(t / 20), 8, 30), d = lightR(R.light) + 64, a0 = R.rnd() * TAU, p = R.p;
+  for (let i = 0; i < n && R.foes.length < FOE_HARD; i++) { const a = a0 + i / n * TAU; spawnFoe(R, t > 240 && i % 5 === 2 ? "kasa" : t > 120 && i % 3 === 0 ? "hitotsu" : "kage", t, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); }
   notice("nRing");
 }
 function stream(R, t) { // a line of wisps crosses the light; they are fire, so they show in the dark before they arrive
@@ -874,8 +885,9 @@ function spawnBoss(R, kind) {
   const K = KIND[kind], p = R.p, demo = R.mode === "demo";
   const a = demo ? -Math.PI / 2 : R.rnd() * TAU, d = demo ? 150 : lightR(R.light) + 110;
   const e = spawnFoe(R, kind, 0, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d);
-  Object.assign(e, { hp: K.hp, max: K.hp, boss: K.boss, spd: K.spd, st: "walk", t: 0, next: demo ? 99 : 3.5, atk: K.atk, ai: 0, tel: null, lunging: false, demoHit: false });
-  R.bossAlive++;
+  const hp = K.hp * (demo ? 3 : 1); // ?demo=1: the boss outlasts the clip, so it never ends on a defeat by luck
+  Object.assign(e, { hp, max: hp, boss: K.boss, spd: K.spd, st: "walk", t: 0, next: demo ? 99 : 3.5, atk: K.atk, ai: 0, tel: null, lunging: false, demoHit: false });
+  R.bossAlive++; R.bossLog.push([kind, +R.wt.toFixed(1), null]);
 }
 function relocate(R, e) { // a yokai left far behind comes back from the dark ahead
   const p = R.p, mv = Math.hypot(p.vx, p.vy) > 1, a = (mv ? Math.atan2(p.vy, p.vx) : R.rnd() * TAU) + (R.rnd() - 0.5) * 1.6, d = lightR(R.light) + 40 + R.rnd() * 60;
@@ -965,7 +977,7 @@ function bossStep(R, e) {
   } else if (e.st === "lunge") {
     e.x += e.lvx * DT; e.y += e.lvy * DT;
     if (e.t >= ATK.lunge.len / ATK.lunge.spd) { e.st = "rest"; e.t = 0; e.lunging = false; e.trail = null; }
-  } else if (e.st === "rest" && e.t >= 0.9) { e.st = "walk"; e.t = 0; e.next = 3.8 + R.rnd() * 2; }
+  } else if (e.st === "rest" && e.t >= 0.9) { e.st = "walk"; e.t = 0; e.next = 2.8 + R.rnd() * 1.5; }
 }
 function startAtk(R, e, kind) { // every boss attack is shown on the ground first (the telegraph), then lands
   const p = R.p;
@@ -977,7 +989,7 @@ function startAtk(R, e, kind) { // every boss attack is shown on the ground firs
 function hurtPlayer(R, dmg, src) {
   const p = R.p;
   if (p.inv > 0 || R.dead || dmg <= 0) return;
-  R.light -= dmg; p.inv = PL.inv; R.hurts++;
+  R.light -= dmg; p.inv = PL.inv; R.hurts++; R.lostHit += Math.min(dmg, R.light + dmg);
   if (src && !src.boss) { const dx = src.x - p.x, dy = src.y - p.y, d = Math.hypot(dx, dy) || 1; src.kx += dx / d * 150; src.ky += dy / d * 150; }
   fxHurt(R, dmg);
   if (R.light <= 0) { R.light = 0; die("dark"); }
@@ -1052,11 +1064,11 @@ function shotsStep(R) {
     if (gone) S.splice(i, 1);
   }
 }
-// damage grows with the light (0.8x when it is almost out, 1.3x when full)
-const dmgMul = R => 0.8 + 0.5 * clamp(R.light / R.lmax, 0, 1);
+// damage grows with the light (0.85x when it is almost out, 1.2x when full)
+const dmgMul = R => 0.85 + 0.35 * clamp(R.light / R.lmax, 0, 1);
 function hurt(R, e, dmg, kx, ky) {
   if (e.dead) return;
-  e.hp -= dmg * dmgMul(R); e.hitT = R.wt;
+  const d = dmg * dmgMul(R); R.dealt += Math.min(d, Math.max(0, e.hp)); e.hp -= d; e.hitT = R.wt;
   const k = e.boss ? 0.08 : 1; e.kx += (kx || 0) * k; e.ky += (ky || 0) * k;
   fxHit(e);
   if (e.hp <= 0) killFoe(R, e);
@@ -1066,8 +1078,10 @@ function killFoe(R, e) {
   const K = KIND[e.kind];
   if (e.boss) {
     R.bossAlive--; R.bossKills++;
+    const lg = R.bossLog.find(l => l[0] === e.kind && l[2] == null); if (lg) lg[2] = +R.wt.toFixed(1);
     dropMote(R, e.x, e.y, K.lt, K.xp, 2);
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; dropMote(R, e.x + Math.cos(a) * 26, e.y + Math.sin(a) * 26, 2.2, 1, 0); }
+    for (const m of R.motes) m.seek = true; // every light drop left on the ground flies to the lantern
     notice("nBossDown", S("b_" + e.kind));
     if (e.boss === 3) { R.winAt = R.wt + 2.4; fx.winT = fx.vt; }
     fxBossDown(R, e);
@@ -1079,24 +1093,24 @@ function sweep(R) {
   for (let i = 0; i < R.foes.length; i++) { const e = R.foes[i]; if (e.dead) R.byId.delete(e.id); else R.foes[j++] = e; }
   R.foes.length = j;
 }
+// light drops never burn out: past 240 on the ground, the oldest one joins the newest, which grows bigger
 function dropMote(R, x, y, v, xp, size) {
-  if (R.motes.length >= 240) { const o = R.motes.shift(); v += o.v; xp += o.xp; }
-  R.motes.push({ x, y, px: x, py: y, v, xp, size, seek: false, sp: 0, age: 0, ph: R.rnd() * TAU });
+  R.xpAll += xp;
+  if (R.motes.length >= 240) { const o = R.motes.shift(); v += o.v; xp += o.xp; size = Math.max(size, o.size, v >= 20 ? 2 : v >= 6 ? 1 : 0); }
+  R.motes.push({ x, y, px: x, py: y, v, xp, size, seek: false, sp: 0, ph: R.rnd() * TAU });
 }
-const MOTE_LIFE = 16;
 function motesStep(R) { // light drops fly to the lantern once it is near; each one gives light back and experience
-  const p = R.p, pr = 30 * (1 + 0.3 * R.ps.fan);
+  const p = R.p, pr = 40 * (1 + 0.4 * R.ps.fan);
   for (let i = R.motes.length - 1; i >= 0; i--) {
-    const m = R.motes[i]; m.age += DT;
+    const m = R.motes[i];
     const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
     if (!m.seek && (d < pr || R.winAt != null)) m.seek = true;
     if (m.seek) { m.sp = Math.min(560, m.sp + 1100 * DT); const st = Math.min(d, (m.sp + 60) * DT); m.x += dx / d * st; m.y += dy / d * st; }
     if (d < 10) { R.motes.splice(i, 1); collect(R, m); }
-    else if (!m.seek && m.age > MOTE_LIFE) R.motes.splice(i, 1); // an uncollected drop burns out
   }
 }
 function collect(R, m) {
-  R.light = Math.min(R.lmax, R.light + m.v); R.xp += m.xp; R.picks++;
+  R.light = Math.min(R.lmax, R.light + m.v); R.xp += m.xp; R.xpGot += m.xp; R.picks++;
   fxPick(R, m);
   levelCheck(R);
 }
@@ -1106,14 +1120,15 @@ function levelCheck(R) {
 }
 function lightStep(R) {
   if (R.winAt != null || R.dead) return;
-  R.light -= (LT.drain + LT.ramp * R.wt / 60) * (1 - 0.1 * R.ps.wick) * R.drainX * DT;
+  const dr = (LT.drain + LT.ramp * R.wt / 60) * (1 - 0.1 * R.ps.wick) * R.drainX * DT;
+  R.light -= dr; R.lostDrain += dr;
   if (R.light <= 0) { R.light = 0; die("dark"); }
 }
 // ---------- GAME-SPECIFIC: level-up cards (the world waits; three choices) ----------
 function cardOpts(R) {
   const lvOf = k => isWpn(k) ? R.w[k] : R.ps[k];
   if (R.lv === 2 && R.mode !== "demo") return ["fly", "bell", "spark"]; // the first card shows two new weapons
-  const pool = OPTS.filter(k => lvOf(k) < 5).map(k => ({ k, w: isWpn(k) ? (lvOf(k) ? 1.1 : 1.3) : 0.8 })), out = [];
+  const pool = OPTS.filter(k => lvOf(k) < maxLv(k)).map(k => ({ k, w: isWpn(k) ? (lvOf(k) ? 1.1 : 1.3) : 0.8 })), out = [];
   while (out.length < 3 && pool.length) {
     let sum = 0; for (const o of pool) sum += o.w;
     let r = R.rnd() * sum, j = 0;
@@ -1186,7 +1201,7 @@ function botPick(R) {
   let best = 0, bs = -1;
   o.forEach((k, i) => {
     const lv = isWpn(k) ? R.w[k] : (R.ps[k] || 0);
-    let s = k === "candle" ? 0.5 : isWpn(k) ? (lv ? 3 + (5 - lv) * 0.1 : owned < 3 ? 5 : 2.5) : ({ oil: 2.6, wick: 2.4, wind: 2.2, fan: 1.8, zori: 1.6 })[k];
+    let s = k === "candle" ? 0.5 : isWpn(k) ? (lv ? 3 + (maxLv(k) - lv) * 0.1 : owned < 3 ? 5 : 2.5) : ({ oil: 2.6, wick: 2.4, wind: 2.2, fan: 1.8, zori: 1.6 })[k];
     s += R.rAI() * 0.6;
     if (s > bs) { bs = s; best = i; }
   });
@@ -1774,11 +1789,12 @@ function drawCard(x, k, sel, now) {
   const R = run, lv = isWpn(k) ? R.w[k] : (R.ps[k] || 0), isNew = k !== "candle" && lv === 0;
   put(x, cardSpr(), 0, 0);
   put(x, iconSpr(k), -112, 42);
-  text(x, S("w_" + k), -78, 26, 22, "ink", { a: "left", f: ST.title, w: 900, max: 140 });
+  const n = k === "candle" ? 0 : maxLv(k), x0 = 140 - (n - 1) * 10.5; // level pips end at the same edge on every card
+  text(x, S("w_" + k), -78, 26, 22, "ink", { a: "left", f: ST.title, w: 900, max: Math.min(140, x0 - 4.5 - 4 + 78) });
   text(x, isWpn(k) && lv > 0 ? S(GAIN[k][lv]) : S("d_" + k), -78, 58, 15, "plankD", { a: "left", w: 800, max: 222 });
   if (isNew) seal(x, 108, 27, S("isNew"), 999, 14); // something new: a red seal where the level pips would be
-  else if (k !== "candle") for (let i = 0; i < 5; i++) { // level pips: owned ones gold, the one this card adds red
-    const X = 72 + i * 15, p = pPoly([[X, 20], [X + 5, 26], [X, 32], [X - 5, 26]]);
+  else for (let i = 0; i < n; i++) { // level pips: owned ones gold, the one this card adds red (eight for a weapon)
+    const X = x0 + i * 10.5, p = pPoly([[X, 20.5], [X + 4.5, 26], [X, 31.5], [X - 4.5, 26]]);
     x.fillStyle = C(i < lv ? "gold" : i === lv ? "red" : "tagL"); x.fill(p); ST.edge(x, p, 0.8);
   }
   if (sel) cordLine(x, pCut(-153, -3, 306, 90, 9), 2.4, "red", 0.7);
@@ -2111,7 +2127,8 @@ window.__game = {
   info() { // for balance probes: the run in plain numbers
     const R = run; if (!R) return null;
     return { mode: R.mode, wt: +R.wt.toFixed(2), light: +R.light.toFixed(1), lmax: R.lmax, lv: R.lv, kills: R.kills, foes: R.foes.length, hurts: R.hurts, picks: R.picks,
-      w: Object.assign({}, R.w), ps: Object.assign({}, R.ps), bossKills: R.bossKills, dead: R.dead && R.dead.reason, card: !!R.card };
+      w: Object.assign({}, R.w), ps: Object.assign({}, R.ps), bossKills: R.bossKills, dead: R.dead && R.dead.reason, card: !!R.card,
+      xpAll: R.xpAll, xpGot: R.xpGot, lostHit: Math.round(R.lostHit), lostDrain: Math.round(R.lostDrain), dealt: Math.round(R.dealt), bossLog: R.bossLog.map(l => l.slice()) };
   }
 };
 

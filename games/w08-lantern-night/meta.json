@@ -27,7 +27,7 @@
     "one-more-try",
     "mobile-friendly"
   ],
-  "session_length_sec": 300,
+  "session_length_sec": 600,
   "video_hook_ja": "このちょうちんが消えたら、終わり。",
   "quality_bar": 1
 }
