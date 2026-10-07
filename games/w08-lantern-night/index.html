@@ -1332,7 +1332,7 @@ function resultStep(now) {
   if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
   if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
-    const u = L.u, bx = 180 + 70 * u, by = overY() + 238 * u;
+    const u = L.u, bx = UI.ox + 70 * u, by = overY() + 238 * u;
     burst(bx, by, 16, 220, { col: "gold", kind: "chip", s: 3 }); burst(bx, by, 5, 240, { kind: "star", col: "goldL", s: 3 });
   }
 }
@@ -1354,6 +1354,11 @@ function layoutUI() {
   UI.start = ui(180, ty, 176, 54);
   UI.retry = ui(180, ty - 10 * u, 176, 54);
   UI.toTitle = L.wide ? ui(180 + 162 * u, ty - 2 * u, 128, 40) : ui(180, ty + 52 * u, 128, 36);
+  UI.ox = 180; // the result board's centre
+  if (L.wide && overY() + 338 * u > UI.retry.y - 4) { // a short wide screen (a phone on its side): the board moves left, the buttons sit at its right
+    UI.ox = 180 - 123 * u; const bx = 180 + 193 * u, by = overY() + 132 * u;
+    UI.retry = ui(bx, by, 176, 54); UI.toTitle = ui(bx, by + 76 * u, 128, 40);
+  }
   UI.resume = ui(180, py + 70 * u, 196, 54);
   UI.restart = ui(180 - 72 * u, py + 144 * u, 132, 42);
   UI.quit = ui(180 + 72 * u, py + 144 * u, 132, 42);
@@ -1817,8 +1822,8 @@ function drawPause(x, now) {
 function drawOver(x, now) {
   const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, H = play ? 330 : 250, big = { f: ST.title, w: 900, deep: "paneL" };
   const y = overY() - (H + 80) * u * (1 - easeBack(age / RES.drop));
-  cords(x, [[180 - 110 * u, y + 4 * u], [180 + 110 * u, y + 4 * u]], beamY());
-  at(x, 180, y, u, 0, () => {
+  cords(x, [[UI.ox - 110 * u, y + 4 * u], [UI.ox + 110 * u, y + 4 * u]], beamY());
+  at(x, UI.ox, y, u, 0, () => {
     board(x, 0, 0, 316, H);
     if (age > RES.head) text(x, S(r.won ? "dawn" : "over"), 0, 40, 30, r.won ? "redD" : "paneT", Object.assign({ max: 272 }, big));
     if (age > RES.count) { text(x, S("rTime"), 0, 74, 16, "paneS", {}); text(x, mmss(r.time * easeOut((age - RES.count) / RES.countDur)), 0, 116, 52, "paneT", big); }
