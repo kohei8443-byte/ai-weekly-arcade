@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ちょうちん夜行 / LANTERN NIGHT</title>
+<title>よるの惑星 / NIGHT PLANET</title>
 <style>
 /* AI Weekly Arcade template, house style 「墨と和紙」 (STYLE.md). Everything is drawn on one canvas; the DOM holds
    only transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
 [hidden]{display:none!important}
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#2b335f}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#2a2147}
 body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
 #wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
 #cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
@@ -17,7 +17,7 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
 .ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
 #ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
 #ui button:focus{outline:none}
-#ui button:focus-visible{outline:2px dashed #f4ead3;outline-offset:1px}
+#ui button:focus-visible{outline:2px dashed #f6f2ea;outline-offset:1px}
 </style>
 </head>
 <body>
@@ -56,13 +56,13 @@ const platform = (name, ...args) => { try { window.Platform[name](...args); } ca
 
 // ---------- palettes: one table per style, same names (the only hex colours in the script) ----------
 const PALS = {
-  B: { // 「墨と和紙」 (default): a bright evening printed on washi
-    ink: "#1c1a24", paper: "#f4ead3", paperD: "#dbc9a6", grey: "#b3aa9c", greyD: "#6f6862",
-    tag: "#dfbb80", tagL: "#f1dcac", tagD: "#ae8752", tagG: "#c8a068", plank: "#5b4233", plankL: "#7c5c47", plankD: "#35271f",
-    pane: "#f2e7cd", paneL: "#d9c6a0", paneT: "#1c1a24", paneS: "#9a3328",
-    red: "#d24a32", redD: "#94302a", redL: "#ec8a6c", gold: "#e2b24e", goldD: "#a37a34", goldL: "#f6dc98", orange: "#ef8f3a", indigo: "#2f4a86",
-    sky0: "#2b335f", sky1: "#20264b", sky2: "#3c4680", sky3: "#6f8fd6", mist: "#c4d4f4", far: "#46528c", mid: "#262c55",
-    ground: "#ebdfbf", groundL: "#f5ecd5", poolA: "#d7c8a2", poolB: "#bfb4a0", lit: "#f3b86c", warm: "#ffd08a", shadeK: "#1b1530", hlK: "#fff6df", grass: "#86a052"
+  B: { // 「よるの惑星」 (w08, kouhei's pick): the night side of a small planet; CO in the game says what each colour is
+    ink: "#241a3c", paper: "#f6f2ea", paperD: "#d8d0c4", grey: "#b2a7c4", greyD: "#6e6386",
+    tag: "#3a3160", tagL: "#51478a", tagD: "#2a2147", tagG: "#cfc2dc", plank: "#9dcc5a", plankL: "#c8e692", plankD: "#72a13c",
+    pane: "#8c5dc4", paneL: "#b394e0", paneT: "#63409a", paneS: "#f08c6a",
+    red: "#f07a55", redD: "#c5553a", redL: "#ffd8c6", gold: "#f4c44e", goldD: "#c1902a", goldL: "#ffd36a", orange: "#fff3c4", indigo: "#3c5ba6",
+    sky0: "#2a2147", sky1: "#342a5b", sky2: "#1e1836", sky3: "#90b3eb", mist: "#cfc2dc", far: "#19132e", mid: "#a996c3",
+    ground: "#e8dff0", groundL: "#f4eff8", poolA: "#d7cae6", poolB: "#cbbcdd", lit: "#5fc9bf", warm: "#fff3c4", shadeK: "#2f9188", hlK: "#a9ede5", grass: "#72a13c"
   },
   A: { // 「つやつや細工」: a dusk in real materials (lacquer, brass, glaze) under one light
     ink: "#21161d", paper: "#f7ecd4", paperD: "#d8c49e", grey: "#bdb4aa", greyD: "#6c6470",
@@ -585,16 +585,33 @@ function drawTapHint(x, X, Y, k) { // (X, Y) = where to press; k = 0 when a pres
 // ==== ART KIT END ====
 
 // ======================================================================================================
-// Below: 「ちょうちん夜行 / LANTERN NIGHT」. GAME-SPECIFIC sections are this week's game; KEEP sections are the
+// Below: 「よるの惑星 / NIGHT PLANET」. GAME-SPECIFIC sections are this week's game; KEEP sections are the
 // template's required systems (QUALITY_BAR.md, CLAUDE.md 4) adapted to it. window.__game at the end is the test
 // contract (tools/README.md).
 // ======================================================================================================
 
 // ---------- GAME-SPECIFIC: identity, scene size, tuning ----------
-const SLUG = "lantern-night", WEEK = 8;
+const SLUG = "night-planet", WEEK = 8;
 const CW = 360, CH = 640;          // the core 9:16 scene in logical px (STYLE.md 2)
-const CH_WIDE = 540;               // landscape screens get a closer view, so the child and the yokai read bigger on a PC
-useStyle("B");                     // the house style
+const CH_WIDE = 540;               // landscape screens get a closer view, so the child and the creatures read bigger on a PC
+useStyle("B");                     // the house palette table, holding this planet's colours (CO below says what each is for)
+// kouhei picked the 「よるの惑星」 look on 2026-10-07 (the w08 look card): flat colour with one even ink line, no washi
+// grain, a plain gothic face. The game keeps its own copy of style B with those changes; the kit stays as it is.
+ST = Object.assign({}, STYLES.B, { grain: false, lw: 1.7, ui: SANS, title: SANS,
+  fill(x, p, c, rule) { x.fillStyle = C(c); x.fill(p, rule || "nonzero"); },
+  edge(x, p, w) { x.save(); x.lineJoin = x.lineCap = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w || this.lw; x.stroke(p); x.restore(); },
+  line(x, p, w, c) { x.save(); x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w; x.stroke(p); x.restore(); } });
+// what each palette colour is in this game (STYLE.md 3: the kit's names stay, their values are this planet's)
+const CO = {
+  ink: "ink", text: "paper", eye: "paper", suit: "paper", suitD: "paperD", pack: "grey", pebble: "grey", off: "greyD",
+  panel: "tag", panelL: "tagL", panelD: "tagD", sub: "mist",
+  night: "sky0", nightP: "sky1", nightD: "sky2", rock: "far",
+  ground: "ground", groundD: "poolA", groundL: "groundL", crater: "poolB", craterD: "mid", shadow: "poolB",
+  crys: "lit", crysD: "shadeK", crysL: "hlK", bulb: "paneS", stalk: "grass",
+  accent: "red", accentD: "redD", accentL: "redL", gold: "gold", goldD: "goldD", goldL: "goldL",
+  visor: "indigo", visorL: "sky3", lamp: "warm",
+  slime: "plank", slimeD: "plankD", slimeL: "plankL", hop: "pane", hopD: "paneT", hopL: "paneL", beetle: "tagL", beetleD: "tag"
+};
 const DEMO = /[?&]demo=1(&|$)/.test(location.search);
 const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
 const reduceMotion = mq("(prefers-reduced-motion: reduce)"), finePointer = mq("(hover: hover) and (pointer: fine)");
@@ -604,8 +621,8 @@ const store = makeStore(SLUG + "-");
 // The rules run in fixed steps of 1/120 s counted from the run clock, so a run replays the same at any frame rate.
 const HZ = 120, DT = 1 / HZ;
 const PL = { spd: 74, r: 8, dash: 260, dashT: 0.17, dashInv: 0.3, dashCd: 1.3, inv: 0.9 };
-// The lantern's light is health, sight and weapon reach at once: it drains all the time and comes back from the
-// light drops of defeated yokai. Its radius on screen is lightR(light).
+// The lamp's light is health, sight and weapon reach at once: it drains all the time and comes back from the
+// light crystals of defeated creatures. Its radius on screen is lightR(light).
 const LT = { start: 100, max: 100, drain: 1.6, ramp: 0.2, r0: 52, rk: 1.16, cap: 214 };
 const lightR = l => Math.min(LT.cap, LT.r0 + LT.rk * Math.max(0, l));
 const KIND = {
@@ -621,7 +638,7 @@ const BOSSES = [{ at: 180, kind: "nyudo" }, { at: 360, kind: "kumo" }, { at: 600
 const ATK = { stomp: { tele: 1, R: 110, dmg: 28 }, lunge: { tele: 0.9, len: 300, spd: 430, dmg: 26 } };
 const FOE_CAP = 220, FOE_HARD = 400;
 // Weapons fire by themselves and only reach inside the light; eight levels each (index = level - 1). The last three
-// levels are big steps, so a long night ends with the lantern far stronger than the yokai (kouhei, 2026-10-07)
+// levels are big steps, so a long night ends with the child far stronger than the creatures (kouhei, 2026-10-07)
 const WPN = {
   spark: [{ n: 1, cd: 0.85, dmg: 4, pierce: 0 }, { n: 1, cd: 0.75, dmg: 5, pierce: 0 }, { n: 2, cd: 0.72, dmg: 5, pierce: 0 }, { n: 2, cd: 0.62, dmg: 6, pierce: 1 }, { n: 3, cd: 0.52, dmg: 7, pierce: 1 },
     { n: 3, cd: 0.48, dmg: 10, pierce: 1 }, { n: 4, cd: 0.44, dmg: 12, pierce: 2 }, { n: 5, cd: 0.4, dmg: 15, pierce: 2 }],
@@ -643,8 +660,8 @@ const maxLv = k => isWpn(k) ? WPN[k].length : PMAX;
 // so the level keeps pace with the crowd (about Lv 6, 14, 25 and 34 at 1, 3, 6 and 9 minutes)
 const xpNeed = lv => Math.round(5 + 3 * lv + 0.3 * lv * lv);
 const flyR = rr => clamp(rr * 0.55, 44, 118);
-// Phase table as data (bar 1.5.2, long-play type): 0-8 s the core verb only and safe, then denser; a new yokai, a
-// surround wave, a wisp stream or a boss every 20 to 40 s; past the last row the pace keeps rising (no plateau).
+// Phase table as data (bar 1.5.2, long-play type): 0-8 s the core verb only and safe, then denser; a new creatures, a
+// surround wave, a comet stream or a boss every 20 to 40 s; past the last row the pace keeps rising (no plateau).
 const PHASES = [
   { at: 0, rate: 1.2, mix: { kage: 1 } },
   { at: 8, rate: 1.8, mix: { kage: 1 } },
@@ -664,7 +681,7 @@ const PHASES = [
 const phaseAt = t => { let i = 0; for (let j = 0; j < PHASES.length; j++) if (t >= PHASES[j].at) i = j; return i; };
 const RING_FROM = 70, RING_EVERY = 30;   // a surround wave every 30 s from 1:10
 // ?demo=1 is a 30 s clip that holds the whole story, scripted by run time, never by luck: kills at once, a level-up
-// card, a surround wave the bell clears, the first boss, a near miss with the light almost out, then the light dies.
+// card, a surround wave the shockwave clears, the first boss, a near miss with the light almost out, then the light dies.
 const DEMO_SKIP = 167;             // the demo night starts at 2:47, 13 s before the first boss
 const DEMO_SCRIPT = [{ at: 4.6, act: "level" }, { at: 8.2, act: "ring" }, { at: 15.4, act: "stomp" }, { at: 20.6, act: "fail" }];
 // AI profiles (attract, ?demo=1, __game.autoplay): think every N steps, aim noise (rad), lapses per s, threat reach
@@ -680,35 +697,35 @@ const BOT = {
 // ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
 const STRINGS = {
   ja: {
-    title: "ちょうちん夜行", titleEn: "LANTERN NIGHT", mark: "灯", start: "スタート",
+    title: "よるの惑星", titleEn: "NIGHT PLANET", start: "スタート",
     how1: "ドラッグで うごくだけ", how1k: "WASD・矢印で うごくだけ", how2: "光が 消えたら おわり",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     lvUp: "レベルアップ!", isNew: "新", lv: "Lv", hint123: "1・2・3 でも えらべる",
-    w_spark: "火の粉", w_fly: "蛍", w_bell: "鈴", w_fuda: "お札", w_oil: "油", w_wick: "芯", w_zori: "草履", w_fan: "うちわ", w_wind: "風車", w_candle: "ろうそく",
-    d_spark: "近くの敵に 火の粉を とばす", d_fly: "まわりを 蛍が まわる", d_bell: "鈴の音で まわりを はらう", d_fuda: "すすむ方へ お札を なげる",
-    d_oil: "光の 上限が ふえる", d_wick: "光が へりにくく なる", d_zori: "足が はやく なる", d_fan: "灯の粒を 遠くから あつめる", d_wind: "こうげきが はやく なる", d_candle: "光が 30 もどる",
+    w_spark: "レーザー", w_fly: "ドローン", w_bell: "しょうげき波", w_fuda: "円ばん", w_oil: "電池", w_wick: "省エネ", w_zori: "ブースター", w_fan: "じしゃく", w_wind: "ターボ", w_candle: "エネルギー",
+    d_spark: "近くの敵に レーザーを うつ", d_fly: "まわりを ドローンが まわる", d_bell: "しょうげき波で まわりを はらう", d_fuda: "すすむ方へ 円ばんを なげる",
+    d_oil: "光の 上限が ふえる", d_wick: "光が へりにくく なる", d_zori: "足が はやく なる", d_fan: "結晶を 遠くから あつめる", d_wind: "こうげきが はやく なる", d_candle: "光が 30 もどる",
     u_more: "数が ふえる", u_dmg: "つよく なる", u_fast: "はやく なる", u_pierce: "つらぬく",
-    nHop: "一つ目が とんでくる", nOnibi: "鬼火の列!", nKasa: "からかさが 来た", nRing: "かこまれた!", nBoss: "{n}が 来る!", nBossDown: "{n}を たおした!", nDawn: "夜が 明ける",
-    b_nyudo: "大入道", b_kumo: "土蜘蛛", b_oni: "大鬼",
+    nHop: "三つ目が とんでくる", nOnibi: "すい星の 列!", nKasa: "いわ虫が 来た", nRing: "かこまれた!", nBoss: "{n}が 来る!", nBossDown: "{n}を たおした!", nDawn: "夜が 明ける",
+    b_nyudo: "いわガメ", b_kumo: "ほしグモ", b_oni: "すいしょうゴーレム",
     tMove: "ドラッグで うごく", tMoveK: "WASD・矢印で うごく", tLight: "光が 消えたら おわり", tKill: "たおすと 光が もどる", tDash: "タップで ダッシュ", tDashK: "SPACEで ダッシュ",
-    over: "灯が 消えた", dawn: "夜明け!", rTime: "生きのびた時間", rKills: "たおした数", rLv: "レベル", rBest: "ベスト", newBest: "ベスト更新!", tieBest: "ならんだ!", toBest: "あと {n}",
+    over: "ライトが 消えた", dawn: "夜明け!", rTime: "生きのびた時間", rKills: "たおした数", rLv: "レベル", rBest: "ベスト", newBest: "ベスト更新!", tieBest: "ならんだ!", toBest: "あと {n}",
     g_time: "{n}まで 生きのびる", g_boss: "{n}を たおす", g_lv: "Lv{n}に とどく", g_kills: "{n}体 たおす",
     best: "ベスト", space: "SPACE", credit: "Made with Claude"
   },
   en: {
-    title: "LANTERN NIGHT", titleEn: "LANTERN NIGHT", mark: "灯", start: "START",
+    title: "NIGHT PLANET", titleEn: "NIGHT PLANET", start: "START",
     how1: "JUST DRAG TO MOVE", how1k: "JUST MOVE: WASD OR ARROWS", how2: "IF YOUR LIGHT GOES OUT, IT ENDS",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
     lvUp: "LEVEL UP!", isNew: "NEW", lv: "LV", hint123: "KEYS 1, 2, 3 WORK TOO",
-    w_spark: "SPARKS", w_fly: "FIREFLIES", w_bell: "BELL", w_fuda: "TALISMAN", w_oil: "OIL", w_wick: "WICK", w_zori: "SANDALS", w_fan: "FAN", w_wind: "PINWHEEL", w_candle: "CANDLE",
-    d_spark: "SPARKS FLY AT FOES", d_fly: "FIREFLIES CIRCLE YOU", d_bell: "A RING SWEEPS AROUND", d_fuda: "TALISMANS FLY AHEAD",
-    d_oil: "MORE MAX LIGHT", d_wick: "LIGHT FADES SLOWER", d_zori: "MOVE FASTER", d_fan: "PULL LIGHT FROM AFAR", d_wind: "ATTACK MORE OFTEN", d_candle: "GET 30 LIGHT BACK",
+    w_spark: "LASER", w_fly: "DRONES", w_bell: "SHOCKWAVE", w_fuda: "DISCS", w_oil: "BATTERY", w_wick: "POWER SAVER", w_zori: "BOOSTERS", w_fan: "MAGNET", w_wind: "TURBO", w_candle: "ENERGY",
+    d_spark: "LASERS FIRE AT FOES", d_fly: "DRONES CIRCLE YOU", d_bell: "A SHOCKWAVE SWEEPS AROUND", d_fuda: "DISCS FLY AHEAD",
+    d_oil: "MORE MAX LIGHT", d_wick: "LIGHT FADES SLOWER", d_zori: "MOVE FASTER", d_fan: "PULL CRYSTALS FROM AFAR", d_wind: "ATTACK MORE OFTEN", d_candle: "GET 30 LIGHT BACK",
     u_more: "ONE MORE", u_dmg: "STRONGER", u_fast: "FASTER", u_pierce: "PIERCES",
-    nHop: "HOPPERS INCOMING", nOnibi: "WISP STREAM!", nKasa: "UMBRELLAS ARRIVE", nRing: "SURROUNDED!", nBoss: "{n} IS COMING!", nBossDown: "{n} DEFEATED!", nDawn: "DAWN IS BREAKING",
-    b_nyudo: "GREAT MONK", b_kumo: "EARTH SPIDER", b_oni: "GREAT ONI",
+    nHop: "HOPPERS INCOMING", nOnibi: "COMET STREAM!", nKasa: "ROCK BUGS ARRIVE", nRing: "SURROUNDED!", nBoss: "{n} IS COMING!", nBossDown: "{n} DEFEATED!", nDawn: "DAWN IS BREAKING",
+    b_nyudo: "ROCK TURTLE", b_kumo: "STAR SPIDER", b_oni: "CRYSTAL GOLEM",
     tMove: "DRAG TO MOVE", tMoveK: "WASD OR ARROWS TO MOVE", tLight: "YOUR LIGHT IS YOUR LIFE", tKill: "DEFEATS BRING LIGHT BACK", tDash: "TAP TO DASH", tDashK: "SPACE TO DASH",
     over: "YOUR LIGHT WENT OUT", dawn: "DAWN!", rTime: "SURVIVED", rKills: "DEFEATED", rLv: "LEVEL", rBest: "BEST", newBest: "NEW BEST!", tieBest: "TIED!", toBest: "{n} TO GO",
-    g_time: "SURVIVE TO {n}", g_boss: "DEFEAT THE {n}", g_lv: "REACH LV {n}", g_kills: "DEFEAT {n} YOKAI",
+    g_time: "SURVIVE TO {n}", g_boss: "DEFEAT THE {n}", g_lv: "REACH LV {n}", g_kills: "DEFEAT {n} CREATURES",
     best: "BEST", space: "SPACE", credit: "Made with Claude"
   }
 };
@@ -771,7 +788,7 @@ const clockNow = () => {
   if (state === "paused") return run.pauseClock;
   return (run.holdAt == null ? T() : run.holdAt) - run.offset;
 };
-// a few yokai already near the lantern, so the first defeat comes within a second or two (bar 1.1.2)
+// a few creatures already near the child, so the first defeat comes within a second or two (bar 1.1.2)
 function opening(R) {
   for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (i - 1) * 2.1 + (R.rnd() - 0.5) * 0.4, d = 118 + i * 16; spawnFoe(R, "kage", 0, Math.cos(a) * d, Math.sin(a) * d); }
 }
@@ -822,7 +839,7 @@ function scriptStep(R) {
     const a = R.script.shift().act, boss = R.foes.find(e => e.boss && !e.dead);
     if (a === "level") { R.xp = R.need; levelCheck(R); }
     else if (a === "ring") ringWave(R, R.wt);
-    else if (a === "stomp" && boss) { // the boss stomps right next to the lantern; the AI holds still for it
+    else if (a === "stomp" && boss) { // the boss stomps right next to the child; the AI holds still for it
       const d = Math.hypot(R.p.x - boss.x, R.p.y - boss.y);
       startAtk(R, boss, "stomp"); boss.tel.R = Math.max(boss.tel.R, d + 26); boss.demoHit = true; R.bot.noDodge = ATK.stomp.tele + 0.1;
     } else if (a === "fail") { R.bot.lapseT = 99; R.bot.ix = R.bot.iy = 0; R.drainX = 24; }
@@ -853,25 +870,25 @@ function spawnStep(R) {
   if (ph.stream && t >= R.nextStream) { R.nextStream = t + ph.stream; stream(R, t); }
   const b = BOSSES[R.bossNo];
   if (b && !R.warned && t >= b.at - 2.5) { R.warned = true; notice("nBoss", S("b_" + b.kind)); fx.bossWarnT = fx.vt; if (loud()) sfx.warn(); }
-  if (b && t >= b.at) { spawnBoss(R, b.kind); if (R.mode !== "demo") ringWave(R, t); R.bossNo++; R.warned = false; } // a boss comes with a ring of yokai
+  if (b && t >= b.at) { spawnBoss(R, b.kind); if (R.mode !== "demo") ringWave(R, t); R.bossNo++; R.warned = false; } // a boss comes with a ring of creatures
 }
 function pickKind(R, mix) { let r = R.rnd(), k = "kage"; for (const n in mix) { k = n; if ((r -= mix[n]) < 0) break; } return k; }
 function spawnFoe(R, kind, t, x, y) {
   const K = KIND[kind], p = R.p;
   if (x == null) { const a = R.rnd() * TAU, d = lightR(R.light) + 36 + R.rnd() * 80; x = p.x + Math.cos(a) * d; y = p.y + Math.sin(a) * d; }
-  // yokai grow tougher as the night goes on; the lantern's build grows faster, so the late night is about the build
+  // creatures grow tougher as the night goes on; the child's build grows faster, so the late night is about the build
   const hp = K.hp * (1 + t / 110 + (t / 320) * (t / 320));
   const e = { id: R.nid++, kind, x, y, px: x, py: y, hp, max: hp, spd: K.spd * (0.92 + R.rnd() * 0.16) * (1 + t / 1200), r: K.r, dmg: K.dmg * (1 + t / 600), hop: K.hop || 0, ho: R.rnd(),
     kx: 0, ky: 0, hitT: -9, flyT: 0, dead: false, cell: -1, born: R.wt, ph: R.rnd() * TAU, boss: 0, line: false };
   R.foes.push(e); R.byId.set(e.id, e);
   return e;
 }
-function ringWave(R, t) { // a circle of yokai closes in from the dark all at once
+function ringWave(R, t) { // a circle of creatures closes in from the dark all at once
   const n = clamp(8 + fl(t / 20), 8, 30), d = lightR(R.light) + 64, a0 = R.rnd() * TAU, p = R.p;
   for (let i = 0; i < n && R.foes.length < FOE_HARD; i++) { const a = a0 + i / n * TAU; spawnFoe(R, t > 240 && i % 5 === 2 ? "kasa" : t > 120 && i % 3 === 0 ? "hitotsu" : "kage", t, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); }
   notice("nRing");
 }
-function stream(R, t) { // a line of wisps crosses the light; they are fire, so they show in the dark before they arrive
+function stream(R, t) { // a line of comets crosses the light; they shine, so they show in the dark before they arrive
   const n = clamp(6 + fl(t / 90), 6, 12), p = R.p, a = R.rnd() * TAU, d = lightR(R.light) + 170, lo = (R.rnd() - 0.5) * 70;
   const sx = p.x + Math.cos(a) * d, sy = p.y + Math.sin(a) * d, tx = p.x - Math.sin(a) * lo, ty = p.y + Math.cos(a) * lo;
   const dd = Math.hypot(tx - sx, ty - sy) || 1, ux = (tx - sx) / dd, uy = (ty - sy) / dd, v = KIND.onibi.spd;
@@ -889,7 +906,7 @@ function spawnBoss(R, kind) {
   Object.assign(e, { hp, max: hp, boss: K.boss, spd: K.spd, st: "walk", t: 0, next: demo ? 99 : 3.5, atk: K.atk, ai: 0, tel: null, lunging: false, demoHit: false });
   R.bossAlive++; R.bossLog.push([kind, +R.wt.toFixed(1), null]);
 }
-function relocate(R, e) { // a yokai left far behind comes back from the dark ahead
+function relocate(R, e) { // a creature left far behind comes back from the dark ahead
   const p = R.p, mv = Math.hypot(p.vx, p.vy) > 1, a = (mv ? Math.atan2(p.vy, p.vx) : R.rnd() * TAU) + (R.rnd() - 0.5) * 1.6, d = lightR(R.light) + 40 + R.rnd() * 60;
   e.x = e.px = p.x + Math.cos(a) * d; e.y = e.py = p.y + Math.sin(a) * d; e.kx = e.ky = 0;
 }
@@ -906,7 +923,7 @@ function gridBuild(R) {
     const c = cy * GN + cx; e.cell = c; gNext[i] = gHead[c]; gHead[c] = i;
   }
 }
-function nearby(R, x, y, fn) { // every live yokai whose centre is within about one cell of (x, y), then the bosses
+function nearby(R, x, y, fn) { // every live creature whose centre is within about one cell of (x, y), then the bosses
   const cx = Math.floor((x - gOX) / GS), cy = Math.floor((y - gOY) / GS);
   for (let j = cy - 1; j <= cy + 1; j++) {
     if (j < 0 || j >= GN) continue;
@@ -914,7 +931,7 @@ function nearby(R, x, y, fn) { // every live yokai whose centre is within about 
   }
   if (R.bossAlive) for (const e of R.foes) if (e.boss && !e.dead) fn(e);
 }
-function separate(R) { // yokai push each other apart, so a crowd spreads into a wall instead of one dot
+function separate(R) { // creatures push each other apart, so a crowd spreads into a wall instead of one dot
   const F = R.foes;
   for (let i = 0; i < F.length; i++) {
     const a = F[i]; if (a.cell < 0 || a.dead) continue;
@@ -994,7 +1011,7 @@ function hurtPlayer(R, dmg, src) {
   fxHurt(R, dmg);
   if (R.light <= 0) { R.light = 0; die("dark"); }
 }
-function nearest(R, n, range) { // the n nearest yokai inside the light (bosses included), nearest first
+function nearest(R, n, range) { // the n nearest creatures inside the light (bosses included), nearest first
   const p = R.p, out = [];
   for (const e of R.foes) {
     if (e.dead) continue;
@@ -1031,7 +1048,7 @@ function weaponsStep(R) {
     for (let i = 0; i < W.n; i++) fire(R, "fuda", null, W.dmg, W.pierce, 230, a0 + (i - (W.n - 1) / 2) * 0.26, rr * 1.25 / 230 + 0.15);
     sndFuda();
   }
-  for (let i = R.rings.length - 1; i >= 0; i--) { // bell rings sweep out to the light's edge, centred on the lantern
+  for (let i = R.rings.length - 1; i >= 0; i--) { // shockwaves sweep out to the light's edge, centred on the child
     const g = R.rings[i]; g.r += 330 * DT;
     for (const e of R.foes) {
       if (e.dead || g.hit.has(e.id)) continue;
@@ -1050,7 +1067,7 @@ function shotsStep(R) {
   for (let i = S.length - 1; i >= 0; i--) {
     const s = S[i];
     s.life -= DT;
-    if (s.tid) { // sparks home in on their yokai
+    if (s.tid) { // laser shots home in on their target
       const t = R.byId.get(s.tid);
       if (t && !t.dead) { const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 12 * DT); s.vx += (dx / d * s.spd - s.vx) * k; s.vy += (dy / d * s.spd - s.vy) * k; }
     }
@@ -1081,7 +1098,7 @@ function killFoe(R, e) {
     const lg = R.bossLog.find(l => l[0] === e.kind && l[2] == null); if (lg) lg[2] = +R.wt.toFixed(1);
     dropMote(R, e.x, e.y, K.lt, K.xp, 2);
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; dropMote(R, e.x + Math.cos(a) * 26, e.y + Math.sin(a) * 26, 2.2, 1, 0); }
-    for (const m of R.motes) m.seek = true; // every light drop left on the ground flies to the lantern
+    for (const m of R.motes) m.seek = true; // every light crystal left on the ground flies to the child
     notice("nBossDown", S("b_" + e.kind));
     if (e.boss === 3) { R.winAt = R.wt + 2.4; fx.winT = fx.vt; }
     fxBossDown(R, e);
@@ -1093,13 +1110,13 @@ function sweep(R) {
   for (let i = 0; i < R.foes.length; i++) { const e = R.foes[i]; if (e.dead) R.byId.delete(e.id); else R.foes[j++] = e; }
   R.foes.length = j;
 }
-// light drops never burn out: past 240 on the ground, the oldest one joins the newest, which grows bigger
+// light crystals never burn out: past 240 on the ground, the oldest one joins the newest, which grows bigger
 function dropMote(R, x, y, v, xp, size) {
   R.xpAll += xp;
   if (R.motes.length >= 240) { const o = R.motes.shift(); v += o.v; xp += o.xp; size = Math.max(size, o.size, v >= 20 ? 2 : v >= 6 ? 1 : 0); }
   R.motes.push({ x, y, px: x, py: y, v, xp, size, seek: false, sp: 0, ph: R.rnd() * TAU });
 }
-function motesStep(R) { // light drops fly to the lantern once it is near; each one gives light back and experience
+function motesStep(R) { // light crystals fly to the child once it is near; each one gives light back and experience
   const p = R.p, pr = 40 * (1 + 0.4 * R.ps.fan);
   for (let i = R.motes.length - 1; i >= 0; i--) {
     const m = R.motes[i];
@@ -1188,7 +1205,7 @@ function botThink(R, b, P) {
   for (const m of R.motes) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < md) { md = d; m0 = m; } }
   const need = 1 - R.light / R.lmax;
   if (m0) { const k = (0.6 + 1.4 * need) / Math.max(24, md); ax += (m0.x - p.x) * k; ay += (m0.y - p.y) * k; }
-  if (hd > rr * 0.85 && hd < 1e9) { const k = 0.45 * P.hunt / hd; ax += hx * k; ay += hy * k; } // walk toward yokai when none are in reach
+  if (hd > rr * 0.85 && hd < 1e9) { const k = 0.45 * P.hunt / hd; ax += hx * k; ay += hy * k; } // walk toward creatures when none are in reach
   b.wa += 0.5 * P.every * DT; ax += Math.cos(b.wa) * 0.18; ay += Math.sin(b.wa) * 0.18; // keep moving in a slow circle
   const mag = Math.hypot(ax, ay);
   if (mag < 0.02) { b.ix = b.iy = 0; return; }
@@ -1221,15 +1238,16 @@ function die(reason) {
 function notice(key, n) { fx.note = { key, n, t: T() }; if (loud()) sfx.notice(); }
 
 // ---------- GAME-SPECIFIC: feedback the rules call (visuals and sound only; the rules never read fx) ----------
+const BITS = { kage: CO.slime, hitotsu: CO.hop, onibi: CO.crysL, kasa: CO.beetle }; // what a defeated creature breaks into
 function splash(x, y, n, spd, o) { // a top-down burst: no gravity, the bits spread and fade where they land
   for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.3 + rnd() * 0.8), life = 0.28 + rnd() * 0.3; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 10 }, o)); }
 }
-function fxDash(R) { fx.dashCue = fx.vt; splash(R.p.x, R.p.y + 10, 6, 70, { col: "paperD", kind: "dot", s: 2 }); if (loud()) sfx.dash(); }
-function fxHurt(R, dmg) { fx.hurtT = fx.vt; addTrauma(dmg > 15 ? 0.62 : 0.34); splash(R.p.x, R.p.y - 6, 8, 120, { col: "red", kind: "chip", s: 2.4 }); if (loud()) sfx.hurt(); }
+function fxDash(R) { fx.dashCue = fx.vt; splash(R.p.x, R.p.y + 10, 6, 70, { col: CO.craterD, kind: "dot", s: 2 }); if (loud()) sfx.dash(); }
+function fxHurt(R, dmg) { fx.hurtT = fx.vt; addTrauma(dmg > 15 ? 0.62 : 0.34); splash(R.p.x, R.p.y - 6, 8, 120, { col: CO.accent, kind: "chip", s: 2.4 }); if (loud()) sfx.hurt(); }
 function fxHit(e) { if (loud() && fx.vt - fx.hitT > 55) { fx.hitT = fx.vt; sfx.hit(); } }
 function fxKill(e) {
-  splash(e.x, e.y, e.boss ? 0 : 6, 90, { col: "ink", kind: "dot", s: 2.2 });
-  splash(e.x, e.y, e.boss ? 0 : 3, 120, { col: e.kind === "onibi" ? "mist" : "paper", kind: "chip", s: 2 });
+  splash(e.x, e.y, e.boss ? 0 : 6, 90, { col: CO.ink, kind: "dot", s: 2.2 });
+  splash(e.x, e.y, e.boss ? 0 : 3, 120, { col: BITS[e.kind] || CO.text, kind: "chip", s: 2 });
   if (loud() && fx.vt - fx.killT > 45) { fx.killT = fx.vt; sfx.kill(fx.killN++); }
 }
 function fxPick(R, m) {
@@ -1237,11 +1255,11 @@ function fxPick(R, m) {
   if (loud() && fx.vt - fx.pickT > 30) sfx.pick(fx.pickN);
   fx.pickT = fx.vt; fx.pickN++;
 }
-function fxChoose(R, k) { fx.chooseT = fx.vt; splash(R.p.x, R.p.y - 10, 12, 140, { col: "goldL", kind: "star", s: 2.6 }); if (loud()) sfx.choose(); }
-function fxStomp(tl) { fx.stompT = fx.vt; addTrauma(0.6); splash(tl.x, tl.y, 18, 210, { col: "ink", kind: "chip", s: 3 }); if (loud()) sfx.stomp(); }
+function fxChoose(R, k) { fx.chooseT = fx.vt; splash(R.p.x, R.p.y - 10, 12, 140, { col: CO.goldL, kind: "star", s: 2.6 }); if (loud()) sfx.choose(); }
+function fxStomp(tl) { fx.stompT = fx.vt; addTrauma(0.6); splash(tl.x, tl.y, 18, 210, { col: CO.pebble, kind: "chip", s: 3 }); if (loud()) sfx.stomp(); }
 function fxBossDown(R, e) {
   addTrauma(0.85); hitstop(0.12);
-  splash(e.x, e.y, 30, 240, { col: "ink", kind: "chip", s: 3.4 }); splash(e.x, e.y, 14, 200, { col: "goldL", kind: "star", s: 3 });
+  splash(e.x, e.y, 30, 240, { col: CO.crys, kind: "chip", s: 3.4 }); splash(e.x, e.y, 14, 200, { col: CO.goldL, kind: "star", s: 3 });
   if (loud()) sfx.bossDown();
   if (R.mode === "play") platform("happytime");
 }
@@ -1250,37 +1268,36 @@ function sndBell() { fx.bellT = fx.vt; if (loud()) sfx.bell(); }
 function sndFuda() { if (loud()) sfx.fuda(); }
 
 // ---------- KEEP: audio. SFX are data-like functions (w = start time); every voice goes through the kit bus ----------
-const INS = [164.81, 174.61, 220.0, 246.94, 261.63];          // the "in" scale (E F A B C) for the night
-const ni = d => INS[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5));
+const SCL = [146.83, 174.61, 196.0, 220.0, 261.63];         // D minor pentatonic (D F G A C) for the night side
+const ni = d => SCL[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5));
 const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0];
 const pz = d => PENTA[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5)); // pentatonic degree -> Hz
-function koto(f, w, peak, dest, dur) { // a plucked string: a bright attack that fades fast over a soft body
+function pluck(f, w, peak, dest, dur) { // a soft synth pluck: a triangle and a faint, slightly sharp octave above it
   dur = dur || 0.5;
-  tone("triangle", f, f * 0.998, dur, peak, w, dest, 0.002);
-  tone("sine", f * 2, f * 2, dur * 0.4, peak * 0.35, w, dest, 0.002);
-  hiss("bandpass", Math.min(9000, f * 4), 4, 0.02, peak * 0.4, w, dest);
+  tone("triangle", f, f * 0.999, dur, peak, w, dest, 0.004);
+  tone("sine", f * 2.004, f * 2.004, dur * 0.55, peak * 0.32, w, dest, 0.004);
 }
 const SFX = {
-  shot(w) { const q = vary(80, 0.15); tone("triangle", 1500 * q.f, 900 * q.f, 0.05, 0.05 * q.g, w); },
+  shot(w) { const q = vary(80, 0.15); tone("square", 1700 * q.f, 600 * q.f, 0.06, 0.03 * q.g, w, null, 0.002, 2600); },
   hit(w) { const q = vary(60, 0.2); hiss("bandpass", 900 * q.f, 1.6, 0.04, 0.08 * q.g, w, null, 400); },
-  kill(w, n) { const q = vary(30, 0.12); tone("sine", 260 * q.f, 90, 0.09, 0.2 * q.g, w); hiss("lowpass", 1500, 1, 0.05, 0.12, w, null, 300); koto(ni(7 + (n % 5)) * q.f, w + 0.01, 0.06, null, 0.25); },
+  kill(w, n) { const q = vary(30, 0.12); tone("sine", 260 * q.f, 90, 0.09, 0.2 * q.g, w); hiss("lowpass", 1500, 1, 0.05, 0.12, w, null, 300); pluck(ni(7 + (n % 5)) * q.f, w + 0.01, 0.06, null, 0.25); },
   pick(w, k) { const f = pz(7 + Math.min(k, 9)); tone("sine", f, f, 0.08, 0.06, w); tone("sine", f * 2, f * 2, 0.05, 0.025, w + 0.01); },
   dash(w) { hiss("bandpass", 700, 1.2, 0.18, 0.2, w, null, 2600); tone("sine", 300, 600, 0.12, 0.06, w); },
   fizzle(w) { hiss("bandpass", 500, 2, 0.06, 0.06, w); },
   hurt(w) { tone("sine", 120, 50, 0.25, 0.45, w); hiss("highpass", 2400, 1, 0.08, 0.18, w); tone("triangle", 233, 220, 0.25, 0.09, w + 0.02); tone("triangle", 247, 247, 0.25, 0.07, w + 0.02); },
-  bell(w) { for (const [i, d] of [[0, 0], [1, 0.07]]) { const f = 2200 + i * 260; tone("sine", f, f, 0.5, 0.05, w + d); tone("sine", f * 1.5, f * 1.5, 0.35, 0.03, w + d); tone("sine", f * 2.76, f * 2.76, 0.2, 0.016, w + d); } },
+  bell(w) { tone("sine", 180, 70, 0.4, 0.14, w); hiss("bandpass", 500, 1.4, 0.35, 0.07, w, null, 2200); tone("sine", 900, 450, 0.18, 0.02, w); }, // the shockwave
   fuda(w) { hiss("highpass", 3200, 1, 0.07, 0.07, w, null, 6000); },
   tele(w) { tone("sawtooth", 82, 78, 0.6, 0.12, w, null, 0.02, 500); hiss("lowpass", 400, 1, 0.5, 0.1, w); },
   stomp(w) { tone("sine", 75, 32, 0.6, 0.55, w); hiss("lowpass", 600, 1, 0.4, 0.4, w, null, 90); },
   lunge(w) { hiss("bandpass", 400, 1, 0.35, 0.28, w, null, 1800); tone("sawtooth", 110, 70, 0.3, 0.08, w, null, 0.01, 600); },
   warn(w) { for (let i = 0; i < 3; i++) { tone("sine", 95, 45, 0.35, 0.45, w + i * 0.32); hiss("lowpass", 500, 1, 0.12, 0.26, w + i * 0.32); } tone("sawtooth", 82, 82, 1.1, 0.09, w + 0.1, null, 0.08, 420); },
-  lvup(w) { [0, 2, 4, 5, 7].forEach((n, i) => koto(pz(n + 5), w + i * 0.06, 0.11)); tone("sine", pz(14), pz(14), 0.5, 0.05, w + 0.32); },
-  choose(w) { tone("sine", 150, 60, 0.15, 0.35, w); hiss("lowpass", 1200, 1, 0.08, 0.22, w); [5, 9, 12].forEach((n, i) => koto(pz(n), w + 0.04 + i * 0.03, 0.08)); },
-  bossDown(w) { tone("sine", 100, 38, 0.8, 0.5, w); hiss("lowpass", 800, 1, 0.5, 0.36, w, null, 100); for (const [f, d] of [[180, 0.1], [270, 0.1], [360, 0.12]]) tone("sine", f, f * 0.99, 1.4, 0.07, w + d); [0, 2, 4, 7, 9].forEach((n, i) => koto(pz(n + 5), w + 0.3 + i * 0.07, 0.1)); },
-  fail(w) { hiss("bandpass", 1300, 0.8, 0.5, 0.28, w, null, 260); [4, 3, 1, 0].forEach((n, i) => koto(ni(n + 5), w + 0.25 + i * 0.16, 0.1, null, 0.6)); tone("sine", 160, 55, 0.8, 0.16, w + 0.9); },
-  dawn(w) { tone("sine", 110, 40, 0.6, 0.4, w); [0, 1, 2, 3, 4, 5, 7, 9].forEach((n, i) => koto(pz(n + 5), w + 0.1 + i * 0.09, 0.1, null, 0.8)); for (let i = 0; i < 6; i++) tone("sine", 1500 + i * 220, 1560 + i * 220, 0.14, 0.03, w + 0.9 + i * 0.05); },
+  lvup(w) { [0, 2, 4, 5, 7].forEach((n, i) => pluck(pz(n + 5), w + i * 0.06, 0.11)); tone("sine", pz(14), pz(14), 0.5, 0.05, w + 0.32); },
+  choose(w) { tone("sine", 150, 60, 0.15, 0.35, w); hiss("lowpass", 1200, 1, 0.08, 0.22, w); [5, 9, 12].forEach((n, i) => pluck(pz(n), w + 0.04 + i * 0.03, 0.08)); },
+  bossDown(w) { tone("sine", 100, 38, 0.8, 0.5, w); hiss("lowpass", 800, 1, 0.5, 0.36, w, null, 100); for (const [f, d] of [[180, 0.1], [270, 0.1], [360, 0.12]]) tone("sine", f, f * 0.99, 1.4, 0.07, w + d); [0, 2, 4, 7, 9].forEach((n, i) => pluck(pz(n + 5), w + 0.3 + i * 0.07, 0.1)); },
+  fail(w) { hiss("bandpass", 1300, 0.8, 0.5, 0.28, w, null, 260); [4, 3, 1, 0].forEach((n, i) => pluck(ni(n + 5), w + 0.25 + i * 0.16, 0.1, null, 0.6)); tone("sine", 160, 55, 0.8, 0.16, w + 0.9); },
+  dawn(w) { tone("sine", 110, 40, 0.6, 0.4, w); [0, 1, 2, 3, 4, 5, 7, 9].forEach((n, i) => pluck(pz(n + 5), w + 0.1 + i * 0.09, 0.1, null, 0.8)); for (let i = 0; i < 6; i++) tone("sine", 1500 + i * 220, 1560 + i * 220, 0.14, 0.03, w + 0.9 + i * 0.05); },
   heart(w) { tone("sine", 62, 40, 0.14, 0.4, w); tone("sine", 58, 38, 0.12, 0.28, w + 0.2); },
-  notice(w) { koto(ni(9), w, 0.08); koto(ni(11), w + 0.08, 0.08); },
+  notice(w) { pluck(ni(9), w, 0.08); pluck(ni(11), w + 0.08, 0.08); },
   best(w) { [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", pz(n), pz(n), 0.28, 0.13, w + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.04, w + 0.4); },
   tick(w, i) { tone("sine", 900 + (i % 12) * 40, 900 + (i % 12) * 40, 0.035, 0.28, w); },
   stamp(w) { tone("sine", 140, 60, 0.15, 0.45, w); hiss("lowpass", 1200, 1, 0.08, 0.28, w); },
@@ -1289,8 +1306,8 @@ const SFX = {
 const sfx = {};
 for (const k in SFX) sfx[k] = n => { if (audioOn()) SFX[k](AU.ctx.currentTime, n); };
 const PEAK_SET = ["stomp", "bossDown", "warn", "hurt", "dawn", "fail", "choose", "lvup"]; // the 8 loudest, for the peak test
-// Music: a slow night loop in the "in" scale on the audio clock: a low drone, koto plucks, crickets. Taiko joins as
-// the crowd grows and doubles while a boss is out; it ducks on failure and softens on title and result.
+// Music: a slow night loop in D minor pentatonic on the audio clock: a low drone, synth plucks, a far sonar ping. Drums
+// join as the crowd grows and double while a boss is out; it ducks on failure and softens on title and result.
 const MEL = [7, -1, 8, 10, -1, 9, 8, -1, 7, -1, 5, 6, -1, 7, -1, -1], MSTEP = 0.3;
 const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1 };
 function musicLevel(lv) {
@@ -1306,7 +1323,7 @@ function pad(f, w, dur, peak) { // a held drone voice: linear swell, hold, relea
   gn.gain.setValueAtTime(0, w); gn.gain.linearRampToValueAtTime(peak, w + r); gn.gain.setValueAtTime(peak, w + dur - r); gn.gain.linearRampToValueAtTime(0, w + dur);
   o.connect(gn); gn.connect(mus.bus); o.start(w); o.stop(w + dur + 0.05);
 }
-function taiko(w, peak, small) { tone("sine", small ? 140 : 90, small ? 70 : 42, small ? 0.12 : 0.3, peak, w, mus.bus); hiss("lowpass", small ? 900 : 500, 1, 0.05, peak * 0.5, w, mus.bus); }
+function drum(w, peak, small) { tone("sine", small ? 140 : 90, small ? 70 : 42, small ? 0.12 : 0.3, peak, w, mus.bus); hiss("lowpass", small ? 900 : 500, 1, 0.05, peak * 0.5, w, mus.bus); }
 function musicStep() {
   if (!audioOn() || AU.offline) return;
   const c = AU.ctx;
@@ -1317,13 +1334,13 @@ function musicStep() {
     const i = mus.i++, w = mus.next, R = run, full = mus.level === "play" && i >= mus.drop;
     if (i % 8 === 0) { pad(ni(-5), w, MSTEP * 8 + 0.6, 0.05); pad(ni(-3), w + 0.03, MSTEP * 8 + 0.6, 0.025); } // overlapping pads: never a silent gap
     const m = MEL[i % 16];
-    if (m >= 0 && (mus.level !== "bed" || i % 2 === 0)) koto(ni(m), w, mus.level === "title" ? 0.05 : 0.06, mus.bus, 0.9);
-    if (i % 4 === 1) for (let k = 0; k < 3; k++) tone("sine", 4200, 4300, 0.025, 0.01, w + k * 0.05, mus.bus); // crickets
+    if (m >= 0 && (mus.level !== "bed" || i % 2 === 0)) pluck(ni(m), w, mus.level === "title" ? 0.05 : 0.06, mus.bus, 0.9);
+    if (i % 16 === 6) { tone("sine", 1568, 1568, 0.2, 0.016, w, mus.bus, 0.004); tone("sine", 1568, 1568, 0.2, 0.008, w + 0.27, mus.bus, 0.004); } // a far sonar ping and its echo
     if (full && R) {
       const lay = R.bossAlive ? 3 : R.foes.length > 90 ? 2 : R.foes.length > 35 ? 1 : 0;
-      if (lay >= 1 && i % 4 === 0) taiko(w, 0.26);
-      if (lay >= 2 && i % 4 === 2) taiko(w, 0.16);
-      if (lay >= 3 && i % 2 === 1) taiko(w, 0.12, 1);
+      if (lay >= 1 && i % 4 === 0) drum(w, 0.26);
+      if (lay >= 2 && i % 4 === 2) drum(w, 0.16);
+      if (lay >= 3 && i % 2 === 1) drum(w, 0.12, 1);
     }
     mus.next += MSTEP;
   }
@@ -1348,7 +1365,7 @@ function resultStep(now) {
   if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
     const u = L.u, bx = UI.ox + 70 * u, by = overY() + 238 * u;
-    burst(bx, by, 16, 220, { col: "gold", kind: "chip", s: 3 }); burst(bx, by, 5, 240, { kind: "star", col: "goldL", s: 3 });
+    burst(bx, by, 16, 220, { col: CO.gold, kind: "chip", s: 3 }); burst(bx, by, 5, 240, { kind: "star", col: CO.goldL, s: 3 });
   }
 }
 const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
@@ -1356,11 +1373,11 @@ function skipResult(now) { const r = run && run.result; if (r && now - r.at < RE
 
 // ---------- GAME-SPECIFIC: where things sit (scene coords; the screen may show more world around the scene) ----------
 const vTop = () => -L.y0, vBot = () => L.H - L.y0, vLeft = () => -L.x0, vRight = () => CW + L.x0;
-const beamY = () => vTop() + 9;                                // the bamboo beam across the top of the screen
+const beamY = () => vTop() + 9;                                // the truss across the top of the screen
 const sideX = s => s < 0 ? -L.x0 / 2 : CW + L.x0 / 2;         // the middle of the left (-1) or right (1) side area
 const hudS = () => L.wide ? clamp(L.x0 / 230, L.u, 1.6) : L.u; // HUD scale: bigger in the side areas
 const pauseY = () => vTop() + 132, overY = () => vTop() + (L.wide ? 30 : 58);
-// where the lantern stands on screen: the middle, a little low under the sign; on the title, below the scroll
+// where the child stands on screen: the middle, a little low under the HUD; on the title, below the title panel
 const playY = () => isTitle() && !DEMO ? vTop() + L.H * 0.6 : vTop() + L.H * 0.5 + (L.wide ? 0 : 14);
 const JOY = 34;                                                // a full push of the floating stick, logical px
 const UI = {};
@@ -1389,8 +1406,8 @@ function layoutUI() {
 function cardBox(i) { const u = L.u, h = 84, gap = 12, cy = vTop() + L.H * 0.5 + 22 * u, top = cy - (3 * h + 2 * gap) * u / 2; return { cx: 180, y: top + i * (h + gap) * u, w: 300, h, s: u }; }
 
 // ---------- GAME-SPECIFIC: world tiles. Baked once per screen scale and laid as world-anchored patterns ----------
-// The lit ground is washi-coloured earth with grass, pebbles, fallen leaves and red spider lilies; the night is an
-// ink wash in four indigo tones with moonlit grass, so the dark still shows the world moving past.
+// The lit ground is pale lavender dust with craters, pebbles, crystal clusters and little bulb plants; the night is
+// dark purple with flat-topped rocks and crystal spikes in silhouette, so the dark still shows the world moving past.
 const TILE_G = 384, TILE_D = 420;
 let PAT = null;
 const wrap9 = (x, T, fn) => { for (const ox of [-T, 0, T]) for (const oy of [-T, 0, T]) { x.save(); x.translate(ox, oy); fn(); x.restore(); } }; // seamless edges
@@ -1404,205 +1421,279 @@ function tilePats() {
   PAT = { K: L.K, ground: mk(TILE_G, groundArt), dark: mk(TILE_D, darkArt) };
   return PAT;
 }
+// one crystal spike standing at (X, Y): a flat face, a darker face away from the light, a light facet
+function crystal(x, X, Y, h, a, hit) {
+  at(x, X, Y, 1, a, () => {
+    const p = pPoly([[-3, 0], [-3.4, -h * 0.7], [0, -h], [3.4, -h * 0.72], [3, 0]]);
+    shape(x, p, hit ? CO.text : CO.crys, 1.1, hit ? CO.suitD : CO.crysD, 1.6, 0);
+    if (!hit) { x.fillStyle = C(CO.crysL); x.fill(pPoly([[-1.8, -h * 0.25], [-2, -h * 0.68], [-0.4, -h * 0.86]])); }
+  });
+}
+function bulbPlant(x, X, Y, v) { // a little plant: a bent stalk and a round bulb with a light spot
+  const h = 10 + v * 6;
+  ST.line(x, pSmooth([[X, Y], [X - 2, Y - h * 0.5], [X + 1, Y - h]], true), 1.6, CO.stalk);
+  shape(x, pBlob(X + 1, Y - h - 2, 4, 3.6, 0.1, fl(v * 99)), CO.bulb, 1, CO.accentD, 0.8, 1);
+  x.fillStyle = C(CO.accentL); x.fill(pEll(X - 0.4, Y - h - 3, 1, 0.8));
+}
 function groundArt(x, T) {
   const r = seeded(41), w9 = fn => wrap9(x, T, fn);
-  x.fillStyle = C("ground"); x.fillRect(0, 0, T, T);
-  for (let i = 0; i < 10; i++) { const p = pBlob(r() * T, r() * T, 16 + r() * 34, 9 + r() * 14, 0.22, fl(r() * 999)); w9(() => { x.fillStyle = C("poolA"); x.fill(p); }); }
-  for (let i = 0; i < 6; i++) { const p = pBlob(r() * T, r() * T, 12 + r() * 22, 7 + r() * 9, 0.2, fl(r() * 999)); w9(() => { x.fillStyle = C("groundL"); x.fill(p); }); }
-  for (let i = 0; i < 16; i++) { const s = 2 + r() * 3.4, p = pBlob(r() * T, r() * T, s * 1.3, s, 0.15, fl(r() * 999)); w9(() => { ST.fill(x, p, "poolB"); ST.edge(x, p, 0.8); }); }
-  for (let i = 0; i < 30; i++) { // grass tufts: short tapered brush strokes fanning up
-    const px = r() * T, py = r() * T, n = 3 + fl(r() * 3), h = 6 + r() * 5, bl = [];
-    for (let k = 0; k < n; k++) { const a = -Math.PI / 2 + (k - (n - 1) / 2) * 0.34 + (r() - 0.5) * 0.2, l = h * (0.7 + r() * 0.5), bx = px + k * 1.8 - n; bl.push([[bx, py], [bx + Math.cos(a) * l * 0.5, py + Math.sin(a) * l * 0.5], [bx + Math.cos(a) * l, py + Math.sin(a) * l]]); }
-    w9(() => { for (const b of bl) brush(x, b, 1.7, "grass"); });
+  x.fillStyle = C(CO.ground); x.fillRect(0, 0, T, T);
+  for (let i = 0; i < 9; i++) { const p = pBlob(r() * T, r() * T, 18 + r() * 34, 9 + r() * 14, 0.26, fl(r() * 999)); w9(() => { x.fillStyle = C(CO.groundD); x.fill(p); }); }
+  for (let i = 0; i < 6; i++) { const p = pBlob(r() * T, r() * T, 14 + r() * 24, 7 + r() * 10, 0.24, fl(r() * 999)); w9(() => { x.fillStyle = C(CO.groundL); x.fill(p); }); }
+  for (let i = 0; i < 7; i++) { // craters of different sizes: a rim, then the floor with its shadow on the side away from the light
+    const X = r() * T, Y = r() * T, w = 9 + r() * r() * 30, s = fl(r() * 999);
+    const rim = pBlob(X, Y, w, w * 0.56, 0.08, s), floor = pBlob(X + 1, Y + 1, w * 0.72, w * 0.38, 0.08, s + 1);
+    w9(() => { shape(x, rim, CO.crater, 1.2); shape(x, floor, CO.groundD, 0.9, CO.craterD, -w * 0.16, -w * 0.12); });
   }
-  for (let i = 0; i < 14; i++) { // fallen leaves
-    const px = r() * T, py = r() * T, rot = r() * TAU, c = ["red", "orange", "gold"][fl(r() * 3)], s = 3 + r() * 1.6, p = pStar(0, 0, s, s * 0.45, 5, 0);
-    w9(() => at(x, px, py, 1, rot, () => { ST.fill(x, p, c); ST.edge(x, p, 0.6); }));
+  for (let i = 0; i < 18; i++) { const s = 1.8 + r() * 2.8, p = pBlob(r() * T, r() * T, s * 1.3, s, 0.2, fl(r() * 999)); w9(() => shape(x, p, CO.pebble, 0.8)); }
+  for (let i = 0; i < 4; i++) { // crystal clusters of two to four spikes, the tallest in the middle
+    const X = r() * T, Y = r() * T, sc = 0.6 + r() * 0.5, n = 2 + fl(r() * 3), sp = [];
+    for (let k = 0; k < n; k++) { const m = (k - (n - 1) / 2); sp.push([m * 5.5 + (r() - 0.5) * 2, 24 - Math.abs(m) * 8 + r() * 4, m * 0.34 + (r() - 0.5) * 0.16]); }
+    sp.sort((a, b) => a[1] - b[1]);
+    w9(() => at(x, X, Y, sc, 0, () => { for (const [dx, h, a] of sp) crystal(x, dx, 0, h, a); }));
   }
-  for (let i = 0; i < 4; i++) { const px = r() * T, py = r() * T, fs = []; for (let k = 0; k < 3; k++) fs.push([px + (r() - 0.5) * 18, py + (r() - 0.5) * 12, r() * TAU]); w9(() => { for (const f of fs) lily(x, ...f); }); }
-}
-function lily(x, X, Y, a0) { // higanbana from above: six curled petals, long stamens, a gold heart
-  for (let k = 0; k < 6; k++) { const a = a0 + k * TAU / 6; brush(x, [[X, Y], [X + Math.cos(a) * 4, Y + Math.sin(a) * 4], [X + Math.cos(a + 0.5) * 6.5, Y + Math.sin(a + 0.5) * 6.5]], 1.8, "red"); }
-  x.strokeStyle = C("redD"); x.lineWidth = 0.5;
-  for (let k = 0; k < 6; k++) { const a = a0 + 0.3 + k * TAU / 6; x.beginPath(); x.moveTo(X, Y); x.quadraticCurveTo(X + Math.cos(a) * 6, Y + Math.sin(a) * 6, X + Math.cos(a + 0.4) * 10, Y + Math.sin(a + 0.4) * 10); x.stroke(); }
-  x.fillStyle = C("gold"); x.fill(pEll(X, Y, 1.2, 1.2));
+  for (let i = 0; i < 5; i++) { const X = r() * T, Y = r() * T, v = r(); w9(() => bulbPlant(x, X, Y, v)); }
 }
 function darkArt(x, T) {
   const r = seeded(73), w9 = fn => wrap9(x, T, fn);
-  x.fillStyle = C("sky0"); x.fillRect(0, 0, T, T);
-  const blobs = (n, c, r0, r1, amp) => { for (let i = 0; i < n; i++) { const rx = r0 + r() * (r1 - r0), p = pBlob(r() * T, r() * T, rx, rx * (0.5 + r() * 0.4), amp, fl(r() * 999)); w9(() => { x.fillStyle = C(c); x.fill(p); }); } };
-  blobs(7, "sky1", 60, 120, 0.22); blobs(4, "sky2", 40, 80, 0.24); blobs(3, "shadeK", 12, 26, 0.3);
-  for (let i = 0; i < 18; i++) { // night grass catching the moon: tall blades in a lighter indigo
-    const px = r() * T, py = r() * T, n = 4 + fl(r() * 4), h = 12 + r() * 14, bl = [];
-    for (let k = 0; k < n; k++) { const a = -Math.PI / 2 + (k - (n - 1) / 2) * 0.3 + (r() - 0.5) * 0.25, l = h * (0.6 + r() * 0.6), bx = px + k * 2.4 - n; bl.push([[bx, py], [bx + Math.cos(a) * l * 0.5, py + Math.sin(a) * l * 0.5 - 1], [bx + Math.cos(a) * l, py + Math.sin(a) * l]]); }
-    w9(() => { for (const b of bl) brush(x, b, 2.2, "far"); });
+  x.fillStyle = C(CO.night); x.fillRect(0, 0, T, T);
+  for (let i = 0; i < 20; i++) { const rx = 34 + r() * 60, p = pBlob(r() * T, r() * T, rx, rx * (0.45 + r() * 0.35), 0.3, fl(r() * 999)), c = i % 3 ? CO.nightP : CO.nightD; w9(() => { x.fillStyle = C(c); x.fill(p); }); }
+  for (let i = 0; i < 6; i++) { // frost on the night side: flat pale patches (no specks, so nothing looks like eyes in the dark)
+    const rx = 14 + r() * 24, p = pBlob(r() * T, r() * T, rx, rx * (0.4 + r() * 0.2), 0.35, fl(r() * 999)); w9(() => { x.fillStyle = C(CO.panelL); x.fill(p); });
   }
-  for (let i = 0; i < 8; i++) { const s = 4 + r() * 7, p = pBlob(r() * T, r() * T, s * 1.4, s, 0.12, fl(r() * 999)); w9(() => { x.fillStyle = C("far"); x.fill(p); x.save(); x.translate(1.4, 1.8); x.fillStyle = C("sky1"); x.fill(p); x.restore(); }); }
+  for (let i = 0; i < 5; i++) { // dark craters: a lighter rim round a deep floor
+    const X = r() * T, Y = r() * T, w = 12 + r() * 26, s = fl(r() * 999), rim = pBlob(X, Y, w, w * 0.55, 0.08, s), floor = pBlob(X + 1, Y + 1.5, w * 0.74, w * 0.36, 0.08, s + 1);
+    w9(() => { x.fillStyle = C(CO.nightP); x.fill(rim); x.fillStyle = C(CO.rock); x.fill(floor); });
+  }
+  for (let i = 0; i < 6; i++) { // flat-topped rocks in silhouette
+    const X = r() * T, Y = r() * T, w = 50 + r() * 40, h = 40 + r() * 36;
+    const p = pSmooth([[X - w / 2, Y], [X - w / 2 + 8, Y - h * 0.8], [X - w * 0.2, Y - h], [X + w * 0.25, Y - h], [X + w / 2 - 6, Y - h * 0.75], [X + w / 2, Y]]);
+    w9(() => { x.fillStyle = C(CO.rock); x.fill(p); });
+  }
+  for (let i = 0; i < 16; i++) { // stone spikes in the dark, their tips a shade lighter (no crystal colour, so they never look like a pickup)
+    const X = r() * T, Y = r() * T, h = 10 + r() * 16, p = pPoly([[X - 4, Y], [X, Y - h], [X + 4, Y]]), tip = pPoly([[X - 1.6, Y - h * 0.6], [X, Y - h], [X + 1.6, Y - h * 0.6]]);
+    w9(() => { x.fillStyle = C(CO.nightD); x.fill(p); x.fillStyle = C(CO.panelL); x.fill(tip); });
+  }
+  for (let i = 0; i < 46; i++) { const p = pEll(r() * T, r() * T, 1, 0.8); w9(() => { x.fillStyle = C(CO.nightP); x.fill(p); }); }
 }
 
 // ---------- GAME-SPECIFIC: sprites (made once per size by the kit's sprite cache) ----------
-const shadowSpr = r => bake("sh" + r, r * 2 + 4, r * 0.8 + 4, r + 2, r * 0.4 + 2, q => { q.fillStyle = C("poolA"); q.fill(pEll(0, 0, r, r * 0.36)); });
-function eye(q, X, Y, rx, ry, col) { q.fillStyle = C(col || "paper"); q.fill(pEll(X, Y, rx, ry)); q.fillStyle = C("ink"); q.fill(pEll(X + rx * 0.35, Y + ry * 0.12, rx * 0.46, ry * 0.46)); }
-// the child with the lantern, three-quarter view facing right (flipped for left): indigo yukata, red obi, a black bob
+const shadowSpr = r => bake("sh" + r, r * 2 + 4, r * 0.8 + 4, r + 2, r * 0.4 + 2, q => { q.fillStyle = C(CO.shadow); q.fill(pEll(0, 0, r, r * 0.36)); });
+// the child astronaut, three-quarter view facing right (flipped for left): a round helmet with a blue visor and an
+// antenna, a white suit with a coral chest plate, a backpack, and the hand lamp held out in front (it makes the light)
 function kidSpr(f) {
-  return bake("kid" + f, 34, 40, 17, 24, q => {
+  return bake("kid" + f, 36, 40, 12, 27, q => {
     const step = [0, 1.8, 0, -1.8][f], b = f % 2 ? -0.8 : 0;
-    for (const s of [-1, 1]) shape(q, pRR(s * 3.4 - 2.4 + s * step, 11.2, 4.8, 2.8, 0.8), "plankD", 0.8);
-    const body = pSmooth([[-6.6, 12], [-5.6, 2], [-4.8, -3 + b], [0, -4.4 + b], [4.8, -3 + b], [5.6, 2], [6.6, 12], [0, 12.8]]);
-    shape(q, body, "indigo", 1.1, "ink", 1.3, 1.2);
-    q.fillStyle = C("paper"); for (const [dx, dy] of [[-3, 7.4], [2.6, 9], [-0.6, 10.8], [3.4, 6]]) q.fill(pEll(dx, dy + b * 0.5, 0.75, 0.75));
-    ST.line(q, pPoly([[-2.4, -3.6 + b], [0.2, 0.4 + b], [2.6, -3.6 + b]], true), 1, "paper");
-    shape(q, pPoly([[-5.8, 1.4 + b], [5.8, 1.4 + b], [6, 4.4 + b], [-6, 4.4 + b]]), "red", 0.8);
-    shape(q, pBlob(-6.8, 3 + b, 2.6, 2, 0.1, 3), "red", 0.8, "redD", 0.6, 0.6);           // the obi's bow at the back
-    shape(q, pBlob(0.6, -10.2 + b, 7.2, 6.8, 0.03, 5), "paper", 1.1, "paperD", -1.2, 1.1);  // the face
-    const hair = pSmooth([[-7.4, -7.6 + b], [-7, -14 + b], [-1.4, -17.6 + b], [5, -16 + b], [7.8, -11.4 + b], [7.6, -9.4 + b], [4.4, -11.4 + b], [1.2, -10.8 + b], [-2, -9.2 + b], [-3.4, -5.4 + b], [-6.6, -4.6 + b]]);
-    ST.fill(q, hair, "ink"); ST.edge(q, hair, 0.9);
-    q.fillStyle = C("ink"); q.fill(pEll(4.4, -9 + b, 0.95, 1.25));
-    q.fillStyle = C("redL"); q.fill(pEll(4.8, -6.8 + b, 1.3, 0.8));
-    shape(q, pSmooth([[1.6, -2 + b], [7, -0.6 + b], [9.6, 0.8 + b], [8.6, 2.8 + b], [3.4, 2 + b]]), "indigo", 0.9);   // the arm holding the pole
-    shape(q, pEll(9.8, 1 + b, 1.7, 1.7), "paper", 0.7);
+    q.scale(0.86, 0.86);
+    shape(q, pSmooth([[-12, -6 + b], [-7, -8 + b], [-6, 4 + b], [-11, 5 + b]]), CO.pack, 1.1, CO.craterD, 0.8, 1);               // backpack
+    for (const s of [-1, 1]) { const lx = s * (3.4 + step * 0.7); shape(q, pSmooth([[lx - 3, 6], [lx + 3, 6], [lx + 3.4, 13], [lx - 3.4, 13]]), CO.suit, 1.1, CO.suitD, 1, 0); }
+    shape(q, pSmooth([[-7.6, -5 + b], [7.6, -5 + b], [8.4, 4 + b], [7, 8 + b], [-7, 8 + b], [-8.4, 4 + b]]), CO.suit, 1.4, CO.suitD, 1.6, 1.6);
+    shape(q, pCut(-3.6, -1 + b, 7.2, 5.4, 1.2), CO.accent, 0.9);                                                                  // chest plate
+    q.fillStyle = C(CO.text); q.fill(pEll(-1.4, 1.6 + b, 0.9, 0.9)); q.fill(pEll(1.4, 1.6 + b, 0.9, 0.9));
+    shape(q, pBlob(0, -13 + b, 10.4, 9.6, 0.04, 6), CO.suit, 1.5, CO.suitD, 1.6, 1.8);                                             // helmet
+    shape(q, pSmooth([[-6.6, -15 + b], [-4, -19 + b], [5, -19 + b], [7.4, -14.6 + b], [5, -9.6 + b], [-4.4, -9.6 + b]]), CO.visor, 1.2, CO.ink, 1.2, 1.4);
+    q.fillStyle = C(CO.visorL); q.fill(pSmooth([[-4.6, -15.4 + b], [-2.6, -18 + b], [0, -17.4 + b], [-3, -14 + b]]));
+    ST.line(q, pSmooth([[6, -21 + b], [8, -26 + b]], true), 1.2, CO.suitD); shape(q, pBlob(8.4, -27 + b, 1.8, 1.8, 0.1, 2), CO.accent, 0.8); // antenna
+    shape(q, pSmooth([[6, -3 + b], [13, -2.4 + b], [15, 0.4 + b], [13, 2.4 + b], [6, 2 + b]]), CO.suit, 1.1, CO.suitD, 0.8, 1);     // the arm
+    at(q, 18, b, 1, 0, () => { shape(q, pCut(-4, -3, 8, 6, 1.4), CO.accent, 1, CO.accentD, 0.6, 0.8); shape(q, pSmooth([[3.6, -4], [7, -4.6], [7, 4.6], [3.6, 4]]), CO.lamp, 0.9); });
   });
 }
-// the paper lantern on its pole, lit from inside (origin = where it hangs)
-const lampSpr = () => bake("lamp", 18, 22, 9, 2, q => {
-  ST.line(q, pLine(0, 0, 0, 3), 0.8);
-  const w = 11, h = 13, y0 = 3, body = pSmooth([[-w * 0.36, y0], [w * 0.36, y0], [w / 2, y0 + h * 0.3], [w / 2, y0 + h * 0.7], [w * 0.36, y0 + h], [-w * 0.36, y0 + h], [-w / 2, y0 + h * 0.7], [-w / 2, y0 + h * 0.3]]);
-  ST.fill(q, body, "red"); q.save(); q.clip(body);
-  for (const [c, k] of [["orange", 1], ["goldL", 0.5]]) { q.fillStyle = C(c); q.fill(pEll(-0.4, y0 + h * 0.5, w * 0.32 * k, h * 0.4 * k)); }
-  q.strokeStyle = C("redD"); q.lineWidth = 0.5; for (let i = 1; i < 5; i++) { q.beginPath(); q.ellipse(0, y0 + h * i / 5 - 0.6, w * 0.55, 1, 0, 0.15, Math.PI - 0.15); q.stroke(); }
-  q.restore(); ST.edge(q, body, 0.9);
-  q.fillStyle = C("ink"); for (const cy of [y0 - 1.2, y0 + h - 0.4]) q.fill(pRR(-w * 0.3, cy, w * 0.6, 1.8, 0.5));
-});
-// yokai of the night parade, drawn as woodblock prints (all face right; flipped toward the child)
-const FOE_BOX = { kage: [30, 34, 15, 19], hitotsu: [30, 34, 15, 19], onibi: [22, 30, 11, 16], kasa: [30, 42, 15, 24], nyudo: [84, 100, 42, 62], kumo: [72, 52, 37, 27], oni: [104, 112, 52, 66] };
+// the creatures of the night side (all face right; flipped toward the child). Rule names: kage = blob, hitotsu =
+// hopper, onibi = comet, kasa = rock bug; bosses nyudo = rock turtle, kumo = star spider, oni = crystal golem
+const FOE_BOX = { kage: [30, 32, 15, 17], hitotsu: [30, 34, 15, 19], onibi: [22, 32, 11, 17], kasa: [36, 34, 18, 19], nyudo: [100, 100, 50, 62], kumo: [72, 52, 37, 27], oni: [104, 112, 52, 66] };
 const FOE_ART = {
-  kage(q, h) { // a blot of ink with two paper eyes and a flick of the brush on top
-    const b = pSmooth([[-8.6, 6.4], [-10, 0], [-7.4, -6.6], [-2.6, -9.6], [0.6, -14.4], [1.8, -9.6], [6.6, -7.2], [9.8, -0.6], [8.6, 6.4], [3, 9], [-3, 9.2]]);
-    shape(q, b, h ? "paper" : "ink", 1.1);
-    if (!h) { eye(q, -3.4, -1.6, 2.6, 3.2); eye(q, 3.6, -1.6, 2.6, 3.2); q.fillStyle = C("redL"); q.fill(pEll(0.4, 4.2, 1.8, 1)); }
+  kage(q, h) { // a blob: a green dome with one big eye, a frown and a drip
+    shape(q, pSmooth([[-11, 8], [-9, -2], [-3, -10], [4, -10], [10, -2], [11.4, 8], [5, 6.6], [2, 9], [-2, 7]]), h ? CO.text : CO.slime, 1.4, h ? CO.suitD : CO.slimeD, 1.6, 1.4);
+    if (h) return;
+    q.fillStyle = C(CO.slimeL); q.fill(pEll(-5, -4, 2.4, 1.6, -0.6));
+    shape(q, pBlob(0.6, -1, 4.4, 4.6, 0.05, 3), CO.eye, 1); q.fillStyle = C(CO.ink); q.fill(pEll(1.4, -0.4, 1.9, 2.2));
+    ST.line(q, pLine(-3.4, -6.6, 4.4, -5.2), 1.2, CO.ink);
   },
-  hitotsu(q, h) { // a one-eyed hopper with two small horns
-    for (const s of [-1, 1]) shape(q, pEll(s * 4.4, 9.4, 2.8, 1.7), "ink", 0.6);
-    const b = pBlob(0, 0, 10, 9.6, 0.05, 12);
-    for (const s of [-1, 1]) b.addPath(pPoly([[s * 2.6, -8.6], [s * 5.4, -14], [s * 6.8, -7.6]]));
-    shape(q, b, h ? "paper" : "indigo", 1.2, h ? "paperD" : "ink", 1.6, 1.8);
-    if (!h) { shape(q, pEll(0.8, -1, 5.4, 5.8), "paper", 0.8); q.fillStyle = C("red"); q.fill(pEll(2.2, -0.6, 2.9, 3.1)); q.fillStyle = C("ink"); q.fill(pEll(2.7, -0.4, 1.5, 1.8)); }
+  hitotsu(q, h) { // a hopper: a round purple body on two springy legs, three eyes
+    for (const s of [-1, 1]) ST.line(q, pSmooth([[s * 4, 4], [s * 8, 8], [s * 5, 11], [s * 8, 13]], true), 1.6, h ? CO.suitD : CO.hopD);
+    shape(q, pBlob(0, 0, 9.4, 8.6, 0.07, 8), h ? CO.text : CO.hop, 1.4, h ? CO.suitD : CO.hopD, 1.4, 1.6);
+    if (h) return;
+    q.fillStyle = C(CO.hopL); q.fill(pEll(-4, -4.6, 2, 1.3, -0.5));
+    for (const [dx, dy, rr] of [[-3.6, -1, 2], [3.4, -1.4, 2], [0, -5.4, 1.6]]) { q.fillStyle = C(CO.eye); q.fill(pEll(dx, dy, rr, rr * 1.1)); q.fillStyle = C(CO.ink); q.fill(pEll(dx + 0.4, dy + 0.3, rr * 0.48, rr * 0.55)); }
+    ST.line(q, pSmooth([[-2.6, 3.6], [0, 2.6], [2.6, 3.6]], true), 1, CO.ink);
   },
-  onibi(q, h) { // a wisp of blue fire (its tail is up; turned to trail behind its flight)
-    const f = pSmooth([[0, 8], [-6.4, 4], [-7, -1.4], [-3.6, -6.6], [-1.4, -14], [1.6, -8.6], [5, -10.4], [4.6, -4], [7, 1.6], [5.6, 6]]);
-    shape(q, f, h ? "paper" : "sky3", 1);
-    ST.fill(q, pSmooth([[0, 6], [-4, 2.6], [-3.6, -2.4], [-0.6, -6.4], [1.6, -3], [4, -0.6], [3.4, 4]]), h ? "paper" : "mist");
-    q.fillStyle = C("paper"); q.fill(pEll(0, 2, 2.6, 2.6));
-    q.fillStyle = C("ink"); q.fill(pEll(-1.6, 1.6, 0.8, 1.1)); q.fill(pEll(1.6, 1.6, 0.8, 1.1));
+  onibi(q, h) { // a little comet: a round head of ice with two eyes, its teal tail streaming up (turned to trail its flight)
+    shape(q, pSmooth([[0, 8], [-6.4, 4], [-6.6, -2], [-3.4, -7], [-1.6, -14.4], [1, -9], [4.4, -11], [4.4, -4.4], [6.6, 1], [5.4, 6]]), h ? CO.text : CO.crys, 1);
+    ST.fill(q, pSmooth([[0, 6], [-3.8, 2.6], [-3.4, -2.4], [-0.6, -6.4], [1.6, -3], [3.8, -0.6], [3.2, 4]]), h ? CO.text : CO.crysL);
+    shape(q, pBlob(0, 2.6, 4.2, 4, 0.06, 5), CO.text, 0.9);
+    q.fillStyle = C(CO.ink); q.fill(pEll(-1.5, 2.4, 0.8, 1.1)); q.fill(pEll(1.5, 2.4, 0.8, 1.1));
   },
-  kasa(q, h) { // an old paper umbrella on one leg, one eye and a long tongue
-    ST.line(q, pLine(0, 4, 0, 11.4), 1.8, "paperD");
-    shape(q, pRR(-3.8, 11, 7.6, 2.8, 0.8), "plankD", 0.8);
-    const c = pSmooth([[0, -17], [4, -10], [11.4, 3], [6, 5.6], [0, 4.6], [-6, 5.6], [-11.4, 3], [-4, -10]]);
-    shape(q, c, h ? "paper" : "red", 1.2, h ? "paperD" : "redD", 1.6, 1.4);
+  kasa(q, h) { // a rock bug: a dark shell with a crystal growing on its back, six legs, two small eyes
+    for (const s of [-1, 1]) for (const dy of [-3, 2, 7]) ST.line(q, pSmooth([[s * 8, dy], [s * 13, dy + 1.6], [s * 14, dy + 5]], true), 1.4, h ? CO.suitD : CO.beetleD);
+    shape(q, pBlob(0, 1, 11, 9, 0.06, 4), h ? CO.text : CO.beetle, 1.4, h ? CO.suitD : CO.beetleD, 1.6, 1.8);
+    if (h) return;
+    ST.line(q, pLine(0, -6, 0, 9.6), 1, CO.beetleD);
+    at(q, 1, -2, 1, 0.15, () => shape(q, pPoly([[-3.4, 2], [-3.4, -6], [0, -12], [3.4, -6.4], [3, 2]]), CO.crys, 1.1, CO.crysD, 1.4, 0));
+    q.fillStyle = C(CO.eye); q.fill(pEll(-4.6, 6.4, 1.4, 1.2)); q.fill(pEll(4.6, 6.4, 1.4, 1.2));
+  },
+  nyudo(q, h) { // the rock turtle: a domed shell of stone with crystals growing on it, stubby legs, a grey head
+    const sk = h ? CO.text : CO.pack, skD = h ? CO.suitD : CO.craterD;
+    for (const [X, Y, s] of [[-24, 20, 0.8], [14, 22, 0.8]]) shape(q, pBlob(X, Y, 8 * s, 8.5 * s, 0.08, X & 7), sk, 1.2, skD, 1.2, 1.4);         // the far legs
+    shape(q, pBlob(36, 4, 11, 9.5, 0.05, 9), sk, 1.4, skD, 1.4, 1.6);                                                                          // the head
+    const shell = pSmooth([[-40, 22], [-38, 0], [-28, -22], [-8, -32], [14, -30], [31, -18], [38, 2], [38, 20], [0, 26]]);
+    shape(q, shell, h ? CO.text : CO.beetle, 1.8, h ? CO.suitD : CO.beetleD, 3, 3.4);
+    for (const [X, s] of [[-30, 1], [22, 1]]) shape(q, pBlob(X, 27, 8.6 * s, 8 * s, 0.08, X & 5), sk, 1.4, skD, 1.4, 1.6);                     // the near legs
     if (!h) {
-      q.strokeStyle = C("paper"); q.lineWidth = 0.8;
-      for (const s of [-1, 1]) { q.beginPath(); q.moveTo(0, -15.6); q.quadraticCurveTo(s * 4.4, -6, s * 7.6, 4.2); q.stroke(); }
-      eye(q, 1.4, -4.4, 3, 3.4);
-      shape(q, pSmooth([[-3, 1.4], [0.8, 1.2], [2, 5.6], [-0.6, 8], [-2.4, 4.8]]), "redL", 0.7);
-    }
-    ST.line(q, pLine(0, -17, 0, -20.4), 1.5, "plankD");
-  },
-  nyudo(q, h) { // a giant monk: a shaved head over a dark robe, prayer beads, heavy brows
-    const robe = pSmooth([[-36, 34], [-32, 8], [-20, -4], [-8, -7], [8, -7], [20, -4], [32, 8], [36, 34], [0, 37]]);
-    shape(q, robe, h ? "paper" : "indigo", 1.6, h ? "paperD" : "ink", 3, 3.4);
-    ST.line(q, pPoly([[-12, -6], [0, 10], [12, -6]], true), 2.2, "paper");
-    if (!h) for (let i = 0; i < 11; i++) { const t = i / 10; shape(q, pEll(-17 + 34 * t, 5 + Math.sin(t * Math.PI) * 11, 2.5, 2.5), "plank", 0.6); }
-    for (const s of [-1, 1]) shape(q, pEll(s * 21, -25, 3.8, 5.6), h ? "paper" : "grey", 1.1, h ? "paperD" : "greyD", s, 1);
-    shape(q, pBlob(0, -27, 21, 20, 0.03, 8), h ? "paper" : "grey", 1.6, h ? "paperD" : "greyD", -3.4, 3);
-    if (!h) {
-      eye(q, -8, -27, 4.8, 5.2); eye(q, 8, -27, 4.8, 5.2);
-      brush(q, [[-15, -35], [-9, -37.6], [-3, -35]], 3); brush(q, [[3, -35], [9, -37.6], [15, -35]], 3);
-      brush(q, [[-7, -15], [0, -13.4], [7, -15]], 2, "redD");
+      q.save(); q.clip(shell);
+      const plate = pPoly([[-12, -18], [4, -22], [17, -11], [10, 4], [-9, 5], [-19, -6]]);
+      ST.line(q, plate, 1.6, CO.beetleD);
+      for (const [a, b] of [[[-12, -18], [-18, -34]], [[4, -22], [8, -36]], [[17, -11], [36, -14]], [[10, 4], [22, 24]], [[-9, 5], [-14, 26]], [[-19, -6], [-42, 2]]]) ST.line(q, pLine(a[0], a[1], b[0], b[1]), 1.6, CO.beetleD);
+      q.restore();
+      ST.line(q, pSmooth([[-38, 18], [-10, 23], [14, 23], [37, 17]], true), 1.4, CO.beetleD);
+      for (const [X, Y, hh, a] of [[-16, -22, 16, -0.4], [2, -27, 24, 0.04], [17, -20, 15, 0.42]]) crystal(q, X, Y, hh, a);
+      q.fillStyle = C(CO.eye); q.fill(pEll(39, 1, 3, 3.2)); q.fillStyle = C(CO.ink); q.fill(pEll(40.2, 1.4, 1.6, 1.9));
+      brush(q, [[34, -3], [38.6, -4.6], [43, -3]], 2.2);
+      ST.line(q, pSmooth([[39, 8.6], [43, 8], [46, 6.4]], true), 1.2, CO.ink);
     }
   },
-  kumo(q, h) { // an earth spider's body (its legs are drawn per frame)
+  kumo(q, h) { // the star spider's body: a purple abdomen with gold stars, a dark head, coral eyes (legs are drawn per frame)
     const ab = pBlob(-12, 4, 21, 16.5, 0.05, 4);
-    shape(q, ab, h ? "paper" : "plank", 1.5, h ? "paperD" : "plankD", 2.4, 2.8);
-    if (!h) { q.save(); q.clip(ab); q.strokeStyle = C("tagD"); q.lineWidth = 3; for (const X of [-25, -16, -7]) { q.beginPath(); q.moveTo(X, -14); q.quadraticCurveTo(X + 4, 4, X, 22); q.stroke(); } q.restore(); ST.edge(q, ab, 1.5); }
-    shape(q, pBlob(13, -2, 12, 10, 0.05, 6), h ? "paper" : "plankD", 1.4, h ? "paperD" : "ink", 1.6, 1.8);
+    shape(q, ab, h ? CO.text : CO.hop, 1.5, h ? CO.suitD : CO.hopD, 2.4, 2.8);
     if (!h) {
-      q.fillStyle = C("red"); for (const [X, Y, r] of [[17, -6, 2.4], [22, -4.6, 2], [17, 0.6, 1.8], [21.6, 1.6, 1.5]]) q.fill(pEll(X, Y, r, r));
-      q.fillStyle = C("paper"); q.fill(pPoly([[23, 4], [26.4, 8.8], [21.6, 6.2]])); q.fill(pPoly([[19, 5.6], [21, 10.2], [17.4, 7.2]]));
+      q.save(); q.clip(ab);
+      for (const [X, Y, r, a] of [[-20, -3, 4.2, 0.2], [-6, 8, 3.4, -0.3], [-24, 11, 2.8, 0.5], [-4, -6, 2.4, 0.1], [-16, 16, 2, 0]]) shape(q, pStar(X, Y, r, r * 0.45, 5, a), CO.gold, 0.8);
+      q.restore(); ST.edge(q, ab, 1.5);
+    }
+    shape(q, pBlob(13, -2, 12, 10, 0.05, 6), h ? CO.text : CO.hopD, 1.4, h ? CO.suitD : CO.ink, 1.6, 1.8);
+    if (!h) {
+      q.fillStyle = C(CO.accent); for (const [X, Y, r] of [[17, -6, 2.4], [22, -4.6, 2], [17, 0.6, 1.8], [21.6, 1.6, 1.5]]) q.fill(pEll(X, Y, r, r));
+      q.fillStyle = C(CO.text); q.fill(pPoly([[23, 4], [26.4, 8.8], [21.6, 6.2]])); q.fill(pPoly([[19, 5.6], [21, 10.2], [17.4, 7.2]]));
     }
   },
-  oni(q, h) { // a great red oni with horns, a tiger-skin cloth and an iron club
-    const base = h ? "paper" : "red", sh = h ? "paperD" : "redD";
-    for (const s of [-1, 1]) shape(q, pRR(s * 12 - 6, 22, 12, 22, 4), base, 1.3, sh, 1.5, 1.5);
-    const club = pPoly([[30, 12], [35, 12], [47, -40], [38, -42]]);
-    shape(q, club, h ? "paper" : "plankD", 1.3);
-    if (!h) { q.fillStyle = C("gold"); for (let i = 0; i < 5; i++) { const t = i / 4, X = 36 + 7 * t, Y = 2 - 38 * t; q.fill(pEll(X, Y, 1.8, 1.8)); } }
-    shape(q, pSmooth([[-24, 26], [-28, 0], [-20, -16], [0, -20], [20, -16], [28, 0], [24, 26], [0, 30]]), base, 1.6, sh, 3, 3);
-    const loin = pPoly([[-25, 16], [25, 16], [27, 32], [-27, 32]]);
-    shape(q, loin, h ? "paper" : "gold", 1.3);
-    if (!h) { q.save(); q.clip(loin); for (let i = -24; i < 26; i += 7) brush(q, [[i, 15], [i + 3, 24], [i + 1, 33]], 2.6); q.restore(); }
-    for (const s of [-1, 1]) shape(q, pSmooth([[s * 22, -12], [s * 34, -2], [s * 35, 14], [s * 29, 17], [s * 26, 0]]), base, 1.3, sh, 1.5, 1.5);
-    for (const s of [-1, 1]) shape(q, pSmooth([[s * 5, -46], [s * 9, -60], [s * 13.4, -48]]), "paper", 1.1, "paperD", 0.8, 0.8);
-    const hair = pPoly([[-19, -30], [-24, -40], [-17, -40], [-19, -50], [-10, -45], [-6, -54], [0, -47], [6, -54], [10, -45], [19, -50], [17, -40], [24, -40], [19, -30], [12, -42], [-12, -42]]);
-    ST.fill(q, hair, "ink");
-    shape(q, pBlob(0, -33, 16, 15, 0.04, 9), base, 1.6, sh, -2.5, 2.5);
-    ST.fill(q, pSmooth([[-14, -38], [-6, -45], [6, -45], [14, -38], [8, -40], [0, -42], [-8, -40]]), "ink");
-    if (!h) {
-      for (const s of [-1, 1]) { shape(q, pEll(s * 6.4, -34, 4.2, 3.6), "gold", 0.9); q.fillStyle = C("ink"); q.fill(pEll(s * 6.4 + 1.4, -34, 1.8, 2.2)); brush(q, [[s * 12, -40], [s * 7, -41.4], [s * 2.4, -38.6]], 2.6); }
-      q.fillStyle = C("ink"); q.fill(pRR(-7.4, -26.6, 14.8, 5, 2));
-      q.fillStyle = C("paper"); q.fill(pPoly([[-6, -26.4], [-4.2, -21.4], [-2.6, -26.4]])); q.fill(pPoly([[2.6, -26.4], [4.2, -21.4], [6, -26.4]]));
-    }
+  oni(q, h) { // the crystal golem: a body of stone round a crystal heart, boulder fists, a crown of crystals
+    const st = h ? CO.text : CO.beetle, stD = h ? CO.suitD : CO.beetleD;
+    for (const s of [-1, 1]) shape(q, pSmooth([[s * 6, 20], [s * 20, 20], [s * 22, 41], [s * 5, 40]]), stD, 1.4, h ? CO.suitD : CO.panelD, 1.5, 1.5);   // legs
+    for (const s of [-1, 1]) shape(q, pSmooth([[s * 20, -16], [s * 32, -10], [s * 38, 8], [s * 30, 12], [s * 26, -2]]), st, 1.4, stD, 1.6, 1.6);   // arms
+    const torso = pSmooth([[-26, 24], [-30, 2], [-24, -16], [-8, -22], [8, -22], [24, -16], [30, 2], [26, 24], [0, 28]]);
+    shape(q, torso, st, 1.8, stD, 3, 3);
+    for (const s of [-1, 1]) shape(q, pBlob(s * 35, 17, 9.4, 8.6, 0.08, 7 + s), stD, 1.5, h ? CO.suitD : CO.panelD, 1.6, 1.8);                   // fists
+    shape(q, pBlob(0, -32, 15, 13, 0.04, 9), st, 1.6, stD, 2, 2.4);                                                                              // head
+    if (h) return;
+    ST.line(q, pSmooth([[-18, -10], [-12, -2], [-16, 8]], true), 1.4, CO.beetleD); ST.line(q, pSmooth([[16, 10], [12, 17], [18, 22]], true), 1.4, CO.beetleD);
+    shape(q, pPoly([[0, -9], [7.4, 1], [0, 11.4], [-7.4, 1]]), CO.crys, 1.2, CO.crysD, 1.8, 0);                                                   // the crystal heart
+    q.fillStyle = C(CO.crysL); q.fill(pPoly([[-3.6, 0.6], [0, -5.4], [0.6, 0]]));
+    for (const s of [-1, 1]) crystal(q, s * 25, -15, 14, s * 0.62);
+    for (const [X, hh, a] of [[-8, 11, -0.36], [0, 18, 0], [8, 11, 0.36]]) crystal(q, X, -42, hh, a);
+    q.fillStyle = C(CO.accent); q.fill(pPoly([[-8, -35.4], [-1.6, -34.4], [-1.6, -31], [-8, -32]])); q.fill(pPoly([[3.6, -34.4], [10, -35.4], [10, -32], [3.6, -31]]));
+    brush(q, [[-10, -38], [1, -36.4], [12, -38]], 2.4);
+    q.fillStyle = C(CO.ink); q.fill(pRR(-4, -26, 10, 2.6, 1));
   }
 };
 function foeSpr(kind, hit) { const b = FOE_BOX[kind]; return bake("f" + kind + (hit ? "h" : ""), b[0], b[1], b[2], b[3], q => FOE_ART[kind](q, hit)); }
-function kumoLegs(x, X, Y, face, t) { // eight jointed legs as heavy brush strokes, walking in two alternating sets
+function kumoLegs(x, X, Y, face, t) { // eight jointed legs as heavy ink strokes, walking in two alternating sets
   for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
     const ph = Math.sin(t * 9 + k * 1.7 + (s > 0 ? Math.PI : 0)) * 3, hx = X + face * (6 - k * 7), hy = Y + s * 5;
     const kx = hx + face * (8 - k * 6) + ph, ky = hy + s * 16, ex = kx + face * (6 - k * 4) + ph * 0.5, ey = hy + s * 29;
     brush(x, [[hx, hy], [kx, ky - s * 2], [ex, ey]], 3.4);
   }
 }
-const eyesSpr = (two, red) => bake("ey" + two + red, 14, 8, 7, 4, q => { q.fillStyle = C(red ? "red" : "paper"); if (two) { q.fill(pEll(-3.2, 0, 1.5, 1.9)); q.fill(pEll(3.2, 0, 1.5, 1.9)); } else q.fill(pEll(0, 0, 2.6, 2.8)); });
-// a light drop: a small flame in washi colours (size 0, 1 kasa, 2 boss)
+// eyes in the dark: one big eye (blob), two (rock bug), three (hopper); a boss's two are coral
+const eyesSpr = (n, red) => bake("ey" + n + red, 16, 12, 8, 6, q => {
+  q.fillStyle = C(red ? CO.accent : CO.eye);
+  if (n === 1) { q.fill(pEll(0, 0, 2.6, 2.8)); q.fillStyle = C(CO.ink); q.fill(pEll(0.6, 0.3, 1.2, 1.3)); }
+  else for (const [dx, dy] of n === 3 ? [[-3, 0.6], [3, 0.6], [0, -2.8]] : [[-3.2, 0], [3.2, 0]]) q.fill(pEll(dx, dy, 1.4, 1.7));
+});
+const EYES = { kage: 1, hitotsu: 3, kasa: 2 };
+// a light crystal (size 0, 1 a rock bug's, 2 a boss's)
 function moteSpr(size) {
   const s = [1, 1.35, 2.1][size];
-  return bake("mote" + size, 14 * s, 20 * s, 7 * s, 12 * s, q => {
+  return bake("mote" + size, 12 * s, 16 * s, 6 * s, 8.5 * s, q => {
     q.scale(s, s);
-    shape(q, pSmooth([[0, 5], [-4.4, 1.6], [-3.4, -3], [0, -9], [3.4, -3], [4.4, 1.6]]), "orange", 0.9);
-    ST.fill(q, pSmooth([[0, 3.6], [-2.6, 0.8], [-1.6, -2.6], [0, -5.6], [1.6, -2.6], [2.6, 0.8]]), "goldL");
-    q.fillStyle = C("paper"); q.fill(pEll(0, 1, 1.3, 1.6));
+    shape(q, pPoly([[0, -6], [3.6, 0], [0, 5.4], [-3.6, 0]]), CO.crys, 1, CO.crysD, 1.2, 0);
+    q.fillStyle = C(CO.crysL); q.fill(pPoly([[-1.6, -0.4], [0, -4], [0.4, -0.6]]));
   });
 }
-const sparkSpr = () => bake("spark", 14, 14, 7, 7, q => { shape(q, pStar(0, 0, 5.6, 1.9, 4, 0), "goldL", 0.7); q.fillStyle = C("paper"); q.fill(pEll(0, 0, 1.3, 1.3)); });
-const fudaSpr = () => bake("fuda", 12, 18, 6, 9, q => { shape(q, pPoly([[-3.6, -7], [3.6, -7], [3.8, 7], [-3.4, 7.2]]), "paper", 0.8); q.strokeStyle = C("red"); q.lineWidth = 0.7; q.strokeRect(-2.6, -6, 5.4, 12.2); brush(q, [[0, -4.6], [-0.6, -1], [0.8, 2], [0, 5]], 1.4); });
-const flySpr = () => bake("fly", 12, 12, 6, 6, q => { q.fillStyle = C("goldL"); q.fill(pEll(0, 0, 3.6, 3.6)); ST.edge(q, pEll(0, 0, 3.6, 3.6), 0.6); q.fillStyle = C("paper"); q.fill(pEll(0.4, 0.4, 1.7, 1.7)); q.fillStyle = C("ink"); q.fill(pEll(-2.8, -2.4, 1.3, 1.1)); });
-// card pictures, drawn in a 22 px circle
+function boltArt(q) { shape(q, pRR(-8, -2.4, 13, 4.8, 2.4), CO.accent, 1); q.fillStyle = C(CO.accentL); q.fill(pRR(-5, -1, 8, 2, 1)); }
+function discArt(q) { shape(q, pPolar(0, 0, 6.4, 6.4, t => 0.78 + 0.22 * Math.cos(3 * t), 48), CO.gold, 1.1, CO.goldD, 0.8, 0.8); q.fillStyle = C(CO.ink); q.fill(pEll(0, 0, 1.4, 1.4)); }
+function droneArt(q) {
+  ST.line(q, pLine(-2.6, -3.4, -4.6, -7), 1, CO.goldD);
+  shape(q, pBlob(0, 0, 4.4, 4.2, 0.05, 7), CO.goldL, 1, CO.goldD, 0.8, 1);
+  q.fillStyle = C(CO.ink); q.fill(pEll(0.6, 0.2, 1.6, 1.6)); q.fillStyle = C(CO.visorL); q.fill(pEll(0.2, -0.2, 0.6, 0.6));
+}
+const sparkSpr = () => bake("spark", 26, 10, 18, 5, q => { ST.line(q, pLine(-16, 0, -8, 0), 1.2, CO.accent); boltArt(q); }); // a laser shot, flying along +x
+const fudaSpr = () => bake("fuda", 18, 18, 9, 9, discArt);                                                               // a spinning disc
+const flySpr = () => bake("fly", 16, 18, 8, 9, droneArt);                                                                // a little drone
+// card pictures, drawn in a 21 px window
 const ICON = {
-  spark(q) { for (const [X, Y, s] of [[-6, 4, 9], [7, -5, 7], [6, 9, 5]]) shape(q, pStar(X, Y, s, s * 0.34, 4, 0.3), "goldL", 0.9); q.fillStyle = C("orange"); q.fill(pEll(-6, 4, 2.2, 2.2)); },
-  fly(q) { for (const [X, Y] of [[-6, 3], [7, -5]]) { q.fillStyle = C("goldL"); q.fill(pEll(X, Y, 5, 5)); ST.edge(q, pEll(X, Y, 5, 5), 0.8); q.fillStyle = C("ink"); q.fill(pEll(X - 4, Y - 3.4, 1.8, 1.5)); } q.fillStyle = C("goldD"); for (let i = 0; i < 4; i++) q.fill(pEll(-2 + i * 3, 8 - i * 4.6, 0.9, 0.9)); },
-  bell(q) { cordLine(q, pSmooth([[-4, -12], [0, -17], [4, -12]], true), 1.6, "red", 0.5); const b = pBlob(0, 1, 11, 11, 0.02, 2); shape(q, b, "gold", 1.2, "goldD", 1.6, 1.8); ST.line(q, pLine(-8, 3, 8, 3), 1.2); q.fillStyle = C("ink"); q.fill(pEll(0, 7, 2, 2)); },
-  fuda(q) { at(q, 0, 0, 1, -0.2, () => { shape(q, pPoly([[-8, -15], [8, -15], [8.4, 15], [-7.6, 15.4]]), "paper", 1.1, "paperD", 1, 1.2); q.strokeStyle = C("red"); q.lineWidth = 1.2; q.strokeRect(-5.6, -12.6, 11.4, 25.4); brush(q, [[0, -9], [-1.6, -2], [1.6, 3], [0, 10]], 2.6); }); },
-  oil(q) { const j = pSmooth([[-6, -9], [6, -9], [9, -2], [10, 8], [6, 13], [-6, 13], [-10, 8], [-9, -2]]); shape(q, j, "plank", 1.2, "plankD", 1.8, 1.8); shape(q, pRR(-5, -13, 10, 5, 1.6), "tagD", 1); shape(q, pRR(-5, 0, 10, 7, 1), "paper", 0.8); shape(q, pSmooth([[0, -24], [-3.4, -18], [0, -15.6], [3.4, -18]]), "gold", 0.8); },
-  wick(q) { rope(q, [[0, 15], [-1.6, 5], [1.4, -3], [0, -8]], 4.2, "tag", "tagD", 0.6); shape(q, pSmooth([[0, -8], [-4.6, -12], [-3, -17], [0, -23], [3, -17], [4.6, -12]]), "orange", 0.9); ST.fill(q, pSmooth([[0, -9.6], [-2.2, -12.6], [0, -17.4], [2.2, -12.6]]), "goldL"); },
-  zori(q) { const s = pBlob(0, 2, 8.6, 14, 0.04, 4); shape(q, s, "tag", 1.2, "tagD", 1.4, 1.6); grain(q, s, -9, -12, 18, 28, 2.6, "tagG", 3); cordLine(q, pPoly([[-6.4, 6], [0, -7], [6.4, 6]], true), 2, "red", 0.5); },
-  fan(q) { ST.line(q, pLine(0, 4, 0, 19), 3, "tagD"); const f = pBlob(0, -4, 13, 12.4, 0.03, 6); shape(q, f, "paper", 1.2, "paperD", 1.2, 1.4); q.fillStyle = C("red"); q.fill(pEll(0, -4, 5.6, 5.6)); },
-  wind(q) { ST.line(q, pLine(0, 0, 3, 20), 2, "tagD"); ["red", "gold", "indigo", "paper"].forEach((c, i) => at(q, 0, 0, 1, i * Math.PI / 2, () => shape(q, pPoly([[0, 0], [0, -14], [8, -6]]), c, 1))); q.fillStyle = C("ink"); q.fill(pEll(0, 0, 1.8, 1.8)); },
-  candle(q) { shape(q, pRR(-5.4, -4, 10.8, 20, 2), "red", 1.2, "redD", 1.6, 0); ST.line(q, pLine(0, -4, 0, -7), 1, "ink"); shape(q, pSmooth([[0, -6], [-4, -10], [-2.4, -14], [0, -19], [2.4, -14], [4, -10]]), "orange", 0.9); ST.fill(q, pSmooth([[0, -7.6], [-1.8, -10.4], [0, -14.4], [1.8, -10.4]]), "goldL"); }
+  spark(q) { for (const [X, Y, s] of [[-4, 4, 1.5], [7, -6, 1.05]]) at(q, X, Y, s, -0.7, () => boltArt(q)); },
+  fly(q) { q.fillStyle = C(CO.goldD); for (let i = 0; i < 5; i++) { const a = -2.7 + i * 0.5; q.fill(pEll(Math.cos(a) * 13, Math.sin(a) * 13 + 3, 0.9, 0.9)); } for (const [X, Y, s] of [[-6, 4, 1.6], [8, -5, 1.2]]) at(q, X, Y, s, 0, () => droneArt(q)); },
+  bell(q) { for (const r of [15, 9]) cordLine(q, pPolar(0, 0, r, r, t => 1 + 0.025 * Math.sin(5 * t + r), 48), 2.2, CO.crys, 0.6); shape(q, pBlob(0, 0, 3.4, 3.4, 0.05, 3), CO.text, 1); },
+  fuda(q) { for (const d of [-4, 3]) ST.line(q, pLine(-17, 12 + d, -10, 7 + d), 1.4, CO.ink); at(q, -2, 3, 1.8, 0.3, () => discArt(q)); at(q, 10, -9, 1.05, 1.2, () => discArt(q)); },
+  oil(q) { // a battery with a bolt on it
+    shape(q, pCut(-3.6, -15, 7.2, 4.4, 1), CO.pack, 1);
+    shape(q, pCut(-7.5, -11.4, 15, 25, 2.4), CO.crys, 1.2, CO.crysD, 1.6, 1.6);
+    shape(q, pPoly([[1.6, -8], [-4, 2.4], [-0.4, 2.4], [-1.6, 9.4], [4, -1], [0.4, -1]]), CO.text, 0.9);
+  },
+  wick(q) { // power saver: a leaf and a small bolt
+    shape(q, pSmooth([[-11, 10], [-10, -2], [-3, -11], [8, -13], [7, -3], [0, 7]]), CO.slime, 1.2, CO.slimeD, 1.4, 1.6);
+    ST.line(q, pSmooth([[-10, 10], [-3, 1], [5, -9]], true), 1.1, CO.slimeD);
+    shape(q, pPoly([[9, 0], [4, 8], [7, 8], [5, 15], [11, 5], [8, 5]]), CO.gold, 0.9);
+  },
+  zori(q) { // boosters: a boot over a flame
+    shape(q, pSmooth([[-3, 9], [-6, 15], [-1, 19], [2, 15], [5, 19], [8, 13], [5, 9]]), CO.accent, 1, CO.accentD, 0.8, 0.8);
+    shape(q, pSmooth([[-7, -13], [3, -13], [4, 1], [10, 3], [11, 10], [-7, 10]]), CO.suit, 1.2, CO.suitD, 1.4, 1.4);
+    shape(q, pPoly([[-7.6, 6], [11.4, 6], [11.4, 11], [-7.6, 11]]), CO.accent, 1);
+  },
+  fan(q) { // a magnet
+    shape(q, pSmooth([[-11, -11], [-4, -11], [-4, 2], [0, 6], [4, 2], [4, -11], [11, -11], [11, 3], [0, 14], [-11, 3]]), CO.accent, 1.2, CO.accentD, 1.4, 1.4);
+    for (const s of [-1, 1]) shape(q, pCut(s * 7.5 - 3.6, -15.6, 7.2, 5.2, 1), CO.pack, 1);
+  },
+  wind(q) { // turbo: a fan wheel with four blades
+    for (let i = 0; i < 4; i++) at(q, 0, 0, 1, i * Math.PI / 2 + 0.3, () => shape(q, pSmooth([[0, 0], [3.4, -6], [3, -15], [-3, -15.4], [-4, -6]]), CO.gold, 1, CO.goldD, 0.8, 0.8));
+    shape(q, pBlob(0, 0, 4, 4, 0.04, 2), CO.panelL, 1);
+  },
+  candle(q) { // energy: a small cell with a plus
+    shape(q, pCut(-3.6, -12, 7.2, 3.8, 1), CO.pack, 1);
+    shape(q, pCut(-8, -8.6, 16, 21, 2), CO.goldL, 1.2, CO.goldD, 1.4, 1.4);
+    q.fillStyle = C(CO.accent); q.fill(pRR(-1.6, -3.4, 3.2, 10, 0.6)); q.fill(pRR(-5, 0, 10, 3.2, 0.6));
+  }
 };
-const iconSpr = k => bake("ic" + k, 56, 56, 28, 28, q => { shape(q, pBlob(0, 0, 23, 22.4, 0.02, 11), "pane", 1.1, "paneL", -1.4, -1.6); (ICON[k] || ICON.candle)(q); });
-const cardSpr = () => bake("card", 306, 92, 153, 3, q => woodTag(q, -150, 0, 300, 84, { cut: 8, seed: 31 }));
-const signSpr = () => bake("sign", 178, 74, 89, 2, q => woodTag(q, -86, 0, 172, 66, { holes: [-50, 50], seed: 9 }));
-const plankSpr = (w, h = 34) => bake("plank" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 2, x => woodTag(x, -w / 2, 0, w, h, { dark: 1, cut: 5, seed: w }));
-const beamSpr = () => { const W = Math.ceil(L.W) + 12; return bake("beam" + W, W, 14, W / 2, 7, q => bamboo(q, -W / 2 + 2, 0, W / 2 - 2, 0, 9, 70)); };
-// the title scroll: an indigo mount with stitched edges, washi, a brushed rule, two rods (origin = top centre)
-const SCROLL_H = 182;
-const scrollSpr = () => bake("scroll", 316, SCROLL_H + 12, 158, 2, x => {
-  shape(x, pPoly([[-146, 8], [146, 8.6], [145.6, SCROLL_H - 6], [-145.4, SCROLL_H - 6.6]]), "indigo", 1.2);
-  x.fillStyle = C("paper"); for (let i = 0; i < 27; i++) for (const y of [14, SCROLL_H - 12]) x.fillRect(-139 + i * 10.6, y - 0.7, 1.4, 1.4);
-  shape(x, pPoly([[-136, 20], [136, 20.4], [135.6, SCROLL_H - 20], [-135.6, SCROLL_H - 20.5]]), "paper", 0.9, "paperD", -1.6, -2);
-  brush(x, [[-100, 105], [-30, 102], [40, 105], [104, 103]], 3.4);
-  for (const y of [0, SCROLL_H - 10]) { shape(x, pRR(-152, y, 304, 10, 4), "plank", 1.1, "plankD", 0, 2.5); x.fillStyle = C("ink"); for (const s of [-1, 1]) x.fill(pCut(s * 155 - 5, y - 1, 10, 12, 3)); }
+const iconSpr = k => bake("ic" + k, 56, 56, 28, 28, q => {
+  shape(q, pBlob(0, 0, 24, 23.4, 0.02, 11), CO.panelL, 1.2);
+  shape(q, pBlob(0, 0, 20.5, 20, 0.02, 12), CO.ground, 1, CO.groundD, -1.4, -1.6);
+  (ICON[k] || ICON.candle)(q);
 });
+// a panel of the station: a dark plate with cut corners, one shade tone, a frame line just inside and, where its rods
+// hold it, small clips on the top edge (origin = top centre). Every board, button and sign of the game is one.
+function panelArt(q, w, h, o) {
+  o = o || {};
+  const c = o.cut || 9, fc = o.frame || CO.accent;
+  shape(q, pCut(-w / 2, 0, w, h, c), CO.panel, 1.6, CO.panelD, 2.2, 2.6);
+  q.save(); q.lineJoin = "round"; q.lineWidth = o.fw || 2; q.strokeStyle = C(fc); q.stroke(pCut(-w / 2 + 4, 4, w - 8, h - 8, Math.max(2, c - 2))); q.restore();
+  for (const cx of o.clips || []) shape(q, pCut(cx - 4, -2, 8, 6, 1.4), fc, 1, fc === CO.accent ? CO.accentD : CO.panel, 0.6, 0.6);
+}
+const strut = (x, X, y0, y1) => cordLine(x, pLine(X, y0, X, y1), 1.6, CO.panelL, 0.5);                // a rod from the truss
+function truss(q, W) { // two rails and zigzag struts across the top of the screen (origin = its middle)
+  const zz = []; for (let i = 0; i * 14.4 <= W + 14.4; i++) zz.push([-W / 2 + i * 14.4, i % 2 ? 5.2 : -5.2]);
+  cordLine(q, pPoly(zz, true), 1.3, CO.panelL, 0.5);
+  for (const y of [-6.5, 6.5]) shape(q, pPoly([[-W / 2, y - 1.9], [W / 2, y - 1.9], [W / 2, y + 1.9], [-W / 2, y + 1.9]]), CO.panelL, 1.1);
+}
+const cardSpr = () => bake("card", 306, 92, 153, 3, q => panelArt(q, 300, 84, { frame: CO.panelL, fw: 1.6 }));
+const signSpr = () => bake("sign", 180, 76, 90, 4, q => panelArt(q, 172, 66, { clips: [-60, 60] }));
+const plankSpr = (w, h = 34) => bake("plank" + w + "x" + h, w + 6, h + 8, w / 2 + 3, 4, q => panelArt(q, w, h, { frame: CO.panelL, fw: 1.4, cut: 6 }));
+const beamSpr = () => { const W = Math.ceil(L.W) + 12; return bake("beam" + W, W, 22, W / 2, 11, q => truss(q, W)); };
+const btnSpr = (w, h, sub) => bake("btn" + w + "x" + h + (sub ? "s" : ""), w + 6, h + 8, w / 2 + 3, 4, q => panelArt(q, w, h, sub ? { frame: CO.panelL, fw: 1.6, cut: 7 } : { clips: [-w / 2 + 16, w / 2 - 16], cut: 8 }));
+const boardSpr = (w, h) => bake("board" + w + "x" + h, w + 6, h + 8, w / 2 + 3, 4, q => panelArt(q, w, h, { clips: [-100, 100], cut: 12 }));
+const SCROLL_H = 182; // the title panel's height
+const scrollSpr = () => bake("scroll", 312, SCROLL_H + 10, 156, 4, q => panelArt(q, 300, SCROLL_H, { clips: [-110, 110], cut: 12 }));
+function panelBtn(x, cx, y, w, h, label, size, sub) { put(x, btnSpr(w, h, sub), cx, y); text(x, label, cx, y + h / 2 + 1, size || 20, CO.text, { w: 900, deep: CO.panelD }); }
+// a small panel just under the truss for a system control (pause, sound, mute) or the language
+function sysBtn(x, kind, w, label) {
+  put(x, bake("sys" + kind + w, w + 6, 50, w / 2 + 3, 2, q => {
+    at(q, 0, 6, 1, 0, () => panelArt(q, w, 34, { cut: 7, fw: 1.6 }));
+    q.fillStyle = q.strokeStyle = C(CO.text); q.lineCap = "round"; q.lineWidth = 1.8;
+    if (kind === "pause") { q.fill(pRR(-6, 15, 4.4, 16, 1)); q.fill(pRR(1.6, 15, 4.4, 16, 1)); }
+    if (kind === "sound" || kind === "mute") q.fill(pPoly([[-10, 20], [-6, 20], [-1, 15], [-1, 31], [-6, 26], [-10, 26]]));
+    if (kind === "sound") for (const r of [5, 9]) { q.beginPath(); q.arc(-1, 23, r, -0.8, 0.8); q.stroke(); }
+    if (kind === "mute") { q.stroke(pLine(3, 19, 10, 27)); q.stroke(pLine(10, 19, 3, 27)); }
+  }), 0, 0);
+  if (label) text(x, label, 0, 25, 16, CO.text, {});
+}
 
 // ---------- GAME-SPECIFIC: drawing ----------
 const cam = { x: 0, y: 0, sx: 180, sy: 320 };
@@ -1614,7 +1705,7 @@ function camSet() {
   cam.x = IX(R.p); cam.y = IY(R.p); cam.sx = 180; cam.sy = playY();
 }
 const wRect = () => ({ x: cam.x - cam.sx + vLeft() - 24, y: cam.y - cam.sy + vTop() - 24, w: L.W + 48, h: L.H + 48 }); // the visible world
-// the light's edge: a circle cut by hand that breathes with the flame
+// the light's edge: a circle cut by hand that breathes a little
 function lightPath(cx, cy, r, ph) {
   const p = P2(), n = 60;
   for (let i = 0; i < n; i++) { const t = i / n * TAU, k = 1 + 0.011 * Math.sin(5 * t + ph) + 0.007 * Math.sin(9 * t - ph * 1.7), X = cx + Math.cos(t) * r * k, Y = cy + Math.sin(t) * r * k; if (i) p.lineTo(X, Y); else p.moveTo(X, Y); }
@@ -1626,19 +1717,19 @@ function drawWorld(x, now) {
     const g = rv + 22, x0 = Math.max(wr.x, cx - g), y0 = Math.max(wr.y, cy - g), x1 = Math.min(wr.x + wr.w, cx + g), y1 = Math.min(wr.y + wr.h, cy + g);
     x.fillStyle = P.ground; x.fillRect(x0, y0, x1 - x0, y1 - y0);
   }
-  const vis = []; // the yokai the light can show, and the child, in depth order (wisps are fire: drawn above the night)
+  const vis = []; // the creatures the light can show, and the child, in depth order (comets shine: drawn above the night)
   for (const e of R.foes) { if (e.dead || e.kind === "onibi") continue; if (Math.hypot(IX(e) - cx, IY(e) - cy) < rv + e.r * 1.8 + 24) vis.push(e); }
   vis.sort((a, b) => a.y - b.y);
   let kid = false;
   for (const e of vis) { if (!kid && e.y > R.p.y) { drawKid(x, now); kid = true; } drawFoe(x, e, now); }
   if (!kid) drawKid(x, now);
-  // the night: an ink wash with a hole the size of the light, then two stepped bands at its edge
+  // the night: a dark layer with a hole the size of the light, then two stepped bands at its edge
   const d = P2(); d.rect(wr.x, wr.y, wr.w, wr.h);
   if (rv > 0.5) d.addPath(lightPath(cx, cy, rv + 15, ph));
   x.fillStyle = P.dark; x.fill(d, "evenodd");
   if (rv > 0.5) {
-    const b1 = P2(); b1.addPath(lightPath(cx, cy, rv + 15, ph)); b1.addPath(lightPath(cx, cy, rv + 7, ph)); x.fillStyle = rgba("sky1", 0.6); x.fill(b1, "evenodd");
-    const b2 = P2(); b2.addPath(lightPath(cx, cy, rv + 7, ph)); b2.addPath(lightPath(cx, cy, rv, ph)); x.fillStyle = rgba("sky1", 0.28); x.fill(b2, "evenodd");
+    const b1 = P2(); b1.addPath(lightPath(cx, cy, rv + 15, ph)); b1.addPath(lightPath(cx, cy, rv + 7, ph)); x.fillStyle = rgba(CO.panelL, 0.7); x.fill(b1, "evenodd");
+    const b2 = P2(); b2.addPath(lightPath(cx, cy, rv + 7, ph)); b2.addPath(lightPath(cx, cy, rv, ph)); x.fillStyle = rgba(CO.panelL, 0.3); x.fill(b2, "evenodd");
   }
 }
 function drawFoe(x, e, now) {
@@ -1664,29 +1755,26 @@ function drawBoss(x, e, X, Y, flip, now) {
 }
 function drawKid(x, now) {
   const R = run, p = R.p, X = IX(p), Y = IY(p), moving = Math.hypot(p.vx, p.vy) > 5 && !R.dead && !R.card;
-  const f = moving ? fl(fx.walk) % 4 : 0, face = fx.face, b = f % 2 ? -0.8 : 0;
-  put(x, shadowSpr(8), X, Y + 12);
-  if (fx.vt - fx.dashCue < 200) { // speed strokes behind a dash
+  const f = moving ? fl(fx.walk) % 4 : 0;
+  put(x, shadowSpr(8), X, Y + 11.5);
+  if (fx.vt - fx.dashCue < 200) { // thruster streaks behind a dash
     const k = (fx.vt - fx.dashCue) / 200;
-    for (const d of [-6, 0, 6]) brush(x, [[X - p.fx * (12 + 20 * k) + d * p.fy, Y - p.fy * (12 + 20 * k) - d * p.fx], [X - p.fx * 9 + d * p.fy * 0.8, Y - p.fy * 9 - d * p.fx * 0.8]], 1.8 * (1 - k) + 0.3, "paperD");
+    for (const d of [-6, 0, 6]) brush(x, [[X - p.fx * (12 + 20 * k) + d * p.fy, Y - p.fy * (12 + 20 * k) - d * p.fx], [X - p.fx * 9 + d * p.fy * 0.8, Y - p.fy * 9 - d * p.fx * 0.8]], 1.8 * (1 - k) + 0.3, CO.craterD);
   }
   const blink = p.inv > 0 && fx.vt - fx.hurtT < PL.inv * 1000 && !reduceMotion && (fl(fx.vt / 70) & 1);
-  if (!blink) put(x, kidSpr(f), X, Y, 0, face, 1);
-  const hx = X + face * 9.8, hy = Y + 1 + b, tx = hx + face * 5, ty = hy - 6.5;
-  ST.line(x, pLine(hx, hy, tx, ty), 1.2, "plank");
-  put(x, lampSpr(), tx, ty, fx.swing);
+  if (!blink) put(x, kidSpr(f), X, Y, 0, fx.face, 1);
 }
-function drawTele(x, t, k, trail) { // a boss attack shown on the ground before it lands: a ring for a stomp, a lane for a lunge
+function drawTele(x, t, k, trail) { // a boss attack shown on the ground before it lands: a ring for a stomp, a lane for a charge
   k = clamp(k, 0, 1);
   if (t.kind === "stomp") {
-    x.fillStyle = rgba("red", 0.16 + 0.14 * k); x.fill(pEll(t.x, t.y, t.R * k, t.R * k * 0.92));
-    cordLine(x, pEll(t.x, t.y, t.R, t.R * 0.92), 1.8, "redL", 0.6);
+    x.fillStyle = rgba(CO.accent, 0.16 + 0.14 * k); x.fill(pEll(t.x, t.y, t.R * k, t.R * k * 0.92));
+    cordLine(x, pEll(t.x, t.y, t.R, t.R * 0.92), 1.8, CO.accent, 0.6);
   } else at(x, t.x, t.y, 1, Math.atan2(t.uy, t.ux), () => {
-    x.fillStyle = rgba("red", trail ? 0.12 : 0.16 + 0.14 * k); x.fillRect(0, -t.w, t.len * (trail ? 1 : k), 2 * t.w);
-    if (!trail) { cordLine(x, pRR(0, -t.w, t.len, 2 * t.w, 6), 1.8, "redL", 0.6); for (let i = 1; i < 4; i++) { const X = t.len * i / 4; ST.line(x, pPoly([[X - 8, -t.w * 0.5], [X, 0], [X - 8, t.w * 0.5]], true), 2, "redL"); } }
+    x.fillStyle = rgba(CO.accent, trail ? 0.12 : 0.16 + 0.14 * k); x.fillRect(0, -t.w, t.len * (trail ? 1 : k), 2 * t.w);
+    if (!trail) { cordLine(x, pRR(0, -t.w, t.len, 2 * t.w, 6), 1.8, CO.accent, 0.6); for (let i = 1; i < 4; i++) { const X = t.len * i / 4; ST.line(x, pPoly([[X - 8, -t.w * 0.5], [X, 0], [X - 8, t.w * 0.5]], true), 2, CO.accent); } }
   });
 }
-function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, wisps, light drops, the lantern's weapons
+function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, comets, light crystals, the child's weapons
   const R = run, cx = cam.x, cy = cam.y, rv = fx.rv, wr = wRect(), on = (X, Y, m) => X > wr.x - m && X < wr.x + wr.w + m && Y > wr.y - m && Y < wr.y + wr.h + m;
   for (const e of R.foes) if (e.boss && !e.dead) { if (e.tel) drawTele(x, e.tel, e.t / e.tel.T); if (e.trail) drawTele(x, e.trail, 1, true); }
   for (const e of R.foes) {
@@ -1697,56 +1785,58 @@ function drawAbove(x, now) { // what shows in the dark: telegraphs, eyes, wisps,
     const d = Math.hypot(X - cx, Y - cy);
     if (d < rv + (e.boss ? e.r * 0.5 : 2) || (!e.boss && d > rv + 90)) continue;
     if (((now / 1000 + e.ph) % 3.3) < 0.13) continue; // a blink
-    if (e.boss) put(x, eyesSpr(1, 1), X, Y - e.r * 0.8, 0, 2.2, 2.2);
-    else put(x, eyesSpr(e.kind === "hitotsu" ? 0 : 1, 0), X, Y - 1.6);
+    if (e.boss) put(x, eyesSpr(2, 1), X, Y - e.r * 0.8, 0, 2.2, 2.2);
+    else put(x, eyesSpr(EYES[e.kind] || 2, 0), X, Y - 1.6);
   }
   for (const m of R.motes) { const X = IX(m), Y = IY(m); if (on(X, Y, 20)) put(x, moteSpr(m.size), X, Y + Math.sin(now / 240 + m.ph) * 1.5); }
-  for (const s of R.shots) { const X = IX(s), Y = IY(s); if (s.kind === "spark") put(x, sparkSpr(), X, Y, now / 70); else put(x, fudaSpr(), X, Y, Math.atan2(s.vy, s.vx) + Math.PI / 2 + Math.sin(now / 50) * 0.3); }
-  if (R.w.fly && !R.dead) { const W = WPN.fly[R.w.fly - 1], rho = flyR(lightR(R.light)), a0 = R.flyPA + (R.flyA - R.flyPA) * A; for (let i = 0; i < W.n; i++) { const a = a0 + i * TAU / W.n; put(x, flySpr(), cx + Math.cos(a) * rho, cy + Math.sin(a) * rho, a); } }
-  for (const g of R.rings) {
+  for (const s of R.shots) { const X = IX(s), Y = IY(s); if (s.kind === "spark") put(x, sparkSpr(), X, Y, Math.atan2(s.vy || 0, s.vx || 1)); else put(x, fudaSpr(), X, Y, reduceMotion ? 0 : now / 60); }
+  if (R.w.fly && !R.dead) { const W = WPN.fly[R.w.fly - 1], rho = flyR(lightR(R.light)), a0 = R.flyPA + (R.flyA - R.flyPA) * A; for (let i = 0; i < W.n; i++) { const a = a0 + i * TAU / W.n; put(x, flySpr(), cx + Math.cos(a) * rho, cy + Math.sin(a) * rho); } }
+  for (const g of R.rings) { // the shockwave: a teal ring between an ink edge and a light inner line, fading as it spreads
     const r = g.pr + (g.r - g.pr) * A, k = clamp(r / g.max, 0, 1);
-    x.globalAlpha = 1 - 0.65 * k; x.lineWidth = 3.2; x.strokeStyle = C("gold"); x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.stroke();
-    x.lineWidth = 1.2; x.strokeStyle = C("paper"); x.beginPath(); x.arc(cx, cy, Math.max(0, r - 2.6), 0, TAU); x.stroke(); x.globalAlpha = 1;
+    x.globalAlpha = 1 - 0.65 * k;
+    x.lineWidth = 3.2; x.strokeStyle = C(CO.ink); x.beginPath(); x.arc(cx, cy, r + 1.6, 0, TAU); x.stroke();
+    x.lineWidth = 2.4; x.strokeStyle = C(CO.crys); x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.stroke();
+    x.lineWidth = 1; x.strokeStyle = C(CO.text); x.beginPath(); x.arc(cx, cy, Math.max(0, r - 2.2), 0, TAU); x.stroke(); x.globalAlpha = 1;
   }
   partsDraw(x);
   const b = R.foes.find(e => e.boss && !e.dead); // eye guidance: an arrow at the light's edge points at a boss in the dark
   if (b && !R.dead) {
     const dx = IX(b) - cx, dy = IY(b) - cy, d = Math.hypot(dx, dy) || 1;
-    if (d > rv + b.r * 0.3) { const r = Math.max(30, rv - 22) - (reduceMotion ? 0 : Math.sin(now / 160) * 3); at(x, cx + dx / d * r, cy + dy / d * r, 1, Math.atan2(dy, dx), () => shape(x, pPoly([[11, 0], [-7, -9], [-2, 0], [-7, 9]]), "red", 1.3)); }
+    if (d > rv + b.r * 0.3) { const r = Math.max(30, rv - 22) - (reduceMotion ? 0 : Math.sin(now / 160) * 3); at(x, cx + dx / d * r, cy + dy / d * r, 1, Math.atan2(dy, dx), () => shape(x, pPoly([[11, 0], [-7, -9], [-2, 0], [-7, 9]]), CO.accent, 1.3)); }
   }
 }
 function drawCues(x) { // input feedback drawn at once: the stick under the finger, the cursor ring, a dash ring
   const R = run;
   if (state === "play" && ptr.on && !R.card) {
-    if (ptr.mouse) cordLine(x, pEll(ptr.x, ptr.y, 9, 9), 1.6, "paper", 0.6);
-    else { cordLine(x, pEll(ptr.sx, ptr.sy, JOY, JOY), 1.4, "paper", 0.5); shape(x, pEll(ptr.x, ptr.y, 11, 11), "paper", 1.2, "paperD", 1, 1.2); }
+    if (ptr.mouse) cordLine(x, pEll(ptr.x, ptr.y, 9, 9), 1.6, CO.text, 0.6);
+    else { cordLine(x, pEll(ptr.sx, ptr.sy, JOY, JOY), 1.4, CO.text, 0.5); shape(x, pEll(ptr.x, ptr.y, 11, 11), CO.text, 1.2, CO.suitD, 1, 1.2); }
   }
   const dk = (fx.vt - fx.dashCue) / 180;
-  if (dk >= 0 && dk < 1) cordLine(x, pEll(cam.sx, cam.sy, 12 + 22 * dk, 12 + 22 * dk), 1.8 * (1 - dk) + 0.4, "paper", 0.5);
+  if (dk >= 0 && dk < 1) cordLine(x, pEll(cam.sx, cam.sy, 12 + 22 * dk, 12 + 22 * dk), 1.8 * (1 - dk) + 0.4, CO.text, 0.5);
   const fk = (fx.vt - fx.fizzle) / 160;
-  if (fk >= 0 && fk < 1) cordLine(x, pEll(cam.sx, cam.sy, 15, 15), 1.2, "grey", 0.5);
+  if (fk >= 0 && fk < 1) cordLine(x, pEll(cam.sx, cam.sy, 15, 15), 1.2, CO.pack, 0.5);
 }
-function drawHud(x, now) { // one hanging sign: the night's clock, the level and its bar; a boss's name and life under it
+function drawHud(x, now) { // one panel on two rods: the night's clock, the level and its bar; a boss's name and life under it
   const R = run, s = hudS(), wide = L.wide, sx = wide ? sideX(-1) : 180, sy = vTop() + (wide ? 64 : 22), a = fx.sa;
-  cords(x, [-50, 50].map(hx => [sx + s * (hx * Math.cos(a) - 5 * Math.sin(a)), sy + s * (hx * Math.sin(a) + 5 * Math.cos(a))]), beamY());
+  for (const hx of [-60, 60]) strut(x, sx + s * (hx * Math.cos(a) - 2 * Math.sin(a)), beamY(), sy + s * (hx * Math.sin(a) + 2 * Math.cos(a)));
   at(x, sx, sy, s, a, () => {
     put(x, signSpr(), 0, 0);
-    text(x, mmss(R.wt), 0, 25, 30, "ink", { f: ST.title, w: 900, deep: "tagD" });
-    text(x, S("lv") + R.lv, -70, 50, 16, "plank", { a: "left" });
-    const bx = -30, bw = 100, k = R.card ? 1 : clamp(R.xp / R.need, 0, 1), bar = pRR(bx, 45, bw, 9, 3);
-    x.fillStyle = C("plankD"); x.fill(bar);
-    if (k > 0.02) { x.fillStyle = C(R.card && !reduceMotion && (fl(now / 160) & 1) ? "goldL" : "gold"); x.fill(pRR(bx + 1.5, 46.5, (bw - 3) * k, 6, 2)); }
-    ST.edge(x, bar, 1);
+    text(x, mmss(R.wt), 0, 27, 30, CO.text, { w: 900, deep: CO.panelD });
+    text(x, S("lv") + R.lv, -68, 50, 15, CO.text, { a: "left", w: 800 });
+    const bx = -28, bw = 98, k = R.card ? 1 : clamp(R.xp / R.need, 0, 1), bar = pCut(bx, 45, bw, 10, 2);
+    x.fillStyle = C(CO.panelD); x.fill(bar);
+    if (k > 0.02) { x.fillStyle = C(R.card && !reduceMotion && (fl(now / 160) & 1) ? CO.goldL : CO.crys); x.fill(pCut(bx + 2, 47, (bw - 4) * k, 6, 1.5)); }
+    ST.edge(x, bar, 1.1);
   });
   const b = R.foes.find(e => e.boss && !e.dead);
   if (b) {
-    const by = sy + 74 * s;
-    cords(x, [[sx - 76 * s, by + 4 * s], [sx + 76 * s, by + 4 * s]], sy + 60 * s, "plank");
+    const by = sy + 76 * s;
+    for (const hx of [-76, 76]) strut(x, sx + hx * s, sy + 66 * s, by + 4 * s);
     at(x, sx, by, s, 0, () => {
       put(x, plankSpr(212, 44), 0, 0);
-      text(x, S("b_" + b.kind), -94, 14, 15, "paper", { a: "left" });
-      const k = clamp(b.hp / b.max, 0, 1), bar = pRR(-94, 26, 188, 9, 3);
-      x.fillStyle = C("plankD"); x.fill(bar); if (k > 0.01) { x.fillStyle = C("red"); x.fill(pRR(-92.5, 27.5, 185 * k, 6, 2)); } ST.edge(x, bar, 1);
+      text(x, S("b_" + b.kind), -94, 14, 15, CO.text, { a: "left", w: 800, max: 188 });
+      const k = clamp(b.hp / b.max, 0, 1), bar = pCut(-94, 26, 188, 10, 2);
+      x.fillStyle = C(CO.panelD); x.fill(bar); if (k > 0.01) { x.fillStyle = C(CO.accent); x.fill(pCut(-92, 28, 184 * k, 6, 1.5)); } ST.edge(x, bar, 1.1);
     });
   }
 }
@@ -1755,7 +1845,7 @@ function drawNote(x, now) { // one short line at the top of the light, where the
   const age = now - n.t; if (age > 2000 || age < 0) { if (age > 2000) fx.note = null; return; }
   const u = L.u, s = u * (age < 180 ? lerp(0.85, 1, easeBack(age / 180)) : 1), y = cam.sy - clamp(fx.rv * 0.6, 70, 130);
   x.globalAlpha = age > 1700 ? 1 - (age - 1700) / 300 : 1;
-  at(x, 180, y, s, 0, () => text(x, S(n.key, n.n), 0, 0, 24, n.key === "nBoss" ? "redL" : "paper", { f: ST.title, w: 900, ol: "ink", ow: 0.26, deep: "ink", max: 330 }));
+  at(x, 180, y, s, 0, () => text(x, S(n.key, n.n), 0, 0, 24, n.key === "nBoss" ? CO.accent : CO.text, { f: ST.title, w: 900, ol: CO.ink, ow: 0.26, deep: CO.ink, max: 330 }));
   x.globalAlpha = 1;
 }
 function teachStep(R) { // first-run lines, each once per run, shown under the child
@@ -1772,95 +1862,98 @@ function drawTeach(x, now) {
   const age = fx.vt - l.t, dur = l.hold ? 1e9 : 3000; if (age > dur) return;
   const u = L.u, y = cam.sy + 66 * u;
   x.globalAlpha = age > dur - 300 ? (dur - age) / 300 : 1;
-  text(x, S(l.key), 180, y, 20 * u, "paper", { ol: "ink", ow: 0.3, w: 800 });
+  text(x, S(l.key), 180, y, 20 * u, CO.text, { ol: CO.ink, ow: 0.3, w: 800 });
   x.globalAlpha = 1;
   if (l.hold && !finePointer) { const k = (now % 1400) / 1400, ox = Math.sin(k * TAU) * 26 * u; hand(x, 180 + ox, y + 18 * u, 0, u); }
 }
-function drawCards(x, now) { // the level-up choice: three wooden cards over a dimmed night
+function drawCards(x, now) { // the level-up choice: three panels over a dimmed night
   const R = run, c = R.card, u = L.u, age = T() - c.at, k = easeBack(clamp(age / 260, 0, 1));
-  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba(CO.ink, 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
   const b0 = cardBox(0);
-  at(x, 180, b0.y - 34 * u, u, 0, () => text(x, S("lvUp"), 0, 0, 30, "goldL", { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink" }));
+  at(x, 180, b0.y - 34 * u, u, 0, () => text(x, S("lvUp"), 0, 0, 30, CO.goldL, { f: ST.title, w: 900, ol: CO.ink, ow: 0.24, deep: CO.ink }));
   for (let i = 0; i < 3; i++) { const b = cardBox(i); at(x, b.cx, b.y + (1 - k) * 36 * (i + 1) * u, u, 0, () => drawCard(x, c.opts[i], c.keyed && i === c.sel, now)); }
   if (c.keyed && cardReady()) { const b = cardBox(c.sel); hand(x, b.cx - (156 + 12 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * u, b.y + 42 * u, Math.PI / 2, u); }
-  if (finePointer) text(x, S("hint123"), 180, cardBox(2).y + 106 * u, 15 * u, "paper", { ol: "ink", ow: 0.3 });
+  if (finePointer) text(x, S("hint123"), 180, cardBox(2).y + 106 * u, 15 * u, CO.text, { ol: CO.ink, ow: 0.3 });
 }
 function drawCard(x, k, sel, now) {
   const R = run, lv = isWpn(k) ? R.w[k] : (R.ps[k] || 0), isNew = k !== "candle" && lv === 0;
   put(x, cardSpr(), 0, 0);
   put(x, iconSpr(k), -112, 42);
   const n = k === "candle" ? 0 : maxLv(k), x0 = 140 - (n - 1) * 10.5; // level pips end at the same edge on every card
-  text(x, S("w_" + k), -78, 26, 22, "ink", { a: "left", f: ST.title, w: 900, max: Math.min(140, x0 - 4.5 - 4 + 78) });
-  text(x, isWpn(k) && lv > 0 ? S(GAIN[k][lv]) : S("d_" + k), -78, 58, 15, "plankD", { a: "left", w: 800, max: 222 });
-  if (isNew) seal(x, 108, 27, S("isNew"), 999, 14); // something new: a red seal where the level pips would be
-  else for (let i = 0; i < n; i++) { // level pips: owned ones gold, the one this card adds red (eight for a weapon)
+  text(x, S("w_" + k), -78, 27, 22, CO.text, { a: "left", f: ST.title, w: 900, max: Math.min(140, x0 - 4.5 - 4 + 78) });
+  text(x, isWpn(k) && lv > 0 ? S(GAIN[k][lv]) : S("d_" + k), -78, 58, 15, CO.sub, { a: "left", w: 800, max: 222 });
+  if (isNew) seal(x, 108, 27, S("isNew"), 999, 14); // something new: a coral tag where the level pips would be
+  else for (let i = 0; i < n; i++) { // level pips: owned ones gold, the one this card adds coral, the rest dark (eight for a weapon)
     const X = x0 + i * 10.5, p = pPoly([[X, 20.5], [X + 4.5, 26], [X, 31.5], [X - 4.5, 26]]);
-    x.fillStyle = C(i < lv ? "gold" : i === lv ? "red" : "tagL"); x.fill(p); ST.edge(x, p, 0.8);
+    x.fillStyle = C(i < lv ? CO.gold : i === lv ? CO.accent : CO.off); x.fill(p); ST.edge(x, p, 0.8);
   }
-  if (sel) cordLine(x, pCut(-153, -3, 306, 90, 9), 2.4, "red", 0.7);
+  if (sel) cordLine(x, pCut(-153, -3, 306, 90, 9), 2.4, CO.accent, 0.7);
 }
-const btn = (x, e, label, size, dark, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => tagBtn(x, 0, 0, e.w, e.h, label, size, dark));
+const btn = (x, e, label, size, sub, dy) => at(x, e.cx, e.y + (dy || 0), e.s, 0, () => panelBtn(x, 0, 0, e.w, e.h, label, size, sub));
 const pointAt = (x, e, now) => hand(x, e.cx - (e.w / 2 + 14 + (Juice.reduce ? 0 : (fl(now / 300) & 1) * 4)) * e.s, e.y + 30 * e.s, Math.PI / 2, e.s);
-// the scroll hangs lower when the system plaques in the top corners would touch it (narrow screens)
+// the title panel hangs lower when the system panels in the top corners would touch it (narrow screens)
 function titleTop() {
-  const u = L.u, l = UI.lang, m = UI.mute, half = 158 * u;
+  const u = L.u, l = UI.lang, m = UI.mute, half = 152 * u;
   return vTop() + (l.cx + l.w * u / 2 > 180 - half - 4 || m.cx - m.w * u / 2 < 180 + half + 4 ? 12 + 46 * u : 24);
 }
-function drawTitle(x, now) { // the title hangs in the world: a scroll from the beam, a wooden tag under the night
+function drawTitle(x, now) { // the title hangs from the truss on two rods; the start panel waits under the night
   const u = L.u, ty = titleTop(), ja = lang === "ja", still = Juice.reduce;
-  at(x, 180, ty, u, still ? 0 : Math.sin(now / 900) * 0.012, () => {
-    ST.line(x, pPoly([[-122, 2], [0, (beamY() - ty) / u], [122, 2]], true), 1.2);
+  at(x, 180, ty, u, 0, () => {
+    for (const hx of [-110, 110]) strut(x, hx, (beamY() - ty) / u, 2);
     put(x, scrollSpr(), 0, 0);
-    text(x, S("title"), -12, 58, ja ? 36 : 38, "ink", { f: ST.title, w: 900, max: 210, deep: "paperD" });
-    seal(x, 116, 46, S("mark"), 999, 18);
-    text(x, ja ? S("titleEn") : STRINGS.ja.title, -12, 88, 16, "redD", { w: 700 });
-    text(x, S(finePointer ? "how1k" : "how1"), 0, 127, 17, "ink", { max: 262 });
-    text(x, S("how2"), 0, 150, 16, "redD", { max: 262 });
+    text(x, S("title"), 0, 54, ja ? 38 : 36, CO.text, { f: ST.title, w: 900, max: 250, deep: CO.panelD });
+    text(x, ja ? S("titleEn") : STRINGS.ja.title, 0, 88, 16, CO.accent, { w: 800 });
+    ST.line(x, pLine(-80, 106, 80, 106), 1.4, CO.panelL);
+    text(x, S(finePointer ? "how1k" : "how1"), 0, 130, 17, CO.text, { max: 262 });
+    text(x, S("how2"), 0, 154, 16, CO.accent, { max: 262 });
   });
   const b = bestOf();
-  if (b > 0) { // the longest night so far: a dark plank under the scroll, or in the right side area
+  if (b > 0) { // the longest night so far: a small panel under the title, or in the right side area
     const t = S("best") + " " + mmss(b);
-    at(x, L.wide ? sideX(1) : 180, L.wide ? vTop() + 80 : ty + (SCROLL_H + 14) * u, L.wide ? hudS() : u, 0, () => { const w = textW(x, t, 16) + 36; put(x, plankSpr(Math.round(w / 10) * 10 + 10), 0, 0); text(x, t, 0, 18, 16, "paper", {}); });
+    at(x, L.wide ? sideX(1) : 180, L.wide ? vTop() + 80 : ty + (SCROLL_H + 14) * u, L.wide ? hudS() : u, 0, () => { const w = textW(x, t, 16) + 36; put(x, plankSpr(Math.round(w / 10) * 10 + 10), 0, 0); text(x, t, 0, 18, 16, CO.text, {}); });
   }
   const st = UI.start;
-  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, still ? 0 : Math.sin(now / 700) * 0.02, () => tagBtn(x, 0, 0, st.w, st.h, S("start"), 24));
+  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, 0, () => panelBtn(x, 0, 0, st.w, st.h, S("start"), 24));
   pointAt(x, st, now);
-  if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 10) * u, st.y + 30 * u, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3 });
-  text(x, S("credit"), vLeft() + 10, vBot() - 14, 14 * u, "paper", { a: "left", ol: "ink", ow: 0.3, w: 700 });
+  if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 10) * u, st.y + 30 * u, 14 * u, CO.text, { a: "left", ol: CO.ink, ow: 0.3 });
+  text(x, S("credit"), vLeft() + 10, vBot() - 14, 14 * u, CO.text, { a: "left", ol: CO.ink, ow: 0.3, w: 700 });
 }
 function drawPause(x, now) {
-  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba(CO.ink, 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
   const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 260)), y = pauseY() + dy;
-  cords(x, [[180 - 100 * u, y + 4 * u], [180 + 100 * u, y + 4 * u]], beamY());
-  at(x, 180, y, u, 0, () => { board(x, 0, 0, 300, 206); text(x, S("paused"), 0, 38, 28, "paneT", { f: ST.title, w: 900, deep: "paneL" }); });
-  btn(x, UI.resume, S("resume"), 22, 0, dy); btn(x, UI.restart, S("restart"), 17, 0, dy); btn(x, UI.quit, S("toTitle"), 17, 0, dy);
+  for (const hx of [-100, 100]) strut(x, 180 + hx * u, beamY(), y + 2 * u);
+  at(x, 180, y, u, 0, () => { put(x, boardSpr(300, 206), 0, 0); text(x, S("paused"), 0, 40, 28, CO.text, { f: ST.title, w: 900, deep: CO.panelD }); });
+  btn(x, UI.resume, S("resume"), 22, 0, dy); btn(x, UI.restart, S("restart"), 17, 1, dy); btn(x, UI.quit, S("toTitle"), 17, 1, dy);
 }
 function drawOver(x, now) {
-  const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, H = play ? 330 : 250, big = { f: ST.title, w: 900, deep: "paneL" };
+  const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, H = play ? 330 : 250, big = { f: ST.title, w: 900, deep: CO.panelD };
   const y = overY() - (H + 80) * u * (1 - easeBack(age / RES.drop));
-  cords(x, [[UI.ox - 110 * u, y + 4 * u], [UI.ox + 110 * u, y + 4 * u]], beamY());
+  for (const hx of [-100, 100]) strut(x, UI.ox + hx * u, beamY(), y + 2 * u);
   at(x, UI.ox, y, u, 0, () => {
-    board(x, 0, 0, 316, H);
-    if (age > RES.head) text(x, S(r.won ? "dawn" : "over"), 0, 40, 30, r.won ? "redD" : "paneT", Object.assign({ max: 272 }, big));
-    if (age > RES.count) { text(x, S("rTime"), 0, 74, 16, "paneS", {}); text(x, mmss(r.time * easeOut((age - RES.count) / RES.countDur)), 0, 116, 52, "paneT", big); }
+    put(x, boardSpr(316, H), 0, 0);
+    if (age > RES.head) text(x, S(r.won ? "dawn" : "over"), 0, 40, 30, r.won ? CO.goldL : CO.text, Object.assign({ max: 272 }, big));
+    if (age > RES.count) { text(x, S("rTime"), 0, 74, 16, CO.sub, {}); text(x, mmss(r.time * easeOut((age - RES.count) / RES.countDur)), 0, 116, 52, CO.text, big); }
     if (age > RES.rows) {
-      const row = (ry, k, v) => { text(x, S(k), -134, ry, 17, "paneT", { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, "paneS", { a: "right", f: ST.title, w: 900 }); x.fillStyle = C("paneL"); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 15, 2, 2); };
+      const row = (ry, k, v) => { text(x, S(k), -134, ry, 17, CO.sub, { a: "left", w: 700 }); if (v != null) text(x, v, 134, ry, 20, CO.text, { a: "right", f: ST.title, w: 900 }); x.fillStyle = C(CO.panelL); for (let i = -134; i < 134; i += 5) x.fillRect(i, ry + 15, 2, 2); };
       row(170, "rKills", r.kills); row(204, "rLv", r.lv);
       if (play && (r.newBest || r.best > 0)) { // no "BEST 0:00" on a first record
         row(238, "rBest", r.newBest ? null : mmss(r.best));
         if (r.newBest) { if (age > RES.best) seal(x, 70, 238, S("newBest"), age - RES.best); }
-        else text(x, r.time === r.best ? S("tieBest") : S("toBest", mmss(r.best - r.time)), 26, 238, 17, "paneS", {});
+        else { // right-aligned just left of the best time, so a long English line never runs into it
+          const bw = textW(x, mmss(r.best), 20, { f: ST.title, w: 900 });
+          text(x, r.time === r.best ? S("tieBest") : S("toBest", mmss(r.best - r.time)), 134 - bw - 14, 238, 17, CO.accent, { a: "right", max: 150 });
+        }
       }
     }
-    if (play && age > RES.goal && r.goal) { const gt = S(r.goal.k, r.goal.b ? S("b_" + r.goal.b) : r.goal.n), tw = textW(x, gt, 17); hand(x, -tw / 2 - 6, 290, Math.PI / 2, 0.75); text(x, gt, -tw / 2 + 6, 290, 17, "paneS", { a: "left" }); }
+    if (play && age > RES.goal && r.goal) { const gt = S(r.goal.k, r.goal.b ? S("b_" + r.goal.b) : r.goal.n), tw = textW(x, gt, 17); hand(x, -tw / 2 - 6, 290, Math.PI / 2, 0.75); text(x, gt, -tw / 2 + 6, 290, 17, CO.goldL, { a: "left" }); }
   });
-  if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, true); if (retryReady()) pointAt(x, UI.retry, now); }
+  if (play) { btn(x, UI.retry, S("retry"), 24); btn(x, UI.toTitle, S("toTitle"), 17, 1); if (retryReady()) pointAt(x, UI.retry, now); }
 }
 function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
-  at(x, 180, vBot() - 62 * L.u, L.u, 0, () => { put(x, plankSpr(210, 46), 0, 0); text(x, STRINGS.ja.title, 0, 15, 16, "paper", {}); text(x, STRINGS.en.title, 0, 33, 14, "tagL", { w: 700 }); });
+  at(x, 180, vBot() - 62 * L.u, L.u, 0, () => { put(x, plankSpr(210, 46), 0, 0); text(x, STRINGS.ja.title, 0, 16, 16, CO.text, { w: 800 }); text(x, STRINGS.en.title, 0, 33, 14, CO.sub, { w: 700 }); });
 }
 function drawPlaques(x) {
-  const pq = (e, kind, label) => at(x, e.cx, e.y, e.s, 0, () => plaque(x, 0, 0, e.w, kind, label));
+  const pq = (e, kind, label) => at(x, e.cx, e.y, e.s, 0, () => sysBtn(x, kind, e.w, label));
   if (!btnMute.hidden) pq(UI.mute, AU.muted ? "mute" : "sound");
   if (!btnPause.hidden) pq(UI.pause, "pause");
   if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang", S("lang"));
@@ -1872,7 +1965,7 @@ function draw(now) {
   view(x, sh.x, sh.y); x.translate(cam.sx - cam.x, cam.sy - cam.y); // world coords, the child at (cam.sx, cam.sy)
   drawWorld(x, now);
   drawAbove(x, now);
-  view(x); // the beam, the HUD and the boards never shake
+  view(x); // the truss, the HUD and the boards never shake
   put(x, beamSpr(), 180, beamY());
   drawCues(x);
   if (!isTitle() && !isOver()) { drawHud(x, now); if (!run.card) { drawNote(x, now); drawTeach(x, now); } }
@@ -1881,7 +1974,6 @@ function draw(now) {
   if (state === "paused") drawPause(x, now);
   if (isOver()) drawOver(x, now);
   if (DEMO) drawDemoLabel(x); else drawPlaques(x);
-  grainOver(x);
   textEnd();
 }
 function visualStep(dt) { // springs, the walk cycle, the heartbeat, teaching lines (the rules never read them)
@@ -1893,7 +1985,6 @@ function visualStep(dt) { // springs, the walk cycle, the heartbeat, teaching li
   fx.rvv += ((tgt - fx.rv) * kk - fx.rvv * dd) * dt; fx.rv += fx.rvv * dt; if (fx.rv < 0) { fx.rv = 0; fx.rvv = 0; }
   const sp = Math.hypot(p.vx, p.vy);
   if (sp > 5 && !R.card && !dead) { fx.walk += dt * sp / 9; if (Math.abs(p.vx) > 4) fx.face = p.vx < 0 ? -1 : 1; }
-  fx.swingV += ((clamp(-p.vx * 0.004, -0.5, 0.5) - fx.swing) * 60 - fx.swingV * 5) * dt; fx.swing += fx.swingV * dt;
   fx.sv += (-50 * fx.sa - 3.5 * fx.sv) * dt; fx.sa += fx.sv * dt;
   if (loud() && !dead && !R.card && (state === "play" || state === "demo") && R.light < R.lmax * 0.25) { // a heartbeat while the light is low
     fx.heartT -= dt; if (fx.heartT <= 0) { fx.heartT = 0.5 + 1.2 * R.light / (R.lmax * 0.25); sfx.heart(); }
