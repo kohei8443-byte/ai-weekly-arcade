@@ -10,7 +10,7 @@
   "controls": ["hold tap/click", "hold space", "esc/p to pause"],
   "genre": "one-button arcade",
   "tags": ["one-button", "arcade", "sea", "fish", "casual", "near-miss", "mobile-friendly"],
-  "session_length_sec": 55,
+  "session_length_sec": 60,
   "video_hook_ja": "ふくらむと うく、しぼむと しずむ。トゲの すきまを ギリでくぐれ!",
   "quality_bar": 1
 }
