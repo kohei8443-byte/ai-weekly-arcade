@@ -1,0 +1,16 @@
+{
+  "slug": "puffer-squeeze",
+  "week": 9,
+  "title_ja": "ぷくぷくフグ",
+  "title_en": "Puffer Squeeze",
+  "tagline_ja": "おすと ふくらんで うく。赤いトゲの すきまを くぐって、夜の海の すあなまで帰ろう。",
+  "tagline_en": "Hold to puff up and float. Slip between the red spikes and swim home through the night sea.",
+  "how_to_play_ja": "画面を おしているあいだ、フグが ふくらんで うきます。はなすと しぼんで しずみます。赤いトゲに さわらないように すきまを くぐり、昼の浅瀬から夕方の海、夜の海をぬけて すあなまで帰ろう。トゲの すぐそばを とおると「ギリ!」です。",
+  "how_to_play_en": "Hold anywhere to puff up and float; let go to shrink and sink. Slip through the gaps without touching the red spikes, from the day shallows through the sunset reef and the night sea, all the way home to the burrow. Pass right next to a spike for a CLOSE call.",
+  "controls": ["hold tap/click", "hold space", "esc/p to pause"],
+  "genre": "one-button arcade",
+  "tags": ["one-button", "arcade", "sea", "fish", "casual", "near-miss", "mobile-friendly"],
+  "session_length_sec": 55,
+  "video_hook_ja": "ふくらむと うく、しぼむと しずむ。トゲの すきまを ギリでくぐれ!",
+  "quality_bar": 1
+}
