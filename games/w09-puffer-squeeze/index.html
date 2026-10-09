@@ -645,21 +645,25 @@ const PIL = { hw: 22, r: 14 }, NDL = { hw: 6, r: 8 };           // coral pillar 
 const MARGIN = 1.5;                            // every gap is proved passable with this much room (validator)
 // The journey as data (bar 1.5.2), by gap index; rows are interpolated. Gaps 0-2 are the safe opening (about 0-8 s),
 // then the gaps tighten (8-25 s), the needle eye arrives (25-45 s), jellyfish with the sunset reef, upward currents,
-// and urchin beds on the night sand, while the openings keep closing toward the burrow: no plateau.
+// and urchin beds on the night sand, while the openings keep closing toward the burrow: no plateau. Since the gaps
+// follow the table (panel 5 R2), the night's narrow full gaps carry its difficulty, not a corridor of needle eyes.
 const PHASES = [
   { at: 0, sp: 290, open: 200, rise: 90, needle: 0, jelly: 0, cur: 0, bed: 0 },
   { at: 3, sp: 270, open: 170, rise: 100, needle: 0, jelly: 0, cur: 0, bed: 0 },
   { at: 6, sp: 268, open: 152, rise: 148, needle: 0, jelly: 0, cur: 0, bed: 0 },
   { at: 8, sp: 266, open: 142, rise: 172, needle: 0.18, jelly: 0, cur: 0, bed: 0 },
   { at: 14, sp: 262, open: 143, rise: 170, needle: 0.12, jelly: 0.4, cur: 0, bed: 0 },
-  { at: 20, sp: 256, open: 120, rise: 195, needle: 0.15, jelly: 0.35, cur: 0.3, bed: 0 },
-  { at: 27, sp: 238, open: 90, rise: 235, needle: 0.38, jelly: 0.4, cur: 0.3, bed: 0.6 },
-  { at: 34, sp: 222, open: 70, rise: 262, needle: 0.5, jelly: 0.45, cur: 0.35, bed: 0.8 }
+  { at: 20, sp: 256, open: 110, rise: 195, needle: 0.15, jelly: 0.35, cur: 0.3, bed: 0 },
+  { at: 27, sp: 238, open: 74, rise: 235, needle: 0.38, jelly: 0.4, cur: 0.3, bed: 0.6 },
+  { at: 34, sp: 222, open: 42, rise: 262, needle: 0.5, jelly: 0.45, cur: 0.35, bed: 0.8 }
 ];
 const NEEDLE_OPEN = [68, 44];                  // the needle eye's opening, first .. last gap: gentler early, tighter in the night (panels R2, R1)
 const NEEDLE_FIRST = 5;                        // every run's first needle eye is at this gap (the twist inside the first 15 s); a
                                                // player who has not met one yet gets it a gap sooner, on screen by about 9 s (panel 2 R1)
-const NEEDLE_EASY = [8, 8, 6, 4, 2];           // a run's eyes widen this much in order, tapering off (panel 4 R2: a step bonus moved the cliff to eye 3)
+const NEEDLE_EASY = [10, 9, 8, 8, 8, 7, 6, 5, 4, 3];   // a run's eyes widen this much in order, tapering off over ten eyes (panel 4 R2: a step
+                                               // bonus moved the cliff to eye 3; panel 5 R2: it stopped after five, so eye 6 on was a cliff)
+const EYE_STEP = 32;                           // a later eye sits within this many px of the gap before it (panel 5 R2)
+const VENT_DX = 58;                            // a current rises this far before its gap, in open water ahead of the coral (panel 5 R1)
 const JELLY_AMP = [18, 34], JELLY_IN = 20;    // a jellyfish's drift up and down (px), about once in 2.5-3.3 s of swim; how far its reach goes into the lane
 const ZONE_GAPS = [14, 27];                    // the sunset reef and the night sea begin between gaps 13/14 and 26/27
 const BED_C = 515;                             // a gap after an urchin bed sits this low or lower, so the swim dips toward the bed (panel 3, 4 R2)
@@ -771,7 +775,8 @@ function makeCourse(seed, opt) {
   let x = X0;
   for (let i = 0; i < NGAP; i++) { xs.push(Math.round(x)); x += phaseAt(i + 1).sp * (0.92 + 0.16 * RX()); }
   const crs = { seed, R: seeded((seed ^ 0x9e3779b9) >>> 0), xs, gaps: [], len: xs[NGAP - 1] + GOAL_RUN, exits: null, taughtNeedle: opt.taughtNeedle !== false, needleHelp: !!opt.needleHelp, needleSeen: false, nNeedle: 0,
-    taughtJelly: opt.taughtJelly !== false, jellySeen: false, nJelly: 0, taughtVent: opt.taughtVent !== false, ventSeen: false, needleAt: -1, fails: 0, mid: !!opt.mid, ramp: opt.ramp | 0 };
+    taughtJelly: opt.taughtJelly !== false, jellySeen: false, nJelly: 0, taughtVent: opt.taughtVent !== false, ventSeen: false, nVent: 0, eyeRow: 0, roll: null,
+    ventSoft: opt.ventSoft != null ? opt.ventSoft : opt.taughtVent === false ? 2 : 0, needleAt: -1, fails: 0, mid: !!opt.mid, ramp: opt.ramp | 0 };
   crs.zx = ZONE_GAPS.map(i => (xs[i - 1] + xs[i]) / 2);
   // a scripted run (the demo) can ask for a needle eye needleIn gaps after where it starts, so the squeeze is in the video
   if (opt.needleIn != null) { const d0 = (opt.from || 0) * crs.len; let i = 0; while (i < NGAP - 1 && xs[i] < d0) i++; crs.needleAt = Math.max(3, i + opt.needleIn); }   // (gaps 0-2 are the fixed opening)
@@ -781,8 +786,20 @@ const zoneOf = (crs, d) => d < crs.zx[0] ? 0 : d < crs.zx[1] ? 1 : 2;
 // a smooth zone value 0..2 for the look (220 px blends at each border)
 const zoneMix = (crs, d) => smooth((d - crs.zx[0] + 220) / 440) + smooth((d - crs.zx[1] + 220) / 440);
 function pillar(k, x, tip, hw, r) { return { k, x, tip, hw, r, x0: x - hw, x1: x + hw }; }
+// What a gap holds (an eye or not, a jellyfish, a current, an urchin bed) is rolled once per gap from its own stream,
+// before the gap is proved passable. A retry only eases its shape (a smaller step, a wider opening) and never swaps a full
+// gap for an eye (panel 5 R2: re-rolling on every retry let the eyes, which nearly always prove passable, take 81-87 % of
+// the night against the table's 37-50 %, and the beds and the night jellies all but vanished). No more than two eyes in a row.
+function rollGap(crs, i) {
+  const D = seeded((Math.imul(crs.seed, 0x2c1b3c6d) + Math.imul(i + 1, 0x297a2d39) + 0x51ed) >>> 0), ph = phaseAt(i);
+  // a later run of a session meets its eyes a little sooner too, like its openings (panel 5 R2: a flat first 40 s)
+  const nr = crs.ramp && i >= 3 && i <= 13 ? phaseAt(i + crs.ramp).needle : ph.needle;
+  const forced = (i >= NEEDLE_FIRST - (crs.taughtNeedle ? 0 : 1) && !crs.needleSeen) || i === crs.needleAt;
+  const needle = i >= 3 && (forced || (D() < nr && crs.eyeRow < 2));
+  return { needle, jelly: i >= 3 && !needle && D() < ph.jelly, vent: i >= 3 && !needle && D() < ph.cur, bed: i >= 3 && !needle && D() < ph.bed };
+}
 function proposeGap(crs, i, tryN) {
-  const R = crs.R, ph = phaseAt(i), prev = crs.gaps[i - 1], x = crs.xs[i], ease = Math.max(0, tryN - 1);
+  const R = crs.R, ph = phaseAt(i), prev = crs.gaps[i - 1], x = crs.xs[i], ease = Math.max(0, tryN - 1), K = crs.roll;
   // a retry reads the gaps' openings and heights a few rows ahead in the early stretch, so the first real pressure comes in
   // about 12-15 s instead of 30 (panel 4 R2); the new things (jellyfish, currents, beds) keep to their own seas
   const pr = crs.ramp && i >= 3 && i <= 13 ? phaseAt(i + crs.ramp) : ph;
@@ -790,10 +807,10 @@ function proposeGap(crs, i, tryN) {
   if (i < 2) { g.kind = "top"; g.end = i === 0 ? 236 : 300; g.c = (g.end + SAND) / 2; g.open = SAND - g.end; }
   else if (i === 2) { g.c = 430; g.open = 190; }
   else {
-    const needle = (R() < ph.needle || (i >= NEEDLE_FIRST - (crs.taughtNeedle ? 0 : 1) && !crs.needleSeen) || i === crs.needleAt) && tryN < 6;
+    const needle = K.needle && tryN < 6, nth = crs.nNeedle;   // nth: how many eyes this run has had before this one
     g.open = needle ? lerp(NEEDLE_OPEN[0], NEEDLE_OPEN[1], i / (NGAP - 1)) : pr.open * (0.94 + 0.12 * R());
-    if (needle && !crs.needleSeen) g.open += 14;                        // every run's first needle eye is a gentler one
-    if (needle) g.open += NEEDLE_EASY[crs.nNeedle] || 0;                // and its first five a little wider, less each time
+    if (needle && nth < 2) g.open += nth ? 8 : 14;                      // every run's first two eyes are gentler (panel 5 R1: eye 2 was the cliff)
+    if (needle) g.open += NEEDLE_EASY[nth] || 0;                        // and its first nine a little wider, less each time
     if (needle && !crs.taughtNeedle && !crs.needleSeen) g.open += 8;   // and a new player's first is wider still (bar 1.7.2)
     if (needle && crs.needleHelp && !crs.needleSeen) g.open += 12;      // and wider again after two deaths in a row at eyes (panel R1)
     g.open += ease * 9;
@@ -804,18 +821,20 @@ function proposeGap(crs, i, tryN) {
     if (Math.abs(c - pc) < pr.rise * 0.25) c = pc + Math.sign(c - pc || 1) * pr.rise * 0.25;   // never two gaps at one height
     if (c < lo || c > hi) c = pc - (c - pc) * 0.8;
     // the core skill: a needle eye a little above the last gap is passed by letting go just before it and coasting up
-    // into it (every run's first one; later about half of them). A run's first five eyes stay within 40 px of the gap
-    // before them, the rest within 70 (panel 3 R1: the climb to a high eye was where 150-300 ms thumbs died; panel 4 R2)
-    const ndl3 = crs.nNeedle < 5;
-    if (needle && (!crs.needleSeen || R() < 0.5)) c = pc - (ndl3 ? 30 + R() * 10 : 30 + R() * 40) * Math.max(0.3, 1 - ease * 0.3);
-    if (needle) c = clamp(c, pc - (ndl3 ? 40 : 70), pc + (ndl3 ? 40 : 70));
-    // an urchin bed lies before a low gap, so the swim dips toward it and sinking too far there stings (panel 3 R2)
-    const wantBed = tryN < 6 && !needle && R() < ph.bed;
-    if (wantBed) c = Math.max(c, BED_C + R() * 25);
+    // into it. A run's first two eyes sit 30-40 px above the gap before them; later ones about half the time 18-32 px above,
+    // otherwise within 32 px either way (panel 3 R1, panel 4 R2, panel 5 R1 and R2: the climb or drop to an eye far from
+    // the last gap was where 150-350 ms thumbs died; the night's narrower full gaps carry the difficulty instead)
+    if (needle && nth < 2) c = pc - (30 + R() * 10) * Math.max(0.3, 1 - ease * 0.3);
+    else if (needle) c = R() < 0.5 ? pc - (18 + R() * 14) : clamp(c, pc - EYE_STEP, pc + EYE_STEP);
+    // an urchin bed lies before a low gap, so the swim dips toward it and sinking too far there stings (panel 3 R2). The
+    // dip is never more than the sea's step from the last gap, so a bed gap proves passable (panel 5 R2: beds were in 62 of
+    // 300 first-run courses)
+    const wantBed = tryN < 6 && K.bed;
+    if (wantBed) c = Math.max(c, Math.min(BED_C + R() * 25, pc + pr.rise * Math.max(0.3, 1 - ease * 0.22)));
     g.c = clamp(c, lo, hi);
     // a recording keeps the swim in mid-water, where the eye of a phone viewer is (panel 3 R4: the night ran in the top 20 %)
     if (crs.mid) g.c = clamp(g.c, SURF + 180, SAND - 170);
-    if (tryN < 4 && i >= 3 && R() < ph.jelly && !needle) {
+    if (tryN < 4 && K.jelly) {
       // a jellyfish hangs into the swim lane between the two gaps from above or below (its bob reaches about 20 px past
       // the nearer gap's height), so the swim keeps to the other side: a twist to read, not a coin toss (panel 2 R1: one
       // drifting across the line killed about half of the human-model players who met it)
@@ -839,9 +858,12 @@ function proposeGap(crs, i, tryN) {
       if (amp >= 0) g.jelly = { k: "jelly", x: jx, y0: clamp(y0, SURF + 30 + amp, SAND - 40 - amp), amp, w: TAU / (per * SPD0), ph: R() * TAU, x0: jx - 14, x1: jx + 14 };
     }
     // a player's first upward current is gentler (0.6x) until it has been named once (panel 3 R1: the first one could kill)
-    if (tryN < 5 && R() < ph.cur && !needle) g.vent = { x: x - 12 + (R() - 0.5) * 16, a: crs.taughtVent || crs.ventSeen ? 1 : 0.6 };
+    // a profile's first two currents are gentler (0.6x); a current rises in open water before its gap, so its push comes
+    // before the coral and its column never stands over the pillar (panel 5 R1: on the gap itself it killed 2 of 6 first meetings)
+    if (tryN < 5 && K.vent) g.vent = { x: x - VENT_DX + (R() - 0.5) * 16, a: crs.nVent < crs.ventSoft ? 0.6 : 1 };
     const b0 = prev.x + prev.hw + 36, b1 = x - g.hw - 36;   // the bed fills the sand between the two pillars
-    if (wantBed && b1 - b0 > 60) g.bed = { k: "bed", x0: b0, x1: b1 };
+    const b2 = g.vent ? Math.min(b1, g.vent.x - 40) : b1;   // a current's chimney stands on clear sand
+    if (wantBed && b2 - b0 > 60) g.bed = { k: "bed", x0: b0, x1: b2 };
   }
   if (tryN >= 7) { g.kind = "full"; g.hw = PIL.hw; g.r = PIL.r; g.open = 160; g.c = clamp(prev.c, SURF + 110, SAND - 104); g.jelly = g.vent = g.bed = null; }
   const half = g.open / 2;
@@ -876,6 +898,7 @@ function beam(crs, e, xEnd) {
 function buildGap(crs) {
   const i = crs.gaps.length; if (i >= NGAP) return false;
   const entries = crs.exits || [{ d: 0, y: 300, v: 0, s: 0 }];
+  crs.roll = rollGap(crs, i);             // what the gap holds is fixed before its shape is tried
   for (let tryN = 0; tryN < 9; tryN++) {
     const g = proposeGap(crs, i, tryN), xEnd = g.x + g.hw + 26;
     crs.gaps.push(g);                     // in place while it is tested (the search reads crs.gaps)
@@ -885,9 +908,9 @@ function buildGap(crs) {
       outs.sort((a, b) => a.y - b.y);
       const at = f => outs[Math.round((outs.length - 1) * f)];
       crs.exits = outs.length ? [at(0.2), at(0.5), at(0.8)] : entries.map(e => Object.assign({}, e, { d: xEnd }));
-      if (g.kind === "needle") { crs.needleSeen = true; crs.nNeedle++; }
+      if (g.kind === "needle") { crs.needleSeen = true; crs.nNeedle++; crs.eyeRow++; } else crs.eyeRow = 0;
       if (g.jelly) { crs.jellySeen = true; crs.nJelly++; }
-      if (g.vent) crs.ventSeen = true;
+      if (g.vent) { crs.ventSeen = true; crs.nVent++; }
       if (!ok) crs.fails++;
       return true;
     }
@@ -927,7 +950,9 @@ function planScore(crs, st, plan, aim, prefer, target, keep) {
   let sc;
   // the demo's pop: soon, and from the big body rising into a spike above (the balloon gag reads, and it happens in
   // mid-water, not down in the band a Shorts caption covers: panel 3 R4)
-  if (aim === "fail") { const g = crs.gaps[gapIdx(crs, q.d - 40)], up = g && Math.abs(g.x - q.d) < 40 && q.y < g.c && q.v < 0 && q.s > 0.5; sc = hitT >= 0 ? 100 - Math.abs(hitT - 0.45) * 60 + (up ? 60 : 0) : -100 + Math.min(minC, 22); }
+  // ("fail" waits out a hit down by the sand, where the demo's title plate covered the bump (p5 shots); "fail!", 2.5 s
+  // later, takes any hit)
+  if (aim === "fail" || aim === "fail!") { const g = crs.gaps[gapIdx(crs, q.d - 40)], up = g && Math.abs(g.x - q.d) < 40 && q.y < g.c && q.v < 0 && q.s > 0.5; sc = hitT >= 0 ? 100 - Math.abs(hitT - 0.45) * 60 + (up ? 60 : 0) - (aim === "fail" && q.y > SAND - 110 ? 200 : 0) : -100 + Math.min(minC, 22); }
   else if (hitT >= 0) sc = -1000 + hitT * 100;
   else if (aim === "close" && minC < NEAR_PX) sc = 30 - Math.abs(minC - NEAR_PX * 0.75) * 3;   // a ギリ with room to spare, so the next gap is still in reach
   else sc = Math.min(minC, 22) - 0.03 * Math.abs(q.y - target);
@@ -1050,8 +1075,9 @@ const SFX = {
     [0, 1, 2, 3, 4].forEach((k, i) => tone("sine", 2 * pz(d + k) * q.f, 2 * pz(d + k) * q.f, 0.1, 0.07, w + 0.05 + i * 0.035));
     hiss("highpass", 7000, 1, 0.14, 0.09, w + 0.01);
   },
-  // the bump: a soft thud, a crack of noise and a springy boing (the boing carries it on a phone)
-  hit(w) { const q = vary(40, 0.08); tone("sine", 170 * q.f, 55, 0.2, 0.26 * q.g, w); hiss("lowpass", 1500, 1, 0.07, 0.26, w, null, 300); tone("triangle", 540 * q.f, 260 * q.f, 0.16, 0.24 * q.g, w + 0.01); },
+  // the bump: a light thud, a crack of noise and a springy boing; the crack and the boing sit where a phone plays them
+  // (panel 5 R3: the low thud took the peak, and the bump was no louder than a puff on a phone)
+  hit(w) { const q = vary(40, 0.08); tone("sine", 170 * q.f, 55, 0.2, 0.1 * q.g, w); hiss("bandpass", 1400 * q.f, 1.1, 0.08, 0.34, w, null, 500); tone("triangle", 540 * q.f, 240 * q.f, 0.2, 0.4 * q.g, w + 0.01); },
   // the comic deflating pop: a pop, then a squeaky sawtooth wobbling down through a lowpass over a rush of air
   balloon(w) {
     const q = vary(40, 0.1);
@@ -1059,15 +1085,18 @@ const SFX = {
     const c = AU.ctx, o = c.createOscillator(), lf = c.createOscillator(), lg = c.createGain(), f = c.createBiquadFilter(), gn = c.createGain(), dur = 1.05, s = w + 0.05;
     o.type = "sawtooth"; o.frequency.setValueAtTime(640 * q.f, s); o.frequency.exponentialRampToValueAtTime(160 * q.f, s + dur);
     lf.type = "sine"; lf.frequency.setValueAtTime(15, s); lf.frequency.linearRampToValueAtTime(7, s + dur); lg.gain.value = 46; lf.connect(lg); lg.connect(o.frequency);
-    f.type = "lowpass"; f.frequency.value = 3200; env(gn, 0.36 * q.g, s, 0.03, dur);   // the flight is the funny beat: heard on a phone (panel 4 R4: it was 15-20 dB under play)
+    // the flight is the funny beat: the whistle holds near its peak for 0.6 s, then falls away over the rest of the flight
+    // (panel 4 R4: 15-20 dB under play; panel 5 R3, R4: it died within 0.3-0.5 s while the puffer was still flying)
+    f.type = "lowpass"; f.frequency.value = 3200; const pk = 0.36 * q.g;
+    gn.gain.value = 0; gn.gain.setValueAtTime(0.0001, s); gn.gain.linearRampToValueAtTime(pk, s + 0.03); gn.gain.linearRampToValueAtTime(pk * 0.8, s + 0.6); gn.gain.exponentialRampToValueAtTime(0.0001, s + dur);
     o.connect(f); f.connect(gn); gn.connect(AU.sfx); o.start(s); o.stop(s + dur + 0.05); lf.start(s); lf.stop(s + dur + 0.05);
     hiss("bandpass", 2800, 0.9, dur * 0.85, 0.09, s, null, 700);
   },
   goal(w) { // home: a rising run, a warm chord and a shimmer of bubbles, an octave up where a phone speaker plays them (panel 4 R3)
-    [0, 2, 4, 5, 7, 9].forEach((n, i) => tone("triangle", pz(n + 7), pz(n + 7), 0.26, 0.12, w + i * 0.075));
-    [12, 14, 15].forEach(n => tone("sine", pz(n), pz(n), 1.1, 0.07, w + 0.5)); tone("triangle", pz(7), pz(7), 1.0, 0.06, w + 0.5);
-    tone("sine", 110, 55, 0.5, 0.08, w + 0.5);   // a light low thump: the chord, not the sub, carries the homecoming on a phone (panel 3 R3)
-    for (let i = 0; i < 7; i++) tone("sine", 1400 + i * 190, 1500 + i * 190, 0.1, 0.03, w + 0.62 + i * 0.05);
+    // (panel 5 R3: it was the quietest sound in the game; the 110 Hz thump a phone cannot play took its peak, so it is gone)
+    [0, 2, 4, 5, 7, 9].forEach((n, i) => tone("triangle", pz(n + 7), pz(n + 7), 0.26, 0.26, w + i * 0.075));
+    [12, 14, 15].forEach(n => tone("sine", pz(n), pz(n), 1.1, 0.13, w + 0.5)); tone("triangle", pz(7), pz(7), 1.0, 0.1, w + 0.5);
+    for (let i = 0; i < 7; i++) tone("sine", 1400 + i * 190, 1500 + i * 190, 0.1, 0.05, w + 0.62 + i * 0.05);
   },
   zone(w, z) { // a new sea: a soft bell chord, higher and slower at night
     const base = z === 2 ? 9 : z === 1 ? 4 : 5;
@@ -1078,7 +1107,7 @@ const SFX = {
   door(w) { const q = vary(30, 0.08); [10, 12, 14].forEach((n, i) => { tone("sine", pz(n) * q.f, pz(n) * q.f, 0.7, 0.16 * q.g, w + i * 0.09); tone("triangle", 2 * pz(n) * q.f, 2 * pz(n) * q.f, 0.12, 0.04, w + i * 0.09); }); hiss("highpass", 6000, 1, 0.35, 0.05, w + 0.1); },
   notice(w) { const q = vary(30, 0.08); tone("triangle", pz(7) * q.f, pz(7) * q.f, 0.12, 0.28 * q.g, w); tone("triangle", pz(9) * q.f, pz(9) * q.f, 0.16, 0.28 * q.g, w + 0.08); },
   best(w) { [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", pz(n + 5), pz(n + 5), 0.28, 0.24, w + i * 0.07)); tone("sine", pz(10), pz(10), 0.9, 0.12, w + 0.42); hiss("highpass", 5000, 1, 0.4, 0.06, w + 0.4); },
-  tick(w, i) { const q = vary(30, 0.1), f = (900 + (i % 12) * 40) * q.f; tone("sine", f, f, 0.035, 0.24 * q.g, w); },
+  tick(w, i, g) { const q = vary(30, 0.1), f = (900 + (i % 12) * 40) * q.f; tone("sine", f, f, 0.035, 0.24 * q.g * (g == null ? 1 : g), w); },
   // the rank stamp: a thump, and a woody knock in the band a phone speaker plays (it nearly vanished there: panel 2 R3)
   // (the 140 to 60 Hz thump is only a little now: a phone cannot play it, and it took most of the peak, panel 3 R3)
   stamp(w) { const q = vary(30, 0.08); tone("sine", 140, 60, 0.15, 0.1, w); hiss("lowpass", 1200, 1, 0.08, 0.16, w); tone("triangle", 330 * q.f, 300 * q.f, 0.06, 0.16 * q.g, w); hiss("bandpass", 1800 * q.f, 1.2, 0.06, 0.22 * q.g, w); tone("triangle", 660 * q.f, 600 * q.f, 0.08, 0.22 * q.g, w); },
@@ -1088,13 +1117,15 @@ const SFX = {
 };
 // every SFX goes through its own level (a gain node on the sfx bus), set so their peaks sit within 6 dB of each other
 // through the real bus (bar 1.3.4; panel 2 R3 and R5 measured the fanfares 7 to 19 dB above the hold sounds)
-const SFX_LV = { goal: 0.42, zone: 0.4, best: 0.46, notice: 0.52, skim: 0.7, hit: 0.82, giri: 0.88, balloon: 0.29, door: 0.44, stamp: 1.45, puff: 0.98, deflate: 1.2, pass: 1.2, ui: 1.2, tock: 1.3, tick: 1.25, slip: 1.1 };   // every solo peak within -19.5 .. -13.5 dBFS (sfxpeak.mjs, panel 4 R3, R5)
+// (panel 5: the hold sounds 2-3 dB softer, so they sit under the music (R3); the loudest brought down so every solo peak is
+// within 6 dB again (R5); the fanfares stand out because the music steps back under them, not by their own peak)
+const SFX_LV = { goal: 0.26, zone: 0.385, best: 0.43, notice: 0.47, skim: 0.67, hit: 0.63, giri: 0.88, balloon: 0.28, balloonD: 0.5, door: 0.44, stamp: 1.3, puff: 0.72, deflate: 1.02, pass: 1.2, ui: 1.2, tock: 1.3, tick: 1.25, slip: 1.1 };   // every solo peak within about -20.5 .. -14.5 dBFS (sfxpeak.mjs)
 function lvNode(k) {
   const c = AU.ctx; if (!AU.lv || AU.lv.ctx !== c) AU.lv = { ctx: c, n: {} };
   let n = AU.lv.n[k]; if (!n) { n = c.createGain(); n.gain.value = SFX_LV[k] || 1; n.connect(AU.sfx); AU.lv.n[k] = n; }
   return n;
 }
-function playSfx(k, w, n, g) { const keep = AU.sfx; AU.sfx = lvNode(k); try { SFX[k](w, n, g); } finally { AU.sfx = keep; } }
+function playSfx(k, w, n, g, lk) { const keep = AU.sfx; AU.sfx = lvNode(lk || k); try { SFX[k](w, n, g); } finally { AU.sfx = keep; } }
 const sfx = {};
 for (const k in SFX) sfx[k] = (n, g) => { if (audioOn()) playSfx(k, AU.ctx.currentTime, n, g); };
 const PEAK_SET = ["goal", "giri", "hit", "balloon", "best", "stamp", "zone", "puff"]; // the 8 loudest, for the peak test
@@ -1109,7 +1140,7 @@ const MUS = [
   { mel: [4, -1, 5, -1, 4, -1, 2, -1, 1, -1, 2, -1, 4, -1, 6, -1], melB: [6, -1, 7, -1, 6, -1, 4, -1, 5, -1, 4, -1, 2, -1, -1, -1],
     melC: [4, -1, 5, -1, 4, -1, 2, -1, 1, -1, 0, -1, -1, -1, -1, -1], bass: [55.0, 55.0, 43.65, 49.0], pads: [[-1, 1], [-2, 2]], every: 2, wave: "triangle", len: 0.6, vol: 0.11, padUp: 2 },
   { mel: [10, -1, -1, 12, -1, 9, -1, -1, 11, -1, -1, 9, -1, 7, -1, -1], melB: [12, -1, -1, 14, -1, 12, -1, -1, 11, -1, 10, -1, 9, -1, -1, -1],
-    melC: [10, -1, -1, 12, -1, 9, -1, -1, 7, -1, -1, 5, -1, -1, -1, -1], bass: [73.42, 73.42, 65.41, 55.0], pads: [[1, 4], [0, 3]], every: 1, wave: "sine", len: 1.1, vol: 0.08 }
+    melC: [10, -1, -1, 12, -1, 9, -1, -1, 7, -1, -1, 5, -1, -1, -1, -1], bass: [73.42, 73.42, 65.41, 55.0], pads: [[1, 4], [0, 3]], every: 1, wave: "sine", len: 1.1, vol: 0.11, padUp: 2 }   // the night: pads up and a fuller tune (panel 5 R3: 4-5 dB under the day on a phone)
 ];
 const STEP = 0.25;
 const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1, zone: 0, keep: 0 };
@@ -1119,6 +1150,12 @@ function musicLevel(lv) {
   const v = { title: 0.45, play: 0.8, bed: 0.4, duck: 0.12, off: 0 }[lv], t = AU.ctx.currentTime;
   mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" ? 0.02 : 0.25);
   if (lv === "duck") mus.drop = mus.i + 16;
+}
+// the song steps back under a fanfare for sec seconds, then comes back (panel 5 R3: the homecoming sat 6 dB under the music)
+function musicDip(v, sec) {
+  if (!mus.bus || !AU.ctx) return;
+  const t = AU.ctx.currentTime, back = { title: 0.45, play: 0.8, bed: 0.4, duck: 0.12, off: 0 }[mus.level];
+  mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, 0.04); mus.bus.gain.setTargetAtTime(back, t + sec, 0.3);
 }
 function pad(f, w, dur, peak) { // a held drone voice: linear swell, hold, release; starts and ends at silence
   const c = AU.ctx, o = c.createOscillator(), gn = c.createGain(), r = Math.min(0.6, dur * 0.3);
@@ -1148,8 +1185,8 @@ function musicStep() {
     if (i % 8 === 0) { pad(pz(ch[0]) * pu, w, STEP * 8 + 0.6, 0.045 * pk); pad(pz(ch[1]) * pu, w + 0.03, STEP * 8 + 0.6, 0.028 * pk); } // overlapping pads: never a silent gap
     if (i % 4 === 0) { // the bass, with a soft octave above it that a phone speaker can play
       const f = P.bass[(i >> 2) % 4];
-      tone("sine", f, f * 0.97, 0.34, mus.zone === 2 ? 0.1 : 0.2, w, mus.bus, 0.008); tone("triangle", f * 2, f * 1.96, 0.26, mus.zone === 2 ? 0.04 : 0.06, w, mus.bus, 0.008);
-      if (mus.zone !== 2) tone("triangle", f * 4, f * 3.92, 0.22, 0.05, w, mus.bus, 0.008);   // the day's and the sunset's low bass also two octaves up, for a phone speaker
+      tone("sine", f, f * 0.97, 0.34, mus.zone === 2 ? 0.16 : 0.2, w, mus.bus, 0.008); tone("triangle", f * 2, f * 1.96, 0.26, mus.zone === 2 ? 0.05 : 0.06, w, mus.bus, 0.008);
+      tone("triangle", f * 4, f * 3.92, 0.22, mus.zone === 2 ? 0.04 : 0.05, w, mus.bus, 0.008);   // the low bass also two octaves up, for a phone speaker (the night too, panel 5 R3)
     }
     if (i % 4 === 2 && mus.level !== "bed" && mus.zone !== 2) hiss("lowpass", 320, 1, 0.05, 0.07, w, mus.bus);
     if (ek > 0) { const f = pz(10 + Math.min(3, Math.floor(ek * 4))); tone("sine", f, f, 0.05, 0.07, w, AU.music, 0.002); }
@@ -1290,10 +1327,15 @@ const sideX = s => s < 0 ? -L.x0 / 2 : CW + L.x0 / 2;        // the middle of th
 const hudS = () => L.wide ? clamp(L.x0 / 230, L.u, 1.6) : L.u;
 // the puffer's x on screen: 30 % across in portrait; on a wide screen far enough right that it sees as far ahead as on a
 // phone (the swim behind it, with its bubble trail, fills the left). The demo keeps it nearer the middle for video.
-const camPX = () => {   // wide: the same look-ahead as portrait (about 2 s); the trail behind
-  const base = L.wide ? Math.max(PSX, vRight() - (DEMO ? 470 : 300)) : PSX, D = run && run.dead;
-  // home on a wide screen: the camera eases right so the burrow lands in the middle of the frame (panel 4 R6: it sat small in a corner)
-  return D && D.won && L.wide ? lerp(base, 140, smooth((T() - D.at) / 1200)) : base;
+// wide: the puffer a little left of the middle, with room ahead to read the reef (panel 5 R6: at 74 % across it faced
+// the right edge with the left two-thirds empty). It sees at least as far ahead as on a phone; the trail fills the left
+const camPX = () => {
+  const base = L.wide ? Math.max(PSX, Math.min(vRight() - 300, vLeft() + (DEMO ? 0.42 : 0.38) * L.W)) : PSX, D = run && run.dead;
+  // home on a wide screen: the camera eases so the burrow lands at 72% across, clear of the corner (panel 4 R6) and clear of
+  // the result buttons in the middle of the bottom row, which hid the family in the doorway (p5 shots)
+  if (!(D && D.won && L.wide)) return base;
+  const to = vLeft() + 0.72 * (vRight() - vLeft()) - (run.sim.crs.len + BURROW_DX - 26 - run.sim.p.d);
+  return lerp(base, to, smooth((T() - D.at) / 1200));
 };
 const surfY = (X, t, wx) => 22 + 2.2 * Math.sin(wx * 0.034 + t * 1.5) + 1.5 * Math.sin(wx * 0.083 - t * 2.2) + 0 * X;
 
@@ -1339,14 +1381,16 @@ function kelpDraw(g, x, base, p, sway, t, cStem, cA, cB, scl) {
 // 50 px of the urchin the trunk keeps close to the hitbox, so the gap end reads exactly where it stings.
 const PILW = 120, CORAL = ["rock", "rockA", "rockB", "rockC"];
 function pillarPlan(seed, H2, needle) {
-  const R = seeded(seed), u0 = needle ? 27 : 28, hw0 = needle ? 9 : 24, amp = needle ? 4.5 : 16, step = 2;
+  const R = seeded(seed), u0 = needle ? 27 : 28, hw0 = needle ? 9 : 24, amp = needle ? 6 : 16, step = 2;
   const bumps = side => { const out = []; let u = u0 + 26 + R() * 30; while (u < H2 + 30) { out.push({ u, side, a: amp * (0.3 + R() * 0.7) * (R() < 0.2 ? 0.35 : 1), w: (needle ? 7 : 9) + R() * (needle ? 12 : 18) }); u += (needle ? 16 : 18) + R() * (needle ? 26 : 40); } return out; };
   const BL = bumps(-1), BR = bumps(1);
   const prof = (B, u) => { let v = 0; for (const b of B) { const d = (u - b.u) / b.w; if (d > -3 && d < 3) v += b.a * Math.exp(-d * d); } return v; };
-  const ph = R() * TAU, sw = needle ? 0.7 : 1.6, E = [];
+  // a thin (needle) pillar widens toward its root by its own amount, so even the thin ones read as grown coral, not a
+  // line (lead note p5); near the tip it keeps the eye's width
+  const ph = R() * TAU, sw = needle ? 1.1 : 1.6, tw = needle ? 4 + R() * 8 : 0, E = [];
   for (let u = u0; u <= H2 + 8; u += step) {
-    const far = smooth(clamp((u - u0 - 20) / 60, 0, 1)), nz = 0.45 * Math.sin(u * 0.9 + ph) + 0.3 * Math.sin(u * 2.3 + ph * 2);
-    const sl = hw0 + (prof(BL, u) + sw * (1 + Math.sin(u * 0.045 + ph))) * far, sr = hw0 + (prof(BR, u) + sw * (1 + Math.cos(u * 0.04 + ph))) * far;
+    const far = smooth(clamp((u - u0 - 20) / 60, 0, 1)), nz = 0.45 * Math.sin(u * 0.9 + ph) + 0.3 * Math.sin(u * 2.3 + ph * 2), tp = tw * smooth(clamp((u - u0 - 50) / 230, 0, 1));
+    const sl = hw0 + tp + (prof(BL, u) + sw * (1 + Math.sin(u * 0.045 + ph))) * far, sr = hw0 + tp + (prof(BR, u) + sw * (1 + Math.cos(u * 0.04 + ph))) * far;
     E.push({ u, sl, sr, l: sl + nz, r: sr + nz });   // sl, sr: the smooth edges (the light reads their slope); l, r: with a rough grain
   }
   const at = u => E[clamp(Math.round((u - u0) / step), 0, E.length - 1)];
@@ -1520,7 +1564,7 @@ const pillarSeed = (g, top, seed) => (g.i * 7919 + (top ? 3 : 11) + seed * 13) >
 function pillarSpr(g, top, seed) {
   const o = top ? g.objs[0] : g.objs[1], needle = g.kind === "needle", len = top ? o.tip + 50 : SAND + 24 - o.tip, H2 = Math.ceil(len + 24), sd = seed == null ? run.seed : seed;
   let P = null;
-  const b = wbake(PB, 16, "p" + sd + "_" + g.i + (top ? "t" : "b"), PILW, H2, 0, 0, x => { P = pillarPlan(pillarSeed(g, top, sd), H2, needle); coralDraw(x, P, top, H2, needle, g.i * 3 + (top ? 1 : 2)); });
+  const b = wbake(PB, L.wide ? 22 : 16, "p" + sd + "_" + g.i + (top ? "t" : "b"), PILW, H2, 0, 0, x => { P = pillarPlan(pillarSeed(g, top, sd), H2, needle); coralDraw(x, P, top, H2, needle, g.i * 3 + (top ? 1 : 2)); });
   if (P) b.dots = coralLights(P, top, H2);
   return b;
 }
@@ -1535,15 +1579,24 @@ function coralLights(P, top, H2) {
 const pillarAt = (g, top, spr) => [g.x - 60, top ? g.objs[0].tip + 24 - spr.h : g.objs[1].tip - 24];
 // night: the side of a pillar that faces the puffer catches its light. A rim made from the pillar's own silhouette (a soft
 // band 12 px deep with a bright 3 px edge), so it follows every lobe, arm and hole
-const RB = new Map();
+// It is soft light, so it is made at half resolution, in one reused scratch canvas, and drawn ahead with the pillar
+// (panel 5 R5: night rims were made as the pillar came near, with two throwaway full-size canvases each)
+const RB = new Map(), RIM_RES = 0.5;
+let RIMC = null;
 function pillarRim(g, top, side) {
   const spr = pillarSpr(g, top);
-  return wbake(RB, 16, "r" + run.seed + "_" + g.i + (top ? "t" : "b") + side, PILW, spr.h, 0, 0, x => {
-    const c = x.canvas, W = c.width, H = c.height, edge = (d, col) => { const b = cnv(W, H), y = b.getContext("2d");
-      y.drawImage(spr.c, 0, 0); y.globalCompositeOperation = "destination-out"; y.drawImage(spr.c, -side * d * L.K, 0);
-      y.globalCompositeOperation = "source-in"; y.fillStyle = col; y.fillRect(0, 0, W, H); return b; };
-    x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(edge(14, css(SEA.n_rim, 0.45)), 0, 0); x.drawImage(edge(3.5, css(SEA.n_rim, 1)), 0, 0);
-  });
+  return wbake(RB, 20, "r" + run.seed + "_" + g.i + (top ? "t" : "b") + side, PILW, spr.h, 0, 0, x => {
+    const c = x.canvas, W = c.width, H = c.height, k = L.K * RIM_RES;
+    if (!RIMC || RIMC.width < W || RIMC.height < H) RIMC = cnv(Math.max(W, RIMC ? RIMC.width : 0), Math.max(H, RIMC ? RIMC.height : 0));
+    const y = RIMC.getContext("2d"), edge = (d, col) => {
+      y.setTransform(1, 0, 0, 1, 0, 0); y.globalCompositeOperation = "source-over"; y.clearRect(0, 0, W, H);
+      y.drawImage(spr.c, 0, 0, W, H); y.globalCompositeOperation = "destination-out"; y.drawImage(spr.c, -side * d * k, 0, W, H);
+      y.globalCompositeOperation = "source-in"; y.fillStyle = col; y.fillRect(0, 0, W, H); y.globalCompositeOperation = "source-over";
+      x.drawImage(RIMC, 0, 0, W, H, 0, 0, W, H); };
+    // the lit side fades in steps from a bright lip to nothing about 16 px in, so it reads as light on the coral and not
+    // as a second, offset copy of it (p5 shots: one hard 14 px band did)
+    x.setTransform(1, 0, 0, 1, 0, 0); edge(16, css(SEA.n_rim, 0.13)); edge(10, css(SEA.n_rim, 0.2)); edge(6, css(SEA.n_rim, 0.3)); edge(3, css(SEA.n_rim, 1));
+  }, RIM_RES);
 }
 // the night's far giant: a slow lantern whale (an original deep-sea creature) gliding left far behind the reef, rows of
 // soft lights along its flank. It is in view as the night begins and takes the whole night (about 3000 px of swim) to
@@ -1567,6 +1620,9 @@ function drawWhale(x, t, a) {
 }
 
 // ---------- GAME-SPECIFIC: the far and middle distance per sea, the sand, the near silhouettes ----------
+// the far layers are made below full resolution on a phone (soft and small there); on a wide screen at full resolution,
+// since they are drawn pixel for pixel and a scaled-up layer stair-stepped along the rocks' edges (lead note p5)
+const FAR_RES = () => L.wide ? 1 : 0.6;
 function farSpr(z) {
   return wbake(WB, 40, "far" + z, 800, 330, 0, 0, g => {
     const col = css(SEA[ZP[z] + "far"]);
@@ -1575,7 +1631,7 @@ function farSpr(z) {
     g.lineTo(800, 330); g.closePath(); g.fill();
     g.globalCompositeOperation = "destination-out"; g.fill(pEll(232, 190, 30, 42)); g.globalCompositeOperation = "source-over";   // a rock arch
     for (let k = 0; k < 14; k++) { const x0 = h01(k * 39) * 800; for (const ox of [-800, 0, 800]) { if (x0 + ox < -60 || x0 + ox > 860) continue; kelpDraw(g, x0 + ox, 332, kelpPlant(1000 + k), false, 0, col, col, col, 0.9); } }
-  }, 0.6);
+  }, FAR_RES());
 }
 function midSpr(z) {
   return wbake(WB, 40, "mid" + z, 800, 300, 0, 0, g => {
@@ -1583,7 +1639,7 @@ function midSpr(z) {
     g.fillStyle = rock;
     for (let k = 0; k < 5; k++) { const x = h01(k * 57) * 800; for (const ox of [-800, 0, 800]) g.fill(blob(x + ox, 300, 70 + h01(k) * 60, 40 + h01(k * 2) * 40, 11, 0.3, k * 9)); }
     for (let k = 0; k < 12; k++) { const x0 = h01(k * 73 + 1) * 800; for (const ox of [-800, 0, 800]) { const x = x0 + ox; if (x < -120 || x > 920) continue; kelpDraw(g, x, 302, kelpPlant(2000 + k), false, 0, kelp, kelp, kelp2, 1.5); } }
-  }, 0.7);
+  }, L.wide ? 1 : 0.7);
 }
 const sandTop = x => 18 + 4 * Math.sin(x / 600 * TAU * 3) + 3 * Math.sin(x / 600 * TAU * 7 + 1.3);
 // the night sea has its own sand (cool blue-white, so under the night light it is a deep blue, not a muddy grey: panel 3 R6)
@@ -1698,10 +1754,12 @@ function drawPuffer(x, X, Y, o) {
   { const sh = P2(); sh.addPath(body); sh.addPath(body, mtx(-rx * 0.1, -ry * 0.16)); x.fillStyle = css(SEA.pufD, 0.35); x.fill(sh, "evenodd"); }   // a shade crescent, lower right
   x.restore();
   const sk = o.skin || 0;
-  if (sk === 0) { x.fillStyle = css(SEA.pufD); for (const d of DOTS) x.fill(pEll(d[0] * rx, d[1] * ry, 1.5 + pf * 0.7, 1.3 + pf * 0.6)); }
-  else if (sk === 1) { x.fillStyle = css(SEA.pufD); for (let i = 7; i < 10; i++) { const d = DOTS[i]; x.fill(pEll(d[0] * rx, d[1] * ry, 1.2 + pf * 0.5, 1 + pf * 0.4)); } }
+  // the dots: one shape a frame, not one each (panel 5 R5)
+  const dots = (i0, ax, ay, o) => { const p = P2(); for (let i = i0; i < DOTS.length; i++) { const cx = DOTS[i][0] * rx + o, cy = DOTS[i][1] * ry + o; p.moveTo(cx + ax, cy); p.ellipse(cx, cy, ax, ay, 0, 0, TAU); } return p; };
+  if (sk === 0) { x.fillStyle = css(SEA.pufD); x.fill(dots(0, 1.5 + pf * 0.7, 1.3 + pf * 0.6, 0)); }
+  else if (sk === 1) { x.fillStyle = css(SEA.pufD); x.fill(dots(7, 1.2 + pf * 0.5, 1 + pf * 0.4, 0)); }
   else if (sk === 2) { x.fillStyle = css(SEA.pufStar); for (const d of DOTS) x.fill(pStar(d[0] * rx, d[1] * ry, 2.4 + pf * 0.9, 1.05 + pf * 0.4, 5)); }
-  else { for (const d of DOTS) { x.fillStyle = css(SEA.pufNight); x.fill(pEll(d[0] * rx, d[1] * ry, 1.7 + pf * 0.7, 1.5 + pf * 0.6)); x.fillStyle = css(SEA.pufNightL); x.fill(pEll(d[0] * rx - 0.4, d[1] * ry - 0.4, 0.55, 0.55)); } }
+  else { x.fillStyle = css(SEA.pufNight); x.fill(dots(0, 1.7 + pf * 0.7, 1.5 + pf * 0.6, 0)); x.fillStyle = css(SEA.pufNightL); x.fill(dots(0, 0.55, 0.55, -0.4)); }
   x.fillStyle = css(SEA.pufC, 0.6); x.fill(pEll(rx * 0.44, ry * 0.26, 3.2 * k, 1.9 * k));
   const ex = rx * 0.52, ey = -ry * 0.2; // a dot eye with one catchlight (round and startled when it bumps)
   if (o.shock) { x.fillStyle = css(SEA.spk); x.fill(pEll(ex, ey, 3.6 * k, 3.6 * k)); x.fillStyle = css(SEA.pufE); x.fill(pEll(ex + 0.4 * k, ey, 1.6 * k, 1.6 * k)); }
@@ -1748,7 +1806,9 @@ const DEMO_SEED = 20261015;
 // Run 2 asks its course for a needle eye a few gaps in, so the squeeze (the title's twist) is always in the 30 s video
 // whatever the seed (panel 2 R4), and it pops soon after its ギリ peak; run 3 starts inside the sunset reef, so the loop
 // shows all three seas.
-const DEMO_RUNS = [{ from: 0, close: [1, 9.5], want: 4, fail: 10.2, needleIn: 3 }, { from: 0.73, close: [1.2, 7.5], want: 4, fail: 6.2, needleIn: 2 }, { from: 0.42, close: [0.6, 13], want: 4, fail: 14 }];   // the third run's 4th ギリ lands at about 29 s of the Short, so it ends on a beat (panel 4 R4)
+// the Short's three runs go the journey's way, day, sunset, night (panel 5 R4), and the night run's streak builds to the
+// end, so the Short ends on its biggest beat in the prettiest sea
+const DEMO_RUNS = [{ from: 0, close: [1, 9.2], want: 4, fail: 9.5, needleIn: 3 }, { from: 0.42, close: [0.6, 4.2], want: 2, fail: 4.4, needleIn: 2 }, { from: 0.73, close: [0.8, 12], want: 6, fail: 13 }];
 const ATTRACT_FROM = [0, 0.3, 0.64];
 // rank points: how far, how close, and home (shown from the second run)
 const RANKS = [0, 20, 45, 75, 110, 130];
@@ -1762,12 +1822,12 @@ const STRINGS = {
     title: "ぷくぷくフグ", titleEn: "PUFFER SQUEEZE", start: "スタート", how1: "おしている間 ふくらんで うく", how2: "赤いトゲの すきまを くぐろう",
     lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     giri: "ギリ!", skim: "スレスレ!", streak: "{n}れんぞく", hHold: "おしつづけると ふくらむ", hLet: "はなすと しずむ", hNow: "いま はなす!", tHoldLong: "ながく おして!",
-    tGiri: "トゲの すぐそばを ぬけると ギリ!", tNeedle: "てまえで はなして スルッ!", tJelly: "クラゲも あぶない!", tVent: "上むきの 流れ! 中では はなす", tBed: "海の底にも ウニ!",
+    tGiri: "トゲの すぐそばを ぬけると ギリ!", tNeedle: "針の穴は てまえで はなす!", tJelly: "クラゲも あぶない!", tVent: "上むきの 流れ! 中では はなす", tBed: "海の底にも ウニ!",
     zones: ["昼の浅瀬", "夕方のさんご礁", "夜の深い海"], pop: "パチン!", home: "おかえり!",
     over: "ぷしゅー…", clear: "すあなに とうちゃく!", causePil: "赤いトゲに さわった", causeJelly: "クラゲに さわった", causeBed: "海の底の ウニに さわった",
     causePuff: "ふくらんで トゲに さわった", causeSank: "しずんで トゲに さわった", causeLate: "はなすのが おそかった", causeVent: "上むきの 流れに おされた", skins: ["まだら", "しま", "ほし", "よぞら"], g_skin: "あと {n}ギリで 新しい もよう", g_newSkin: "新しい もよう「{n}」!",
     slip: "スルッ!", tEye: "針の穴は てまえで はなす",
-    rGiri: "ギリ", toBest: "ベストまで あと {n}%", tieBest: "ベストと ならんだ!", newBest: "ベスト更新!", giriBest: "ギリ新記録!", giriNew: "ギリ {n}回は 新記録!",
+    rGiri: "ギリ", toBest: "ベストまで あと {n}%", tieBest: "ベストと ならんだ!", newBest: "ベスト更新!", giriBest: "ギリ新記録!", giriNew: "ギリ {n}回は 新記録!", giriNewS: "ギリ{n}回 新記録!",
     g_pct: "{n}% まで いこう", g_giri: "ギリを {n}回 ねらおう", g_row: "ギリを {n}れんぞくで きめよう", g_sunsetN: "夕方の海まで あと {n}%", g_night: "夜の海を 見よう", g_home: "すあなに 帰ろう",
     ranks: ["ちびフグ", "あさせのフグ", "さんごのフグ", "よるのフグ", "すあなのぬし", "ギリギリ名人"], best: "ベスト", giriHud: "ギリ", space: "SPACE", credit: "Made with Claude"
   },
@@ -1775,12 +1835,12 @@ const STRINGS = {
     title: "PUFFER SQUEEZE", titleEn: "PUFFER SQUEEZE", start: "START", how1: "Hold to puff up and rise", how2: "Slip through the red spikes",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
     giri: "CLOSE!", skim: "BY A HAIR!", streak: "{n} IN A ROW", hHold: "KEEP HOLDING TO PUFF UP", hLet: "LET GO TO SINK", hNow: "LET GO NOW!", tHoldLong: "HOLD IT!",
-    tGiri: "SKIM A SPIKE: CLOSE CALL!", tNeedle: "LET GO JUST BEFORE IT!", tJelly: "JELLIES STING TOO!", tVent: "UPWARD CURRENT: LET GO IN IT", tBed: "URCHINS ON THE SEABED!",
+    tGiri: "SKIM A SPIKE: CLOSE CALL!", tNeedle: "LET GO BEFORE THE EYE!", tJelly: "JELLIES STING TOO!", tVent: "UPWARD CURRENT: LET GO IN IT", tBed: "URCHINS ON THE SEABED!",
     zones: ["DAY SHALLOWS", "SUNSET REEF", "NIGHT SEA"], pop: "POP!", home: "HOME!",
     over: "PSSSH...", clear: "HOME AT LAST!", causePil: "TOUCHED A RED SPIKE", causeJelly: "TOUCHED A JELLYFISH", causeBed: "TOUCHED A SEABED URCHIN",
     causePuff: "PUFFED UP INTO A SPIKE", causeSank: "SANK ONTO A SPIKE", causeLate: "LET GO TOO LATE", causeVent: "PUSHED UP BY A CURRENT", skins: ["SPOTS", "STRIPES", "STARS", "NIGHT SKY"], g_skin: "{n} CLOSE CALLS TO A NEW PATTERN", g_newSkin: "NEW PATTERN: {n}!",
-    slip: "SLIP!", tEye: "LET GO BEFORE A NEEDLE EYE",
-    rGiri: "CLOSE CALLS", toBest: "{n}% SHORT OF YOUR BEST", tieBest: "TIED YOUR BEST!", newBest: "NEW BEST!", giriBest: "MOST YET!", giriNew: "{n} CLOSE CALLS: MOST YET!",
+    slip: "SLIP!", tEye: "LET GO BEFORE THE EYE",
+    rGiri: "CLOSE CALLS", toBest: "{n}% SHORT OF YOUR BEST", tieBest: "TIED YOUR BEST!", newBest: "NEW BEST!", giriBest: "MOST YET!", giriNew: "{n} CLOSE CALLS: MOST YET!", giriNewS: "{n} CLOSE: MOST YET!",
     g_pct: "REACH {n}%", g_giri: "GET {n} CLOSE CALLS", g_row: "GET {n} CLOSE CALLS IN A ROW", g_sunsetN: "{n}% TO THE SUNSET REEF", g_night: "SEE THE NIGHT SEA", g_home: "SWIM HOME",
     ranks: ["TINY PUFF", "SHALLOWS PUFF", "REEF PUFF", "NIGHT PUFF", "BURROW KEEPER", "CLOSE-CALL ACE"], best: "BEST", giriHud: "CLOSE CALLS", space: "SPACE", credit: "Made with Claude"
   }
@@ -1883,7 +1943,9 @@ function newRun(mode, seed, opt) {
   };
   fx = newFx(); PARTS.length = 0; BUBS.length = 0; SPK.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
   fx.pf = sim.p.s;
-  if (mode !== "attract") fx.banner = { z: zoneOf(sim.crs, sim.p.d + 200), t: T() + (OUTGO ? OUT_MS : 0) };   // a run that starts just before a new sea names that sea
+  // a run that starts just before a new sea names that sea; a recording's run names its sea at the cut, without waiting
+  // for clear water under the plank (panel 5 R4: the sunset's name came 3.8 s late, over the run's best beat)
+  if (mode !== "attract") fx.banner = { z: zoneOf(sim.crs, sim.p.d + 200), t: T() + (OUTGO ? OUT_MS : 0), free: mode === "demo" };
   if (mode === "play") hint.begin();
   musicLevel(mode === "attract" ? "title" : "play"); mus.drop = Math.min(mus.drop, mus.i); mus.keep = 0;
 }
@@ -1895,13 +1957,22 @@ const clockNow = () => {
 };
 function updateRun(now) {
   const R = run;
-  if (R.slow > 0 && R.lastNow != null) { const k = Math.min(R.slow, Math.max(0, now - R.lastNow)); R.offset += 0.7 * k; R.slow -= k; }   // ギリ: the rules run at 0.3x for 80 ms
+  if (R.lastNow != null) { // a hit-stop holds the rules (R.stop ms); a camera beat runs them at 0.3x (R.slow ms)
+    let e = Math.max(0, now - R.lastNow);
+    if (R.stop > 0) { const k = Math.min(R.stop, e); R.offset += k; R.stop -= k; e -= k; }
+    if (R.slow > 0) { const k = Math.min(R.slow, e); R.offset += 0.7 * k; R.slow -= k; }
+  }
   R.lastNow = now;
   const target = fl((now - R.offset) * 0.12 + 1e-4);   // 120 steps a second
   let n = 0;
   while (R.steps < target && !R.dead && n < 120) { simStep(); R.steps++; n++; }
   if (R.mode !== "play" && !R.dead && R.steps < target) R.offset += (target - R.steps) / 0.12;   // the AI skips a long stall
   if (!R.dead) buildAhead(R.sim.crs, R.sim.p.d, 1100, 1);           // keep the course built well ahead of the puffer
+  // the coral pillars (and in the night sea their rims) are drawn ahead, one a frame, before they come into view
+  // (panel 5 R5: they were drawn as they came near, at night up to 13 canvases in one frame)
+  if (!R.dead) { const G = R.sim.crs.gaps; R.baked = Math.max(R.baked || 0, gapIdx(R.sim.crs, R.sim.p.d - 500));   // (a run that starts part-way skips the gaps behind it)
+    while (R.baked < G.length && G[R.baked].x < R.sim.p.d - camPX() + vRight() + 420) { const g = G[R.baked++], night = g.i >= ZONE_GAPS[1] - 1, sd = R.seed;
+      for (const top of g.kind === "top" ? [true] : [true, false]) { WARM.push(() => { if (run === R) pillarSpr(g, top, sd); }); if (night) WARM.push(() => { if (run === R) pillarRim(g, top, -1); }, () => { if (run === R) pillarRim(g, top, 1); }); } } }
   const b = fx.banner;   // a new sea's name waits until that sea is on screen (never over the one before it)
   if (b && b.wait && sharpZ(zoneMix(R.sim.crs, R.sim.p.d)) >= b.z - 0.2) { b.wait = false; b.t = now; }
   // the next needle eye within about a second: the music steps back and ticks up, the eye lights (bar 1.2.8)
@@ -1910,7 +1981,7 @@ function updateRun(now) {
   // leans in a little while the shrunken puffer is between the two urchins
   if (R.mode === "demo" && !R.dead) {
     const crs = R.sim.crs, p = R.sim.p, g = crs.gaps[gapIdx(crs, p.d - 14)];
-    if (g && g.kind === "needle" && g.x - p.d < 10 && !R.slowAt.has(g.i)) { R.slowAt.add(g.i); R.slow = Math.max(R.slow, 500); zoomPunch(camPX(), p.y, L.wide ? 1.12 : 1.05, 700, now); }
+    if (g && g.kind === "needle" && g.x - p.d < 10 && !R.slowAt.has(g.i)) { R.slowAt.add(g.i); R.slow = Math.max(R.slow, 500); zoomPunch(camPX(), p.y, DEMO ? 1.15 : L.wide ? 1.12 : 1.05, 700, now); }   // a recording pushes in on a phone too (panel 5 R4)
   }
 }
 function eyeNear(R) {
@@ -1924,7 +1995,7 @@ function eyeNear(R) {
 function simStep() {
   const R = run, sim = R.sim;
   let hold = R.hold;
-  if (R.ai) { scriptAim(R); hold = aiHold(R.ai, sim); }
+  if (R.ai) { scriptAim(R); hold = aiHold(R.ai, sim); if (hold && R.mode === "demo" && R.ai.aim !== "fail" && R.ai.aim !== "fail!" && slipOK(sim)) hold = false; }
   else if (autopilot) { if (!R.auto) R.auto = aiNew(BOTS[botName] || BOTS.auto, (R.seed ^ 0x2545f491) >>> 0); hold = !!aiHold(R.auto, sim); }
   else {
     if (R.tapEnd >= 0 && sim.t >= R.tapEnd) { R.tapEnd = -1; setHold(false); hold = false; }
@@ -1956,10 +2027,19 @@ function squeeze(g) {
   for (let i = 0; i < 7; i++) { const a = (rnd() - 0.5) * 1.4; bubble(g.x + 10 + rnd() * 6, p.y + (rnd() - 0.5) * 10, 1.4 + rnd() * 2, Math.cos(a) * (90 + rnd() * 60), Math.sin(a) * 60 - 20, 0.8); }
 }
 // the demo script: aim close for a near miss inside its window (until one lands), then aim at a spike
+// a recording slips through each needle eye deflated, the rule the Short sells (panel 5 R4: three of five eyes were passed
+// puffed): near an eye the AI lets go whenever letting go from here gets through it cleanly
+function slipOK(sim) {
+  const crs = sim.crs, p = sim.p, g = crs.gaps[gapIdx(crs, p.d - NDL.hw - 4)];
+  if (!g || g.kind !== "needle" || g.x - p.d > 95) return false;
+  const q = { d: p.d, y: p.y, v: p.v, s: p.s, h: p.h };
+  while (q.d < g.x + g.hw + 16) { stepP(q, 0, DT, crs); if (minClear(crs, q) < 3) return false; }
+  return true;
+}
 function scriptAim(R) {
   const s = R.script, ai = R.ai, t = R.sim.t;
   if (!s) { ai.aim = "safe"; return; }
-  if (t >= s.fail) { ai.aim = "fail"; return; }
+  if (t >= s.fail) { ai.aim = t >= s.fail + 2.5 ? "fail!" : "fail"; return; }
   if (t >= s.close[0] && t < s.close[1]) { if (R.closeFrom < 0) R.closeFrom = R.sim.giri; ai.aim = R.sim.giri - R.closeFrom >= (s.want || 1) ? "safe" : "close"; return; }
   ai.aim = "safe";
 }
@@ -1978,7 +2058,7 @@ function feedback(h) {
   const gap = R.sim.t - (R.blipAt == null ? -9 : R.blipAt), gk = gap < 0.5 ? 0.15 + 1.7 * Math.max(0, gap) : 1; R.blipAt = R.sim.t;   // quick flutters play softer (panel 4 R3)
   if (h) { R.pressed = true; R.pressAt = R.sim.t; fx.pressT = fx.vt; fx.pushRot = rnd() * TAU; if (loud()) sfx.puff(p.s, gk); for (let i = 0; i < 3; i++) bubble(X + 14 + rnd() * 6, Y + 4 + rnd() * 6, 1.6 + rnd() * 1.6, 40 + rnd() * 40, -20 - rnd() * 30, 0.9); }
   else {
-    const held = R.sim.t - R.pressAt; if (held >= 0.25) R.longHeld = true;
+    const held = R.sim.t - R.pressAt; R.lastHold = held; if (held >= 0.25) R.longHeld = true;
     // a short press only puffs: its release makes no sound, so a fluttering hand does not chatter over the music (panel 4 R3)
     fx.relT = fx.vt; if (loud() && held >= 0.15) sfx.deflate(p.s, gk); for (let i = 0; i < 5; i++) bubble(X + 16 + rnd() * 6, Y + rnd() * 6 - 3, 1.4 + rnd() * 2.2, 60 + rnd() * 70, -30 - rnd() * 40, 1.1);
     // first runs: three short taps while below the next gap mean "tap like Flappy"; one line says to hold longer
@@ -2005,7 +2085,8 @@ function onEvent(e) {
     // only the top tier (スレスレ, or three in a row) adds sparks, a shake, a short stop and a moment of slow motion
     const top = skim || e.n >= 3;
     burst(e.x, e.y, (skim ? 12 : 6) + Math.min(e.n, 6), skim ? 220 : 160, { col: "goldL", kind: "star", s: skim ? 2.8 : 2.4, g: 120 });
-    if (top) { burst(e.x, e.y, 6, 280, { col: "paper", kind: "spark", s: 2.2, g: 40 }); addTrauma(0.42 + Math.min(e.n, 5) * 0.04); hitstop(0.06); }
+    // its hit-stop holds the world itself for 60 ms, not only the particles (panel 5 R2); it is past the spike, so it is fair
+    if (top) { burst(e.x, e.y, 6, 280, { col: "paper", kind: "spark", s: 2.2, g: 40 }); addTrauma(0.42 + Math.min(e.n, 5) * 0.04); hitstop(0.06); R.stop = Math.max(R.stop || 0, 60); }
     // the camera (a moment of slow motion and a push-in) is kept for a run's two or three biggest beats: the first time a
     // streak reaches 3, 5 and 8 (panel 4 R2: a ギリ hunter saw it up to 10 times a run, so it stopped being the top)
     const cam = !DEMO && CAM_AT.includes(e.n) && e.n > (R.camN || 0) && (R.camBeats || 0) < 3;
@@ -2014,9 +2095,10 @@ function onEvent(e) {
     if (DEMO && L.wide && e.n >= 2) zoomPunch(camPX(), R.sim.p.y, 1.16, 900, now);
     else if (DEMO && e.n >= 3) { zoomPunch(camPX(), R.sim.p.y, 1.1, 700, now); R.slow = Math.max(R.slow, 130); }   // the streak is the video's peak frame (panel 3 R4)
     if (loud()) { if (skim) sfx.skim(e.n); else sfx.giri(e.n); }
+    R.bellAt = R.sim.t;
     if (R.mode === "play" && !giriSeen) { giriSeen = true; store.set("giriSeen", true); R.giriDrop = fx.vt; }
   } else if (e.e === "pass") {
-    if (loud()) sfx.pass(e.n);
+    if (loud() && !(R.sim.t - (R.bellAt == null ? -9 : R.bellAt) < 0.5)) sfx.pass(e.n);   // a gap that rang a ギリ bell needs no plip (panel 5 R3)
     const g = R.sim.crs.gaps[e.n - 1];   // a ring of bubbles where the gap was, and the hint's success check
     if (g) for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + rnd() * 0.5; bubble(g.x + Math.cos(a) * 8, g.c + Math.sin(a) * 8, 1.6 + rnd() * 1.4, Math.cos(a) * 55, Math.sin(a) * 55 - 15, 0.9); }
     // the hint stays until a real two-sided gap is passed after a proper hold (drifting past the open first gaps, or
@@ -2034,18 +2116,22 @@ function onEvent(e) {
 // also a little wider (the course reads tNeedle)
 // Each line starts when the thing itself is 250 px ahead (about 2 s), not its gap: a jellyfish sits about 130 px before
 // its gap, so keyed to the gap its warning came under a second before contact (panel 2 R1).
-const TEACH = [["tNeedle", g => g.kind === "needle" ? g.x : null], ["tJelly", g => g.jelly ? g.jelly.x : null], ["tVent", g => g.vent ? g.vent.x : null], ["tBed", g => g.bed ? g.bed.x0 : null]];
+// The current's line comes at 340 px (about 2.6 s) and goes up even while a ギリ or スルッ! word is showing (it stands low by
+// the sand, clear of them): it waited behind them and could get about 1 s before the push (panel 5 R1).
+const TEACH = [["tNeedle", g => g.kind === "needle" ? g.x : null, 250], ["tJelly", g => g.jelly ? g.jelly.x : null, 250], ["tVent", g => g.vent ? g.vent.x : null, 340], ["tBed", g => g.bed ? g.bed.x0 : null, 250]];
 function teachStep(now) {
   const R = run;
-  if (R.mode !== "play" || R.dead || (fx.note && now - fx.note.t < 2600) || (fx.call && now - fx.call.t < 500)) return;   // one line at a time
+  if (R.mode !== "play" || R.dead || (fx.note && now - fx.note.t < 2600)) return;   // one line at a time
+  const callUp = !!fx.call && now - fx.call.t < 500;
   const sim = R.sim, d = sim.p.d, g = sim.crs.gaps, i0 = gapIdx(sim.crs, d - 30);
   for (let i = i0; i < Math.min(g.length, i0 + 3); i++) {
-    for (const [k, f] of TEACH) {
+    for (const [k, f, lead] of TEACH) {
+      if (callUp && k !== "tVent") continue;
       const ox = f(g[i]);
       // the current's line comes back on each run's first current until one has been passed (panel 4 R1: named once, then
       // easy to miss on the sunset water)
       const again = (k === "tNeedle" && R.needleHelp) || (k === "tVent" && !store.get("ventOk", false));
-      if (ox == null || ox - d > 250 || ox - d < 30 || R.taught[k] || (store.get(k, false) && !again)) continue;
+      if (ox == null || ox - d > lead || ox - d < 30 || R.taught[k] || (store.get(k, false) && !again)) continue;
       R.taught[k] = 1; store.set(k, true); fx.note = { key: k, g: g[i], t: now }; if (loud()) sfx.notice(); return;
     }
   }
@@ -2055,7 +2141,9 @@ function teachStep(now) {
 function kill(e) {
   const R = run, sim = R.sim, p = sim.p, now = T(), c = clockNow();
   R.dead = { at: now, c, k: e.o.k, x: e.x, y: e.y, o: e.o, px: p.d, py: p.y, pf: fx.pf, tilt: fx.tilt, won: false, seed: (R.seed * 31 + R.steps) >>> 0,
-    why: e.o.k !== "top" && e.o.k !== "bot" ? null : p.s > 0.6 ? "causePuff" : p.s < 0.35 && e.o.k === "bot" && p.v > 0 ? "causeSank" : !R.held && p.v < 0 && e.o.k === "top" ? "causeLate" : null };
+    why: e.o.k !== "top" && e.o.k !== "bot" ? null : p.s > 0.6 ? "causePuff"
+      : p.s < 0.35 && e.o.k === "bot" && (p.v > 0 || p.y + hbRy(p.s) >= SAND - 1) ? "causeSank"   // lying on the sand into a coral foot is sinking too (panel 5 R1)
+      : !R.held && p.v < 0 && e.o.k === "top" ? ((R.lastHold || 0) >= 0.2 ? "causeLate" : "causePuff") : null };   // quick taps that carried it up puffed it (panel 5 R1)
   // an upward current that carried it into a top spike is named, and its column is ringed in the freeze (panel 3 R1:
   // those runs said "puffed up" or "let go too late")
   const vg = e.o.k === "top" && [0, 50, 100].some(b => curAt(sim.crs, p.d - b) > 0.3) ? sim.crs.gaps.find(g => g.vent && Math.abs(g.vent.x - p.d) < 140) : null;
@@ -2075,7 +2163,7 @@ function kill(e) {
   if (DEMO && L.wide) zoomPunch(camPX(), p.y, 1.18, 900, now); else zoomPunch(camPX() + e.x - p.d, e.y, 1.05, 420, now);
   fx.react = { o: e.o, g: sim.crs.gaps.find(g => g.objs.includes(e.o)), t: fx.vt, at: now, px: p.d, py: p.y, hit: true };   // the spike that did it jolts
   burst(e.x, e.y, 9, 210, { col: "paper", kind: "chip", s: 2.4, g: 80 });
-  if (loud() && audioOn()) { const w = AU.ctx.currentTime; playSfx("hit", w); playSfx("balloon", w + POP_AT / 1000 - 0.03); }
+  if (loud() && audioOn()) { const w = AU.ctx.currentTime; playSfx("hit", w); playSfx("balloon", w + POP_AT / 1000 - 0.03, 0, 0, DEMO ? "balloonD" : null); }   // a recording's flight is louder (panel 5 R4)
   musicLevel("duck");
   prebuildNext();
 }
@@ -2102,7 +2190,7 @@ function win() {
   R.dead = { at: now, c, k: "goal", won: true, px: p.d, py: p.y, pf: fx.pf, tilt: 0, x: p.d, y: p.y, seed: R.seed };
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
   if (R.mode === "play") { pfStop(); platform("happytime"); }
-  if (loud()) sfx.goal();   // the music keeps playing (with the home layer) until the board (panel 4 R3: it dropped under the fanfare)
+  if (loud()) { sfx.goal(); musicDip(0.25, 1.6); }   // the music keeps playing (with the home layer) until the board, stepping back under the fanfare
   prebuildNext();
 }
 function prebuildNext() { // the next run's course, built while this one ends
@@ -2129,7 +2217,11 @@ function makeResult(now) {
   // (panel 4 R6: the lesson is the board's header then, with its coast icon, so the board stays at four rows)
   r.eyeTip = play && !won && !!dg && dg.kind === "needle" && D.k !== "jelly" && num("eyeTip", 0) < 2;
   if (r.eyeTip) r.teachGiri = false;
-  r.giriRow = play && !won && (r.newGiri || r.teachGiri);   // the ギリ line shows only when it is news or a lesson (panel 2 R6, kouhei: a glance)
+  // the board keeps to four rows: the cause, the number, the best, the next goal (kouhei: 2 or 3 things at a glance;
+  // panel 5 R1 and R6). The ギリ lesson becomes the next goal; a ギリ record takes the rank's place by the number; a new best
+  // keeps its stamp as the one beat, with no rank and no ギリ line beside it
+  r.giriNews = play && !won && !r.newBest && r.newGiri;
+  r.rankSeal = r.showRank && !(play && r.newBest) && !r.giriNews;
   // one concrete next goal from a small rotating pool (bar 1.6.1); until the sunset reef is reached, how far it is
   const top = Math.max(pct, best), nextPct = Math.min(100, (fl(top / 10) + 1) * 10), sunPct = Math.ceil(100 * sim.crs.zx[0] / sim.crs.len), pool = [
     sim.zone === 0 ? { k: "g_sunsetN", n: Math.max(1, sunPct - pct) } : sim.zone === 1 ? { k: "g_night" } : !won ? { k: "g_home" } : null,
@@ -2138,14 +2230,15 @@ function makeResult(now) {
     Math.max(sim.maxStreak, bestRowOf()) < 6 ? { k: "g_row", n: Math.max(2, Math.max(sim.maxStreak, bestRowOf()) + 1) } : null,
     (() => { const all = num("giriAll", 0) + (play ? sim.giri : 0), i = skinAt(all); return i + 1 < SKINS.length && runs >= 1 ? { k: "g_skin", n: SKINS[i + 1] - all } : null; })()
   ];
-  if (sim.zone === 0 && best < sunPct) r.goal = pool[0];
+  if (r.teachGiri && !r.newBest) r.goal = { k: "tGiri" };
+  else if (sim.zone === 0 && best < sunPct) r.goal = pool[0];
   for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
   return r;
 }
 function resultStep(now) {
   const r = run.result, age = resAge(r, now);
-  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (k % 2 === 0 && (state === "over" || k % 3 === 0)) sfx.tick(k); } }
-  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; if (!(state === "over" && r.newBest)) sfx.stamp(); }   // a new best keeps the one stamp for NEW BEST
+  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (k % 2 === 0 && (state === "over" || k % 3 === 0)) sfx.tick(k, 0.6); } }   // under the NEW BEST fanfare by about 6 dB (panel 5 R3)
+  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; if (r.rankSeal) sfx.stamp(); }   // a new best keeps the one stamp for NEW BEST
   if (!r.stamped && (r.won ? r.newGiri : r.newBest) && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
     const u = L.u, bx = 180 + (r.won ? 76 : 0) * u, by = overY() + boardRows(r, true).best * u;   // at the stamped line
@@ -2263,7 +2356,8 @@ function drawWorld(x, now, sh, zm) {
     if (dk > 0.05) { x.globalCompositeOperation = "multiply"; x.globalAlpha = (L.wide ? 0.35 : 0.5) * dk; x.drawImage(spr.c, px, py, PILW, spr.h); x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; }
     // night: the side facing the puffer takes its warm light (the light map keeps it to the rows near the puffer)
     const hx = camPX(), dx = g.x - CAM - hx;
-    if (nk > 0.02 && Math.abs(dx) < 300) { x.globalAlpha = nk * Math.pow(1 - Math.abs(dx) / 300, 1.2); x.drawImage(pillarRim(g, top, dx > 0 ? -1 : 1).c, px, py, PILW, spr.h); x.globalAlpha = 1; }
+    // (the rim is baked at half size, so it is scaled up smooth: a crisp scale left stair steps on its edge)
+    if (nk > 0.02 && Math.abs(dx) < 300) { x.imageSmoothingEnabled = true; x.globalAlpha = nk * Math.pow(1 - Math.abs(dx) / 300, 1.2); x.drawImage(pillarRim(g, top, dx > 0 ? -1 : 1).c, px, py, PILW, spr.h); x.globalAlpha = 1; if (crisp()) x.imageSmoothingEnabled = false; }
   }
   x.imageSmoothingEnabled = true;
   // vents of the upward currents: a stone chimney at the coral's foot breathing a column of bubbles up through the gap.
@@ -2384,7 +2478,32 @@ function drawWorld(x, now, sh, zm) {
 // ---------- GAME-SPECIFIC: the sky over the water (a thin strip on a 9:16 screen, a band on a tall phone) ----------
 // Each sea has its own sky, so the three seas tell apart at a glance: clouds and a high sun by day, the sun sinking on
 // the horizon at sunset, the moon and stars at night. A top pillar rises out of the water as a weathered rock.
-function cloud(x, X, Y, w, a) { x.globalAlpha = a; x.fillStyle = css(SEA.spk); x.fill(blob(X, Y, w, w * 0.32, 10, 0.35, (X | 0) & 7)); x.fill(blob(X - w * 0.35, Y + 2, w * 0.5, w * 0.24, 9, 0.3, 3)); x.fill(blob(X + w * 0.4, Y + 3, w * 0.45, w * 0.2, 9, 0.3, 5)); }
+// a cloud's three puffs are made once per cloud and moved into place (panel 5 R5: 12 shapes rebuilt every frame)
+const CLOUDS = [];
+function cloud(x, X, Y, i, a) {
+  if (a < 0.01) return;
+  const w = 22 + h01(i) * 20, P = CLOUDS[i] || (CLOUDS[i] = [blob(0, 0, w, w * 0.32, 10, 0.35, (i * 3 + 1) & 7), blob(-w * 0.35, 2, w * 0.5, w * 0.24, 9, 0.3, 3), blob(w * 0.4, 3, w * 0.45, w * 0.2, 9, 0.3, 5)]);
+  x.globalAlpha = a; x.fillStyle = css(SEA.spk); x.translate(X, Y); for (const q of P) x.fill(q); x.translate(-X, -Y);
+}
+// a top pillar's rock above the water: its shapes are made once per pillar and screen height (panel 5 R5)
+const ROCKP = new Map();
+function rockPaths(g, H) {
+  const key = run.seed + "_" + g.i + "_" + Math.round(H); let R = ROCKP.get(key); if (R) return R;
+  const w = g.kind === "needle" ? 13 : 27, hS = Math.min(20 + h01(g.i * 5 + 1) * 30, H - 10), j = n => (h01(g.i * 13 + n) - 0.5);
+  // a craggy top with two or three knobs; light and shade follow its own outline (the rock laid over a shifted copy)
+  const U = [-1, -0.82, -0.55, -0.3, -0.05, 0.22, 0.48, 0.76, 1], V = [0.2, 0.55, 0.82, 0.66, 1, 0.78, 0.9, 0.5, 0.18];
+  const pts = U.map((u, k) => [u * (w + 1) + (k > 0 && k < 8 ? j(k) * 5 : 0), 22 - hS * (k === 0 || k === 8 ? 0 : V[k] + j(k + 9) * 0.22)]);
+  pts[0][1] = pts[8][1] = 30;
+  const rock = pSmooth(pts), xor = (dx, dy) => { const p = P2(); p.addPath(rock); p.addPath(pSmooth(pts.map(q => [q[0] + dx, q[1] + dy]))); return p; };
+  const cr = P2();   // two cracks
+  for (let k = 0; k < 2; k++) { const cx = (k ? 0.25 : -0.35) * w + j(20 + k) * 6; cr.moveTo(cx, 22 - hS * 0.75); cr.lineTo(cx + j(22 + k) * 6, 22 - hS * 0.4); cr.lineTo(cx + j(24 + k) * 8, 20); }
+  const fr = [[-w - 1, 23]]; for (let k = 0; k <= 8; k++) fr.push([-w + k * w / 4, 18.5 + j(30 + k) * 2.2], [-w + (k + 0.5) * w / 4, k < 8 ? 21 + h01(g.i * 7 + k) * 2.5 : 23]);   // a ragged fringe of weed at the water
+  fr.push([w + 1, 23]);
+  const bn = P2(); for (let k = 0; k < 3; k++) { const bx = j(40 + k) * w * 1.4, by = 16.5 + h01(g.i * 3 + k) * 3; bn.moveTo(bx + 1.3, by); bn.ellipse(bx, by, 1.3, 1, 0, 0, TAU); }
+  R = { w, rock, lit: xor(w * 0.3, 5), shade: xor(-w * 0.4, 2), cr, fr: pPoly(fr), bn };
+  ROCKP.set(key, R); if (ROCKP.size > 24) ROCKP.delete(ROCKP.keys().next().value);
+  return R;
+}
 function drawSky(x, t, gs) {
   const top = vTop() - 6, H = 22 - vTop(), nk = nightK(ZM), dk = duskK(ZM), dy = 1 - clamp(ZM, 0, 1);
   x.save(); x.clip(SURFP);
@@ -2399,7 +2518,7 @@ function drawSky(x, t, gs) {
       x.globalAlpha = dk; x.fillStyle = css(SEA.sunS); x.beginPath(); x.arc(sx, sy, 21, 0, TAU); x.fill();
       x.fillStyle = css(SEA.sun, 0.55); x.beginPath(); x.arc(sx - 5, sy - 6, 9, 0, TAU); x.fill();
     }
-    for (let i = 0; i < 4; i++) { const W = L.W + 160, X = ((((h01(i * 19 + 3) * W - CAM * 0.04 - tw * 3) % W) + W) % W) + vLeft() - 80, Y = top + 16 + h01(i * 7) * Math.max(6, H - 44); cloud(x, X, Y, 22 + h01(i) * 20, 0.85 * dy + 0.5 * dk); }
+    for (let i = 0; i < 4; i++) { const W = L.W + 160, X = ((((h01(i * 19 + 3) * W - CAM * 0.04 - tw * 3) % W) + W) % W) + vLeft() - 80, Y = top + 16 + h01(i * 7) * Math.max(6, H - 44); cloud(x, X, Y, i, 0.85 * dy + 0.5 * dk); }
     if (nk > 0.02) { // stars that twinkle slowly, and the moon with its soft light
       x.fillStyle = css(SEA.spk);
       for (let i = 0; i < 26; i++) { const X = vLeft() + h01(i * 31 + 2) * L.W, Y = top + 6 + h01(i * 17 + 9) * (H - 10); x.globalAlpha = nk * (0.35 + 0.55 * (0.5 + 0.5 * Math.sin(tw * (0.6 + h01(i) * 1.4) + i * 2.3))); x.fillRect(X, Y, 1.3, 1.3); }
@@ -2412,26 +2531,20 @@ function drawSky(x, t, gs) {
   }
   x.globalAlpha = 1;
   // a top pillar rises out of the water as a weathered, wet rock (its coral and urchin stay under the surface)
+  const col = c => css(mixC(SEA[c], SEA.n_sk1, 0.62 * nk));
   for (const g of H > 24 ? gs : []) {
-    const X = g.x - CAM, w = g.kind === "needle" ? 13 : 27, hS = Math.min(20 + h01(g.i * 5 + 1) * 30, H - 10), j = n => (h01(g.i * 13 + n) - 0.5);
-    // a craggy top with two or three knobs; light and shade follow its own outline (the rock laid over a shifted copy)
-    const U = [-1, -0.82, -0.55, -0.3, -0.05, 0.22, 0.48, 0.76, 1], V = [0.2, 0.55, 0.82, 0.66, 1, 0.78, 0.9, 0.5, 0.18];
-    const pts = U.map((u, k) => [X + u * (w + 1) + (k > 0 && k < 8 ? j(k) * 5 : 0), 22 - hS * (k === 0 || k === 8 ? 0 : V[k] + j(k + 9) * 0.22)]);
-    pts[0][1] = pts[8][1] = 30;
-    const rock = pSmooth(pts), col = c => css(mixC(SEA[c], SEA.n_sk1, 0.62 * nk));
-    const xor = (dx, dy) => { const p = P2(); p.addPath(rock); p.addPath(pSmooth(pts.map(q => [q[0] + dx, q[1] + dy]))); return p; };
-    x.fillStyle = col("stack"); x.fill(rock);
-    x.save(); x.clip(rock);
-    x.fillStyle = col("stackL"); x.globalAlpha = 0.75; x.fill(xor(w * 0.3, 5), "evenodd");    // the lit rim up the left and over the top
-    x.fillStyle = col("stackD"); x.globalAlpha = 0.7; x.fill(xor(-w * 0.4, 2), "evenodd");    // the shade down the right side
-    x.globalAlpha = 0.5; x.lineWidth = 1; x.strokeStyle = col("stackD"); x.beginPath();        // two cracks
-    for (let k = 0; k < 2; k++) { const cx = X + (k ? 0.25 : -0.35) * w + j(20 + k) * 6; x.moveTo(cx, 22 - hS * 0.75); x.lineTo(cx + j(22 + k) * 6, 22 - hS * 0.4); x.lineTo(cx + j(24 + k) * 8, 20); }
-    x.stroke();
-    x.fillStyle = col("stackD"); x.globalAlpha = 0.45; x.fillRect(X - w - 4, 15, 2 * w + 8, 10);   // wet and dark just above the water
-    x.restore(); x.globalAlpha = 1;
-    { const fr = [[X - w - 1, 23]]; for (let k = 0; k <= 8; k++) fr.push([X - w + k * w / 4, 18.5 + j(30 + k) * 2.2], [X - w + (k + 0.5) * w / 4, k < 8 ? 21 + h01(g.i * 7 + k) * 2.5 : 23]);   // a ragged fringe of weed at the water
-      fr.push([X + w + 1, 23]); x.fillStyle = col("kelp"); x.globalAlpha = 0.85; x.fill(pPoly(fr)); x.globalAlpha = 1; }
-    x.fillStyle = col("barn"); for (let k = 0; k < 3; k++) x.fill(pEll(X + j(40 + k) * w * 1.4, 16.5 + h01(g.i * 3 + k) * 3, 1.3, 1));
+    const X = g.x - CAM, P = rockPaths(g, H), w = P.w;
+    x.save(); x.translate(X, 0);
+    x.fillStyle = col("stack"); x.fill(P.rock);
+    x.save(); x.clip(P.rock);
+    x.fillStyle = col("stackL"); x.globalAlpha = 0.75; x.fill(P.lit, "evenodd");      // the lit rim up the left and over the top
+    x.fillStyle = col("stackD"); x.globalAlpha = 0.7; x.fill(P.shade, "evenodd");     // the shade down the right side
+    x.globalAlpha = 0.5; x.lineWidth = 1; x.strokeStyle = col("stackD"); x.stroke(P.cr);
+    x.fillStyle = col("stackD"); x.globalAlpha = 0.45; x.fillRect(-w - 4, 15, 2 * w + 8, 10);   // wet and dark just above the water
+    x.restore();
+    x.fillStyle = col("kelp"); x.globalAlpha = 0.85; x.fill(P.fr); x.globalAlpha = 1;
+    x.fillStyle = col("barn"); x.fill(P.bn);
+    x.restore();
   }
   x.restore();
   // the waterline over it all, with the foam where a rock meets the water
@@ -2531,16 +2644,24 @@ function lightPass(x, sh, zm, gs) {
     for (const g of gs) {
       const X = g.x - CAM;
       for (const o of g.objs) {
-        // each pillar glows faintly of itself all along its length (red bioluminescence), so its edges read in the dark as
-        // clearly as by day (measured: the body against the water beside it, lead note p4)
-        if (o.k === "top" || o.k === "bot") { if (!inView(X, 160)) continue; G("n_red", X, o.tip, 74, 74, 0.75 * nk); const y0 = o.k === "top" ? SURF : o.tip, y1 = o.k === "top" ? o.tip : SAND; c.globalAlpha = 0.5 * nk; c.drawImage(CORG(), X - 46, y0, 92, y1 - y0); }
+        // each pillar's trunk is a dark crimson in the dark, with a faint glow of its own (red bioluminescence) that grows
+        // toward its glowing tip, so the end that matters reads 2 s ahead while the trunks far from the puffer stay dark
+        // (lead note p5, panel 5 R6: a full-length wash at 0.5 made every trunk a flat neon rod)
+        if (o.k === "top" || o.k === "bot") { if (!inView(X, 160)) continue; G("n_red", X, o.tip, 74, 74, 0.75 * nk); const y0 = o.k === "top" ? SURF : o.tip, y1 = o.k === "top" ? o.tip : SAND, tl = Math.min(190, y1 - y0);
+          c.globalAlpha = 0.14 * nk; c.drawImage(CORG(), X - 46, y0, 92, y1 - y0); c.globalAlpha = 0.5 * nk; c.drawImage(corTip(o.k === "bot"), X - 46, o.k === "top" ? o.tip - tl : o.tip, 92, tl); }
         else if (o.k === "jelly") G("n_jel", o.x - CAM, jellyY(o, run.sim.p.d), 70, 70, 0.8 * nk);
         else if (o.k === "bed") G("n_red", (o.x0 + o.x1) / 2 - CAM, SAND, (o.x1 - o.x0) / 2 + 30, 36, 0.6 * nk);
       }
       if (g.vent) G("n_moon", g.vent.x - CAM, SAND - 140, 34, 170, 0.45 * nk);
     }
     const bx = run.sim.crs.len + BURROW_DX - CAM;
-    if (bx > vLeft() - 200 && bx < vRight() + 200) { const won = run.dead && run.dead.won; G("burrowG", bx - 26, SAND - 36, won ? 190 : 130, won ? 150 : 110, 0.8 * Math.max(nk, won ? 1 : 0)); }   // home: a warm pool from the door
+    if (bx > vLeft() - 200 && bx < vRight() + 200) { // home: a warm pool from the door
+      const D = run.dead, won = D && D.won, wk = won ? smooth((T() - D.at) / 900) : 0;
+      G("burrowG", bx - 26, SAND - 36, won ? 190 : 130, won ? 150 : 110, 0.8 * Math.max(nk, won ? 1 : 0));
+      // reaching home lights the widest, warmest pool of the journey over the sand and the water above the door (panel 5 R6:
+      // the homecoming was the dimmest frame of the run)
+      if (wk > 0.01) { G("burrowG", bx - 26, SAND - 80, 330, 260, wk); G("burrowG", bx - 26, SAND - 130, 480, 380, 0.45 * wk); G("sandB", bx - 26, SAND + 8, 210, 50, wk); }
+    }
     c.globalAlpha = 1;
   }
   if (L.wide) { // a wide screen: the swim already behind is a little dimmer and cooler, so the eye goes ahead
@@ -2551,6 +2672,11 @@ function lightPass(x, sh, zm, gs) {
   if (key || nkey) { blendUp(BUF.lfullX, B, "lmid", "copy"); keep(); }
   else blendUp(x, B, "lmid", "multiply");
 }
+// the trunk glow near the tip: CORG across, fading out over the length away from the tip (down: the tip is at the top)
+const corTip = down => memoI("corT" + (down ? 1 : 0), () => pixels(32, 48, (d, w, h) => {
+  for (let j = 0; j < h; j++) { const v = Math.pow(1 - (down ? j : h - 1 - j) / (h - 1), 1.6); for (let i = 0; i < w; i++) {
+    const u = Math.abs(i / (w - 1) - 0.5) * 2, a = u < 0.4 ? 1 - u / 0.4 * 0.25 : 0.75 * (1 - (u - 0.4) / 0.6), k = (j * w + i) * 4;
+    d[k] = SEA.n_red[0]; d[k + 1] = SEA.n_red[1]; d[k + 2] = SEA.n_red[2]; d[k + 3] = 255 * a * v; } } }));
 const CORG = () => ramp("corG", [[0, SEA.n_red, 0], [0.3, SEA.n_red, 0.75], [0.5, SEA.n_red, 1], [0.7, SEA.n_red, 0.75], [1, SEA.n_red, 0]], 32, true);
 // glow: things that give light, drawn small with one smaller copy (the softness), plus the sun's shafts by day
 // Panel 4 R5: the glow layer was about 40 % of a frame. Its lights are soft and move with the world, so the blended
@@ -2616,7 +2742,8 @@ function glowBuild(x, sh, zm, gs, t) {
     for (const g of gs) if (g.vent) for (let i = 0; i < 18; i += 2) { const k = ((t * 0.85 + i / 18) % 1); G("n_moon", g.vent.x - CAM + (h01(i * 11 + 4) - 0.5) * CUR_W * 0.9 + Math.sin(t * 3 + i * 1.7) * (3 + k * 6), SAND - 26 - k * (SAND - 70), 5, 0.5 * nk); }
   }
   const bx = sim.crs.len + BURROW_DX - CAM;
-  if (bx > vLeft() - 200 && bx < vRight() + 200) G("burrowG", bx - 26, SAND - 36, 36, run.dead && run.dead.won ? 0.5 : 0.4 + 0.5 * nk);   // home: soft, so the face in the door reads
+  if (bx > vLeft() - 200 && bx < vRight() + 200) { const D = run.dead, won = D && D.won; G("burrowG", bx - 26, SAND - 36, 36, won ? 0.5 : 0.4 + 0.5 * nk);   // home: soft, so the face in the door reads
+    if (won) G("burrowG", bx - 26, SAND - 50, 110, 0.32 * smooth((T() - D.at) / 900)); }
   e.setTransform(1, 0, 0, 1, 0, 0); e.globalAlpha = 1; e.globalCompositeOperation = "source-over";
   BUF.e2X.drawImage(E, 0, 0, BUF.e2.width, BUF.e2.height); // one small copy is the wide, soft halo
   const A = BUF.accX, AW = BUF.acc.width, AH = BUF.acc.height;
@@ -2658,7 +2785,7 @@ function heroPos(now) {
   const R = run, p = R.sim.p, D = R.dead;
   if (!D) return { x: camPX(), y: p.y, k: 1, light: 1 };
   const age = now - D.at;
-  if (D.won) { const k = smooth(age / 1100), d = homeDoor(); return { x: lerp(camPX(), d.x, k), y: lerp(D.py, d.y, k) - Math.sin(k * Math.PI) * 40, k: lerp(1, 0.5, k), light: 1 - smooth((age - 1000) / 300), home: k }; }
+  if (D.won) { const k = smooth(age / 1100), d = homeDoor(); return { x: lerp(camPX(), d.x, k), y: lerp(D.py, d.y, k) - Math.sin(k * Math.PI) * 40, k: lerp(1, 0.5, k), light: 1 - smooth((age - 1150) / 400), home: k }; }   // its light goes out only once it is inside
   if (age < POP_AT || !fx.path) return { x: camPX(), y: D.py, k: 1, light: 1 };
   const s = (age - POP_AT) / 1000, f = Math.min(120, s * 60), i = Math.floor(f), q = fx.path[i], r = fx.path[Math.min(120, i + 1)], u = f - i;
   const dm = R.mode === "demo";   // a video keeps the balloon bigger for longer, so the pop reads at phone size
@@ -2694,8 +2821,9 @@ function drawHero(x, now) {
   const h = heroPos(now), age = now - D.at;
   if (D.won) {
     if (h.home < 1) drawPuffer(x, h.x, h.y, { skin: SK, pf: lerp(D.pf, 0.2, h.home), k: h.k, a: -0.2 * Math.sin(h.home * Math.PI), t, rim: rimCol(), swim: 1, edge: heroEdge() });
-    else if (age > 1300) { // home: it turns round and peeks out of the door
-      const d = homeDoor(), k = smooth((age - 1300) / 300); x.save(); x.clip(blob(d.x, d.y, 30, 32, 12, 0.22, 9));
+    else if (age > 1300) { // home: it turns round and peeks out of the door, and a small one of its family peeks out below it
+      const d = homeDoor(), k = smooth((age - 1300) / 300), k2 = smooth((age - 1750) / 350); x.save(); x.clip(blob(d.x, d.y, 30, 32, 12, 0.22, 9));
+      if (k2 > 0) drawPuffer(x, d.x + 30 - 22 * k2, d.y + 19, { skin: 0, pf: 0, k: 0.55, a: 0.1, t: t + 0.6, sx: -1 });
       drawPuffer(x, d.x + 24 - 16 * k, d.y + 6, { skin: SK, pf: 0.05, k: 0.9, a: 0, t, rim: rimCol(), sx: -1 }); x.restore();
     }
     return;
@@ -2782,7 +2910,7 @@ function drawBanner(x, now) { // a new sea: its name on a plank that drops in, h
   // under it during its 2.4 s, so a danger ahead is never hidden
   if (!b.dropped && now >= b.t) {
     let blocked = false;
-    if (now - b.t0 < 3000) {
+    if (now - b.t0 < 3000 && !b.free) {
       const sim = run.sim, run_ = spdAt(sim.crs, sim.p.d) * 2.6, lo = bx - hw - 6, hi = bx + hw + 6;
       for (const g of gapsInView(run_ + 40)) {
         const X = g.x - CAM; if (X + 30 < lo || X - run_ - 30 > hi) continue;
@@ -2833,6 +2961,7 @@ function drawCall(x, now, fade) { // the one judgement word: ギリ! at the very
     const gold = cl.key === "giri" || cl.key === "skim";
     text(x, S(cl.key), 0, 0, cl.key === "giri" ? 28 : cl.key === "skim" ? 31 : cl.key === "slip" ? 26 : 30, gold ? "goldL" : "paper", { f: ST.title, w: 900, ol: "ink", ow: 0.24, deep: "ink", max: 180 });
     if (cl.n >= 2) text(x, S("streak", cl.n), 0, 26, 15, "paper", { ol: "ink", ow: 0.3 });
+    else if (cl.key === "slip" && cl.n === 1) text(x, S("giri"), 0, 25, 16, "goldL", { f: ST.title, w: 900, ol: "ink", ow: 0.28 });   // a ギリ at an eye is named too (panel 5 R2)
   });
   x.globalAlpha = 1;
 }
@@ -2841,7 +2970,7 @@ const labelTop = () => vTop() + (fx.banner && !fx.banner.wait && !L.wide ? 146 *
 function drawNote(x, now) { // a new danger's first appearance: a short line next to it with an arrow
   const n = fx.note; if (!n) return;
   // one popup at a time: while a judgement word is up the line waits (its clock stops), then comes back (panel 4 R2)
-  const cl = fx.call, busy = cl && cl.key !== "pop" && now - cl.t < 900;
+  const cl = fx.call, busy = cl && cl.key !== "pop" && now - cl.t < 900 && n.key !== "tVent";
   if (n.seen != null && busy) n.t += now - n.seen;
   n.seen = now; if (busy) return;
   const age = now - n.t; if (age > 2600) { fx.note = null; return; }
@@ -2962,13 +3091,12 @@ function drawPause(x, now, lift) {
   btn(x, UI.resume, S("resume"), 22, 0, dy); btn(x, UI.restart, S("restart"), 17, 0, dy); btn(x, UI.quit, S("toTitle"), 17, 0, dy);
 }
 function sealFit(x, X, Y, label, age, max) { const s = clamp(max / (textW(x, label, 17) / 17 + 1.2), 14, 17); seal(x, X, Y, label, age, s); }
-// the result board's rows (y in board px): the cause as the header, the big number with the rank seal, one line about
-// the best, the next goal. The ギリ count is a row of its own only when it is a new best or a lesson (kouhei: two or three
-// things at a glance; panel 2 R6, lead note 3). At home the ギリ count takes the best line, with a seal when it is the most yet.
+// the result board's rows (y in board px): the cause as the header, the big number with the rank seal (or a ギリ record),
+// one line about the best, the next goal: four rows, never more (kouhei: two or three things at a glance; panel 2 R6,
+// panel 5 R1 and R6). At home the ギリ count takes the best line, with a seal when it is the most yet.
 function boardRows(r, play) {
   if (!play) return { H: r.won ? 196 : 180, head: 38, num: 96, giri: 146, best: 0, goal: 0 };
-  const g = r.giriRow ? 36 : 0;
-  return { H: 232 + g, head: 38, num: 98, giri: 146, best: 148 + g, goal: 198 + g };
+  return { H: 232, head: 38, num: 98, giri: 146, best: 148, goal: 198 };
 }
 function drawOver(x, now, r, play, lift) {
   r = r || run.result; play = play == null ? state === "over" : play;
@@ -2989,9 +3117,11 @@ function drawOver(x, now, r, play, lift) {
     }
     if (age > RES.count) {
       const v = Math.round(r.pct * easeOut((age - RES.count) / RES.countDur));
-      text(x, v + "%", r.showRank ? -66 : 0, B.num, 52, "paneT", big);
-      // one red stamp per board: on a new best the NEW BEST seal is the stamp, and the rank is a plain line (panel 4 R6)
-      if (r.showRank && r.rankDone) { if (play && r.newBest) text(x, S("ranks")[r.rank], 66, B.num, 17, "paneS", { max: 124, w: 800 }); else sealFit(x, 84, B.num, S("ranks")[r.rank], age - RES.rank, 124); }
+      const side = r.rankSeal || r.giriNews;
+      text(x, v + "%", side ? -66 : 0, B.num, 52, "paneT", big);
+      // one red stamp per board: on a new best the NEW BEST seal is the stamp and the rank is left out (panel 4 R6, panel 5 R1)
+      if (r.rankDone && r.rankSeal) sealFit(x, 84, B.num, S("ranks")[r.rank], age - RES.rank, 124);
+      else if (r.rankDone && r.giriNews) text(x, S("giriNewS", r.giri), 70, B.num, 17, "paneS", { max: 128, w: 800 });
     }
     if (age > RES.rows) {
       const big2 = { f: ST.title, w: 900, deep: "paneL", max: 270 };
@@ -3002,7 +3132,6 @@ function drawOver(x, now, r, play, lift) {
         text(x, tv, seal ? -70 : 0, B.best, 21, "paneT", seal ? { ...big2, max: 140 } : big2);
         if (seal && age > RES.best) sealFit(x, 72, B.best, S("giriBest"), age - RES.best, 140);
       } else {
-        if (r.giriRow) text(x, r.teachGiri ? S("tGiri") : S("giriNew", r.giri), 0, B.giri, 16, "paneS", { max: 270, w: 700 });
         if (r.newBest) { if (age > RES.best) sealFit(x, 0, B.best, S("newBest"), age - RES.best, 170); }
         else if (r.best > 0) text(x, r.pct === r.best ? S("tieBest") : S("toBest", r.best - r.pct), 0, B.best, 21, "paneT", big2);
       }
@@ -3082,16 +3211,25 @@ window.addEventListener("resize", resize);
 // A very slow device (frames near 120 ms) counts too: a long frame is clamped, not dropped, and a short window (30
 // frames, or 0.6 s of frames) averaging over 30 ms steps down at once (panel R1, bar 1.10.5).
 // The first 1.5 s after a load, a resize or a start bake sprites and build the course: those frames do not count.
-const PERF = { n: 0, sum: 0, n30: 0, s30: 0, quiet: 0 };
+const PERF = { n: 0, sum: 0, n30: 0, s30: 0, quiet: 0, bad: 0, good: 0, upWait: 5000, min: 0 };
 const perfQuiet = () => { PERF.quiet = performance.now() + 1500; PERF.n = PERF.sum = PERF.n30 = PERF.s30 = 0; };
+// A long stall steps down at once; a slow 90-frame stretch steps down only when the next one is slow too; and 5 s under
+// 14 ms a frame steps back up one level (not above where it started, and each climb waits twice as long as the one
+// before, so it never seesaws). Panel 5 R5: one slow stretch kept a fast screen at half resolution for good.
 function perfNote(raw) {
-  if (manual || document.hidden || quality >= 3 || state === "paused" || raw > 1000 || performance.now() < PERF.quiet) { PERF.n = PERF.sum = PERF.n30 = PERF.s30 = 0; return; }
+  if (manual || document.hidden || state === "paused" || raw > 1000 || performance.now() < PERF.quiet) { PERF.n = PERF.sum = PERF.n30 = PERF.s30 = 0; return; }
   const r = Math.min(raw, 120);
   PERF.n++; PERF.sum += r; PERF.n30++; PERF.s30 += r;
   let down = false;
   if (PERF.n30 >= 30 || (PERF.n30 >= 8 && PERF.s30 >= 600)) { down = PERF.s30 / PERF.n30 > 30; PERF.n30 = PERF.s30 = 0; }
-  if (PERF.n >= 90) { down = down || PERF.sum / PERF.n > 21.5; PERF.n = PERF.sum = 0; }
-  if (down) { quality++; fitScreen(); }
+  if (PERF.n >= 90) {
+    const avg = PERF.sum / PERF.n;
+    if (avg > 21.5) { if (++PERF.bad >= 2) down = true; } else PERF.bad = 0;
+    if (avg < 14 && quality > PERF.min && !DEMO) PERF.good += PERF.sum; else PERF.good = 0;
+    PERF.n = PERF.sum = 0;
+    if (PERF.good >= PERF.upWait) { quality--; PERF.good = 0; PERF.bad = 0; PERF.upWait = Math.min(80000, PERF.upWait * 2); fitScreen(); return; }
+  }
+  if (down && quality < 3) { quality++; PERF.bad = 0; PERF.good = 0; fitScreen(); }
 }
 function applyLang() {
   document.documentElement.lang = lang;
@@ -3203,7 +3341,7 @@ ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.ta
 // inside the lockout a press only skips the result animation; after it, one press starts the next run (bar 1.5.4)
 ovOver.addEventListener("click", e => { if (e.target !== ovOver || !freshPress()) return; if (retryReady()) retry(); else skipResult(T()); });
 const toggleLang = () => { lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); };
-on($("btnLang"), toggleLang);
+on($("btnLang"), () => { toggleLang(); $("btnLang").blur(); });   // like the sound plaque (panel 5 R5)
 // every button has its sound: ui going forward (start, resume, sound on), tock stepping back (pause, quit, title)
 const toggleMute = () => { setMute(!AU.muted); if (!AU.muted) sfx.ui(); };
 on(btnMute, () => { if (auInit()) auResume(); toggleMute(); btnMute.blur(); });
@@ -3257,7 +3395,10 @@ function visualStep(dt, now) { // springs, tilt and bubbles of the visuals (the 
     if (!D.won && h.s != null && h.s < 1.3) { fx.emitT -= dt; if (fx.emitT <= 0) { fx.emitT = 0.03; const a = h.a; bubble(h.x + CAM - Math.cos(a) * 14 * h.k, h.y - Math.sin(a) * 14 * h.k, 1.4 + rnd() * 2.4, -Math.cos(a) * 60 + (rnd() - 0.5) * 40, -Math.sin(a) * 60 - 20, 1); } }
     if (D.won && h.home >= 1 && now - D.at < 1800) { fx.emitT -= dt; if (fx.emitT <= 0) { fx.emitT = 0.06; const d = homeDoor(); bubble(d.x + CAM + (rnd() - 0.5) * 30, d.y - 10, 1.5 + rnd() * 3, (rnd() - 0.5) * 30, -40 - rnd() * 40, 1.6); } }
   }
-  for (let i = SPK.length - 1; i >= 0; i--) { const k = SPK[i]; k.age += dt; k.y -= 4 * dt; if (k.age >= k.life) SPK.splice(i, 1); }
+  // home: the night's plankton drifts in toward the lit door, and a few new sparks rise from the sand around it
+  const DW = run && run.dead && run.dead.won ? run.dead : null, hx = DW ? run.sim.crs.len + BURROW_DX - 26 : 0, hy = SAND - 40;
+  if (DW && now - DW.at < 3200 && rnd() < dt * 22) { const a = rnd() * Math.PI, r = 120 + rnd() * 220; spark(hx + Math.cos(a) * r * 1.4, hy - Math.sin(a) * r * 0.8, 1.6 + rnd()); }
+  for (let i = SPK.length - 1; i >= 0; i--) { const k = SPK[i]; k.age += dt; k.y -= 4 * dt; if (DW) { const f = Math.min(1, dt * 0.9); k.x += (hx - k.x) * f; k.y += (hy - k.y) * f; } if (k.age >= k.life) SPK.splice(i, 1); }
   for (let i = BUBS.length - 1; i >= 0; i--) {
     const b = BUBS[i]; b.life -= dt;
     b.vy = Math.max(-95, b.vy - 55 * dt); b.vx -= b.vx * Math.min(1, dt * 1.8);
@@ -3272,11 +3413,12 @@ function update(now, dt) {
   if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) { updateRun(now); teachStep(now); }
   if (isDying()) {
     const D = run.dead, el = now - D.at, wait = state === "dying" ? (D.won ? GOAL_HOLD : FREEZE) : state === "demo-dying" ? (D.won ? 2200 : 1200) : 1700;
-    if (!D.won && !D.popped && el >= POP_AT) { D.popped = true; fx.call = { key: "pop", x: D.cx == null ? D.x : D.cx, y: D.cy == null ? D.y : D.cy, r: D.cr || 14, t: now }; }
+    if (!D.won && !D.popped && el >= POP_AT) { D.popped = true; fx.call = { key: "pop", x: D.cx == null ? D.x : D.cx, y: D.cy == null ? D.y : D.cy, r: D.cr || 14, t: now };
+      if (state === "demo-dying") musicLevel("bed"); }   // a recording keeps its song under the flight, so the funny beat is not a hole (panel 5 R4)
     if (D.won && !D.homed && el >= 1150) { D.homed = true; const d = homeDoor(), wx = run.sim.crs.len + BURROW_DX - 26; fx.call = { key: "home", x: wx, y: d.y, t: now }; burst(wx, d.y, 10, 160, { col: "goldL", kind: "star", s: 2.6, g: 60 }); zoomPunch(d.x, d.y, 1.06, 900, now); if (loud()) sfx.door(); }
     if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else nextAttract(); }
   }
-  if (state === "demo-over" && now - run.result.at > 1100) { demoN++; startDemoRun(); }   // (panel 4 R4: the third run starts about 1 s sooner and ends the Short on a beat)
+  if (state === "demo-over" && now - run.result.at > 900) { demoN++; startDemoRun(); }   // (panel 4 R4: the third run starts about 1 s sooner and ends the Short on a beat)
   if (isOver()) resultStep(now);
   juiceStep(dt);
   if (state === "paused" || (isDying() && !run.dead.won && now - run.dead.at < POP_AT)) return; // the bump holds every pose
@@ -3318,7 +3460,8 @@ window.__game = {
   tap() { if (state === "play" && run && !run.dead) { setHold(true); run.tapEnd = run.sim.t + 0.14; } }, // a short press
   autoplay(on) { autopilot = !!on; },
   bot(name) { botName = BOTS[name] ? name : null; if (run) run.auto = null; }, // probes: autoplay as the slow, normal or skilled player
-  fail() { if (state === "play" && run && !run.dead) { const p = run.sim.p; kill({ o: { k: "top" }, x: p.d + 12, y: p.y - 10 }); } },
+  // a stand-in spike just above the nose, so the forced pop has a culprit to fly away from like a real one
+  fail() { if (state === "play" && run && !run.dead) { const p = run.sim.p; kill({ o: { k: "top", x: p.d + 12, tip: p.y - 10, r: 10 }, x: p.d + 12, y: p.y - 10 }); } },
   audioState() { return AU.ctx ? AU.ctx.state : "none"; },
   // K = device px per logical px; textMin = the smallest text drawn so far, in logical px as it shows on screen;
   // left and cw = where the core scene sits across the screen (logical px), for the wide-sides check
@@ -3339,6 +3482,7 @@ fitScreen();
 // a big desktop screen (1080p and up at DPR under 1.5) starts one quality step down: in a software raster q0 cost
 // about 55 ms a frame there against about 22 at q1 (panel 3 R5, bar 1.10.5). A recording keeps its full resolution.
 if (!DEMO && cv.width * cv.height > 1.6e6 && L.dpr < 1.5) { quality = 1; fitScreen(); }
+PERF.min = quality;
 applyLang();
 if (DEMO) AU.vol = 1.78;   // a recording: +5 dB into the compressor, so a Short sits near -16 LUFS, not -21 (panel 4 R4)
 AU.muted = !!store.get("mute", false); setMute(AU.muted);
