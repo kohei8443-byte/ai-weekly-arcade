@@ -293,7 +293,7 @@ function spinM(t) {
 const STAGES = [0, 1, 2, 3, 4].map(i => ({ wall: "wall" + i, tile: "tile" + i, lit: "lit" + i, deep: "deep" + i }));
 const PAL_LEN = 8 * BAR;
 function palIdx(t) {
-  if (t < T_GOAL) { const i = fl(Math.max(0, t) / PAL_LEN); return { i: i % 4, t0: i * PAL_LEN }; }
+  if (t < T_GOAL) { const i = fl(Math.max(0, t) / PAL_LEN); return { i: (i + (LV ? LV.pal0 : 0)) % 4, t0: i * PAL_LEN }; }
   const j = fl((t - T_GOAL) / PAL_LEN);
   return { i: j === 0 ? 4 : (j - 1) % 5, t0: T_GOAL + j * PAL_LEN };
 }
@@ -306,10 +306,18 @@ function palAt(t) {
 // Every phrase is placed together with the flips of one intended path, and verify() replays that path through the
 // same collision code at 1/240 s before the phrase is kept, so every run can be climbed.
 let LV = null;
+// Returning runs (vary: the 2nd run on) draw their opening, rhythm cells and wall colour (never the last run's) from the level seed; from the
+// 3rd run the order in which plates (d), lasers (l) and pulse rails (p) come in is drawn too. The first run, ?demo=1
+// and the title's attract play keep the standard course (no extra draws from the phrase stream).
+const ORDS = ["dlp", "ldp", "dpl", "lpd", "pdl", "pld"];
 function newLevel(seed, t0, o) {
   o = o || {};
+  const rs = seeded((seed ^ 0x2545f491) >>> 0);   // the run's own draws, apart from the phrase stream
+  let ord = o.ord && o.ord !== "seed" ? o.ord : "dlp"; const lp = typeof o.lastPal === "number" ? fl(o.lastPal) : -1;
+  if (o.ord === "seed") { const ok = ORDS.filter(s => (o.pEarly || s[2] === "p") && s !== o.lastOrd); ord = ok[fl(rs() * ok.length)]; }
   LV = { soft: !!o.soft, intro: !!o.intro, quick: !!o.quick, t5: !!o.t5, f: [[], []], pl: [], lz: [], rnd: seeded(seed), cur: t0 + (o.lead != null ? o.lead : o.intro ? 4 : 3) * BEAT,
-    side: 0, free: t0, late: t0, hz: [-9, -9], nf: [], path: [], seen: {}, fails: 0, tele: null, last: "", hist: null };
+    side: 0, free: t0, late: t0, hz: [-9, -9], nf: [], path: [], seen: {}, fails: 0, tele: null, last: "", hist: null,
+    vary: !!o.vary, ord, pal0: !o.vary ? 0 : lp >= 0 && lp < 3 ? (lp + 1 + fl(rs() * 2)) % 3 : fl(rs() * 3), lc: -1, lastOpen: o.lastOpen || "" };
   for (const b of BARRELS) LV.nf.push([b - TFLY - 0.1, b + SPIN + 0.05]);   // never plan a flip into a barrel spin
 }
 function addF(s, f) {
@@ -444,50 +452,179 @@ function centerP(cs, P, minW) {
   LV.cur = t0 + P * BEAT;
   return true;
 }
-// stepping stone: the far rail is magnetized only on one beat; hop over on it and back.
-// The first one in a run is taught: the far rail blinks on that beat for a bar before it, with the tick.
-function stone(cs, minW, teach) {
-  LV.last = "stone";
-  const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT), par = Math.round(kT / BEAT) & 1;
+// Pulse rails keep their own cycle on the eighth-note grid: lit in eighth e when mod(e - ph, cyc) < on. Three speeds
+// (kouhei 10-11: "isn't only the switching platform way too hard?"; the old one-beat pulse gave a 0.24 s cue, faster
+// than a person reacts, and was 4.4x the deaths of the stage before it). Each slower speed keeps an overlap, a stretch
+// when both rails are lit, so a player who reacts to what is drawn can follow it:
+// L1 (pulse rails before the second barrel spin, and before the squeeze in a player's first two runs): a hop every
+//   2 beats, rails lit 3 beats of 4, both lit for 1 beat (0.72 s from the cue to the last safe hop).
+// L2 (the long squeeze; from the 3rd run also 29-38.7 s): a hop every beat, lit 1.5 beats of 2 (0.48 s).
+// L3 (overdrive, past 100 %): the old one-beat pulse (0.24 s).
+const PG = 0.07, EI = BEAT / 2;   // grace at each edge of a lit stretch (s); one eighth note (s)
+// pLv: the level of a pulse phrase starting at cs before the squeeze. With L1 all the way to 38.7 s a reacting player
+// never fell to a pulse rail at all, so from the 3rd run the stretch after the second spin already takes L2 (fixer
+// 10-11). The first pulse rails of a run come before 29 s in every order, so they stay on L1.
+const pLv = cs => LV.vary && !LV.soft && cs >= T_SWAYF ? 2 : 1;
+const PLV = [null,
+  { sb: 2, on: 6, son: 4, sx: 0.75 },   // sb beats between ladder hops; on lit eighths of 4 * sb; son stone lit eighths; sx stone break offset (beats)
+  { sb: 1, on: 3, son: 3, sx: 0.5 },
+  { sb: 1, on: 2, son: 2, sx: 0 }];
+// stepping stone: the far rail is lit for son / 2 beats; hop over in it and back before it goes dark. At L1 and L2 the
+// break on the pod's own rail comes later, so the hop over is not rushed. The first one in a run is taught: the far rail
+// blinks in the stone's rhythm for a bar before it, with the tick.
+function stone(cs, minW, teach, L) {
+  const P = PLV[L || 3], lb = P.son / 2;   // lit beats of the far rail
+  LV.last = "stone" + (L === 1 ? "A" : L === 2 ? "B" : "");
+  const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT), kb = Math.round(kT / BEAT);
   if (!gapB(B, kT - 1.5 * BEAT, kT - 0.5 * BEAT, minW)) return false;
-  const g0 = kT + 0.06, g1 = g0 + Math.min(0.32, 0.62 * BEAT);
-  const lo1 = Math.max(kT - 0.07 - TFLY, LV.free, LV.hz[B] - TFLY) + 0.02, hi1 = g0 + 4 / v - 0.02;
+  const g0 = kT + 0.06 + P.sx * BEAT, g1 = g0 + Math.min(0.32, 0.62 * BEAT);
+  const lo1 = Math.max(kT - PG - TFLY, LV.free, LV.hz[B] - TFLY) + 0.02, hi1 = g0 + 4 / v - 0.02;
   if (hi1 - lo1 < minW) return false;
   const f1 = (lo1 + hi1) / 2;
-  const lo2 = Math.max(f1 + TFLY, g1 - 4 / v - TFLY) + 0.02, hi2 = kT + BEAT + 0.05;
+  const lo2 = Math.max(f1 + TFLY, g1 - 4 / v - TFLY) + 0.02, hi2 = kT + lb * BEAT + (PG - 0.02);
   if (hi2 - lo2 < minW || hi2 - Math.max(lo2, hi1 + TFLY) < 0.1) return false;
   const f2 = (lo2 + hi2) / 2;
   addF(A, { k: 0, a0: ALT(g0), a1: ALT(g1) });
-  const st = { k: 1, a0: ALT(kT - 0.5 * BEAT), a1: ALT(kT + 1.5 * BEAT), par, forgive: teach && (LV.soft || LV.t5) ? 1 : 0 };
+  const st = { k: 1, a0: ALT(kT - 0.5 * BEAT), a1: ALT(kT + (lb + 0.5) * BEAT), ph: 2 * kb, cyc: 2 * P.son, on: P.son, forgive: teach && (LV.soft || LV.t5) ? 1 : 0 };
   addF(B, st);
-  if (teach) LV.tele = { s: B, a0: ALT(kT - 1.5 * BEAT - BAR), a1: ALT(kT - 1.5 * BEAT), par, t0: kT - 1.5 * BEAT - BAR - 1.2, t1: kT + 1.5 * BEAT, st };
+  if (teach) LV.tele = { s: B, a0: ALT(kT - 1.5 * BEAT - BAR), a1: ALT(kT - 1.5 * BEAT), t0: kT - 1.5 * BEAT - BAR - 1.2, t1: kT + (lb + 0.5) * BEAT, st };
   LV.path.push(f1, f2); LV.side = A; LV.free = f2 + TFLY; LV.late = hi2 + TFLY;
-  LV.hz[B] = kT + 1.5 * BEAT + 10 / v; LV.hz[A] = Math.max(LV.hz[A], g1);
-  LV.cur = kT + 2 * BEAT;
+  LV.hz[B] = kT + (lb + 0.5) * BEAT + 10 / v; LV.hz[A] = Math.max(LV.hz[A], g1);
+  LV.cur = kT + Math.max(2, lb + 1) * BEAT;
   return true;
 }
-// pulse ladder: both rails pulse in opposite beats; flip on every beat
-function pladder(cs, n, minW) {
-  LV.last = "pladder" + n;
-  const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT);
+// pulse ladder: both rails pulse in turn, a hop every sb beats inside the stretch when both are lit
+function pladder(cs, n, minW, L) {
+  const P = PLV[L || 3], sb = P.sb, ov = P.on / 2 - sb;   // beats between hops; beats when both rails are lit (1, 0.5, 0)
+  LV.last = "pladder" + (L === 1 ? "A" : L === 2 ? "B" : "") + n;
+  const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT), kb = Math.round(kT / BEAT);
   if (!gapB(B, kT - 1.5 * BEAT, kT - 0.5 * BEAT, minW)) return false;
-  const pA = (Math.round(kT / BEAT) - 1) & 1;
   let s = A, prevF = -1, prevHi = LV.late - TFLY, f = 0, hi = 0; const fls = [];
   for (let j = 0; j < n; j++) {
-    const Tb = kT + j * BEAT;
-    const lo = Math.max(Tb - 0.07 - TFLY, j ? prevF + TFLY : LV.free) + 0.02;
-    hi = Tb + 0.05;
+    const Tb = kT + j * sb * BEAT;
+    const lo = Math.max(Tb - PG - TFLY, j ? prevF + TFLY : LV.free) + 0.02;
+    hi = Tb + ov * BEAT + (PG - 0.02);
     if (hi - lo < minW || hi - Math.max(lo, prevHi + TFLY) < 0.1) return false;
     f = lo + (hi - lo) * 0.55; fls.push(f); prevF = f; prevHi = hi; s = 1 - s;
   }
-  const a0 = ALT(kT - 0.5 * BEAT), a1 = ALT(kT + (n - 0.5) * BEAT);
-  addF(A, { k: 1, a0, a1, par: pA });
-  addF(B, { k: 1, a0, a1, par: 1 - pA });
+  const tE = kT + ((n - 1) * sb + (sb + ov) / 2) * BEAT;   // the end: the rail left behind is dark there
+  const a0 = ALT(kT - 0.5 * BEAT), a1 = ALT(tE), cyc = 4 * sb;
+  addF(A, { k: 1, a0, a1, ph: 2 * (kb + sb), cyc, on: P.on });
+  addF(B, { k: 1, a0, a1, ph: 2 * kb, cyc, on: P.on });
   Array.prototype.push.apply(LV.path, fls);
   LV.side = s; LV.free = f + TFLY; LV.late = hi + TFLY;
-  LV.hz[1 - s] = kT + (n - 0.5) * BEAT + 10 / v; LV.hz[s] = Math.max(LV.hz[s], kT + (n - 0.5) * BEAT);
-  LV.cur = kT + n * BEAT;
+  LV.hz[1 - s] = tE + 10 / v; LV.hz[s] = Math.max(LV.hz[s], tE);
+  LV.cur = kT + ((n - 1) * sb + (sb + ov) / 2 + 0.5) * BEAT;   // half a beat past the end (ending at kT + n * sb beats made the next phrase fail more)
   return true;
+}
+
+// rhythm cells, a bar each (beat offsets): T a block on the pod's rail (it forces a flip), W a block on the far rail
+// (the pod has to stay), :n a block n beats long. Returning runs mix them in, so the beat of the climb changes.
+const deck = s => s.split("|").map(c => c.trim().split(" ").map(w => { const m = /^([TW])([0-9.]+)(?::([0-9.]+))?$/.exec(w); return [+m[2], m[1] === "W", m[3] ? +m[3] : 0]; }));
+const QDECK = deck("T0 T1 T2 T3|T0 T1.5 T3|W0:1.5 T2 T3|T0:1 T2 T3|T0 T1 T2.5|W0:0.75 T1.25 T2.25 T3.25|T0 W1:1 T2.5|T0 T2 T3");
+// a 6-beat opening (runs 2 and 3); two of the five start half a beat late, so the first block is not always on beat 1
+const SDECK = deck("T0.5 T2.5 T4|T0 T1.5 T3 T4.5|W0:1.25 T2.5 T4|T0.5:1 T3 T4.5|T0 T1.5 T4");
+const ZDECK = deck("T0 T0.75 T1.5 T2.25 T3|T0 T0.75 T1.5 W2:1 T3.25|T0 T0.75 T2 T2.75 T3.5|W0:1 T1.25 T2 T2.75 T3.5|T0:1.25 T2 T2.75 T3.5");
+// never the same cell twice in a row; tag (an opening deck) also keeps the run's first cell off the last run's
+function pickCell(D, tag) {
+  let i = fl(LV.rnd() * D.length);
+  const first = tag && !LV.seen.o0;
+  if (i === LV.lc || (first && LV.lastOpen === tag + i)) i = (i + 1) % D.length;
+  if (first) LV.seen.o0 = tag + i;
+  LV.lc = i; return D[i];
+}
+function cells(cs, cell, len, lg, kinds, minW) {
+  LV.last = "cells" + kinds;
+  for (const c of cell) {
+    const t0 = cs + c[0] * BEAT, s = c[1] ? 1 - LV.side : LV.side, L = c[2] || lg;
+    let kd = pickK(kinds); if (kd === "p" || kd === "x" || (c[1] && kd === "l")) kd = "g";
+    const S = snap();
+    if (block(kd, s, t0, L, minW)) continue;
+    restore(S);
+    if (kd === "g" || !block("g", s, t0, L, minW)) return false;
+  }
+  LV.cur = cs + len * BEAT;
+  return true;
+}
+// the middle stages: slot k (5.8 s, 10.9 s, 19.4 s) brings in hazard LV.ord[k]; the standard order is "dlp"
+const SLOT = [T_PLATE, T_LASER - 1.5 * BEAT, T_PULSE, T_SWAY];
+// the block kinds a phrase may use in a returning run: only hazards this run has already brought in
+const kin = s => { if (!LV.vary) return s; let o = ""; for (const c of s) if (c === "g" || (c === "d" ? LV.seen.d : LV.seen.l)) o += c; return o || "g"; };
+const seenD = () => !LV.vary || LV.seen.d;
+// The pulse rails' own stage, in whichever slot k the run brings them in (the standard order: k 2 at 19.4 s). Its first
+// phrase is the taught stone (the blink, the big tick, the landing ring and the first-runs' forgiveness go with it).
+// e: the first two bars of the slot (shorter ladders, wider windows). fill: the slot's own block run.
+function pulseStage(cs, ib, x, k, e, fill) {
+  if (!LV.seen.p) { LV.seen.p = 1; return stone(ib, 0.26, true, 1); }
+  if (k === 0) return x < 0.4 ? stone(ib, 0.26, false, 1) : fill(kin("gd"));
+  if (k === 1) {
+    if (x < 0.2) return stone(ib, 0.26, false, 1);
+    if (x < 0.32) return pladder(ib, 3, 0.26, 1);
+    if (x < 0.45) return gaps(ib, 3, 1, 0.6, "g", 0.26);
+    if (x < 0.55 && seenD()) return centerP(cs, 1.5, 0.28);
+    return fill(kin("gdlpx"));
+  }
+  if (x < 0.15) return stone(ib, 0.24, false, pLv(cs));
+  if (x < 0.3) return pladder(ib, e ? 3 : 4, e ? 0.24 : 0.22, pLv(cs));
+  if (x < 0.48) return e ? gaps(ib, 3, 1, 0.72, "g", 0.24) : gaps(ib, 5, 1, 0.72, "g", 0.18);     // ladder: a flip on every beat
+  // the slower pulse made this stage easy, so for a returning player its second half previews the squeeze's
+  // dotted-eighth runs instead (difficulty without the pulse)
+  if (!LV.soft && cs >= SLOT[k] + 5 * BAR && x < 0.68) return gaps(cs, 4, 0.75, 0.7, kin("gd"), 0.1);
+  if (x < 0.58 && seenD()) return centerP(cs, 1, 0.24);
+  return fill(kin("gdlpx"));
+}
+function varyPhrase(cs, ib, x, room) {
+  const q = LV.quick, r = LV.rnd;
+  if (cs < T_PLATE && room >= 8) {   // the opening: cells drawn per run (never the same cell twice in a row)
+    if (q) return cells(cs, pickCell(QDECK, "Q"), 4, 0.5, "g", 0.32);
+    return cells(cs, pickCell(SDECK, "S"), 6, 0.4 + r() * 0.2, "g", 0.45);
+  }
+  const k = cs < SLOT[1] ? 0 : cs < SLOT[2] ? 1 : 2, h = LV.ord[k], t0 = SLOT[k], e = cs < t0 + 2 * BAR;
+  // spacing and windows belong to the slot (its time and speed), not to the hazard: slot 0 keeps the plate stage's,
+  // slot 1 the laser stage's and slot 2 the pulse stage's numbers, whichever hazard the run put there
+  const fill = kinds => k === 0 ? gaps(cs, q ? 4 : 3, q ? 1 : 1.5, 0.5, kinds, q ? 0.28 : 0.34)
+    : k === 1 ? gaps(ib, 4, x < 0.85 && !q ? 1.5 : 1, 0.4, kinds, 0.24) : gaps(ib, 4, 1, 0.76, kinds, e ? 0.2 : 0.16);
+  // the hazard of this slot comes in alone first, so its look is seen before it comes in runs
+  if (cs >= t0 && !LV.seen[h] && room >= (h === "p" ? 5 : 3)) {
+    if (h === "p") return pulseStage(cs, ib, x, k, e, fill);
+    // the hazard counts as seen only when the lesson really placed it (a lesson that fell back to a plain break is
+    // tried again by the next phrase, so a plate never first shows up inside a run of blocks)
+    const Lh = h === "d" ? LV.pl : LV.lz, n0 = Lh.length, ok = h === "d" ? gaps(cs, 1, 2, 0.8, "d", 0.42) : gaps(ib, 1, 2, 0, "l", 0.4);
+    if (ok && Lh.length > n0) LV.seen[h] = 1;
+    return ok;
+  }
+  if (room < 8) {                    // the run-up to a barrel spin
+    if (LV.seen.p && x < 0.2 && room >= 4.5) return stone(ib, k < 2 ? 0.26 : 0.24, false, pLv(cs));
+    if (x < 0.6 && room >= 4) return cells(cs, pickCell(QDECK), 4, 0.5, kin("gdl"), k < 2 ? 0.3 : 0.24);
+    const P = q ? 1 : 1.5, nf = Math.max(1, fl((room + 0.5) / P));
+    return gaps(cs, nf, P, 0.5, kin("gd"), k < 2 ? (q ? 0.28 : 0.3) : 0.24);
+  }
+  if (x < 0.3) return cells(cs, pickCell(QDECK), 4, k < 2 ? 0.5 : 0.72, kin(k ? "gdl" : "gd"), k === 0 ? 0.3 : k === 1 ? 0.26 : e ? 0.22 : 0.18);
+  x = (x - 0.3) / 0.7;
+  if (h === "p") return pulseStage(cs, ib, x, k, e, fill);
+  // pulse rails brought in by an earlier slot keep coming now and then
+  if (k > 0 && LV.seen.p && x < 0.14) return k === 1 ? stone(ib, 0.26, false, 1) : x < 0.07 ? stone(ib, 0.24, false, pLv(cs)) : pladder(ib, e ? 3 : 4, e ? 0.24 : 0.22, pLv(cs));
+  // the second half of slot 2 previews the squeeze's dotted-eighth runs whatever its hazard, as the pulse stage does
+  if (k === 2 && !LV.soft && cs >= t0 + 5 * BAR && x >= 0.8) return gaps(cs, 4, 0.75, 0.7, kin("gd"), 0.1);
+  if (h === "d") {                   // plates and pillars
+    if (k === 0) { if (x < 0.2 && cs > t0 + BAR) return centerP(cs, 2, 0.32); return fill(x < 0.65 ? "gd" : "g"); }
+    if (k === 1) { if (x < 0.25) return centerP(cs, 1.5, 0.28); if (x < 0.4) { LV.last = "double"; return gaps(cs, 2, 1, 0.3, "g", 0.3); } if (x < 0.6) return gaps(cs, 3, q ? 1 : 1.5, 0.6, "dgd", 0.26); return fill(kin("gdl")); }
+    if (x < 0.25) return centerP(cs, 1, 0.24);
+    if (x < 0.5) return gaps(ib, e ? 3 : 5, 1, 0.72, "gdd", e ? 0.24 : 0.18);
+    return fill(kin("gdlpx"));
+  }
+  // lasers
+  if (k === 0) return x < 0.5 ? gaps(ib, 3, q ? 1 : 1.5, 0, "l", 0.26) : fill(kin("gl"));
+  if (k === 1) {
+    if (x < 0.22) { LV.last = "double"; return gaps(cs, 2, 1, 0.3, "g", 0.3); }
+    if (x < 0.36 && LV.seen.d) return centerP(cs, 1.5, 0.28);
+    if (x < 0.52) return gaps(ib, 3, 1.5, 0, cs > t0 + 3.4 ? "lx" : "l", 0.26);
+    return fill(kin("gdl"));
+  }
+  if (x < 0.25) return gaps(ib, 3, 1.5, 0, "lx", e ? 0.24 : 0.2);
+  if (x < 0.37 && LV.seen.d) return centerP(cs, 1, 0.24);
+  if (x < 0.55) return gaps(ib, e ? 3 : 4, 1, 0.5, "gll", e ? 0.22 : 0.18);
+  return fill(kin("gdlpx"));
 }
 
 function nextBarrel(cs) { for (const b of BARRELS) if (b + SPIN > cs) return b; return 1e9; }
@@ -507,6 +644,7 @@ function phrase() {
     if (!gapB(1, cs + 2.5 * BEAT, cs + 3.1 * BEAT, 0.4)) return false;
     LV.cur = cs + 6.75 * BEAT; return true;
   }
+  if (LV.vary && !od && cs < T_SWAY) return varyPhrase(cs, ib, x, room);
   // overdrive tightens over 40 s, again over the next 40 s, and then slowly on, so a strong player never finds a plateau
   const v = clamp((cs - T_GOAL) / 40, 0, 1), v2 = clamp((cs - T_GOAL - 40) / 40, 0, 1), v3 = clamp((cs - T_GOAL - 80) / 60, 0, 1);
   if (room < 8) { // short run-up to a barrel: quick alternating blocks that end before the spin
@@ -535,22 +673,18 @@ function phrase() {
   if (cs < T_SWAY) {             // 19.4-38.7 s: pulse rails (first one taught), second barrel spin at 29 s
     // its first two bars ramp in (shorter ladders, wider windows), so the stage is not a step down from the lasers
     const e = cs < T_PULSE + 2 * BAR;
-    if (!LV.seen.p) { LV.seen.p = 1; return stone(ib, 0.26, true); }
-    if (x < 0.15) return stone(ib, 0.24);
-    if (x < 0.3) return e ? pladder(ib, 3, 0.24) : pladder(ib, 4, 0.22);
-    if (x < 0.48) return e ? gaps(ib, 3, 1, 0.72, "g", 0.24) : gaps(ib, 5, 1, 0.72, "g", 0.18);     // ladder: a flip on every beat
-    if (x < 0.58) return centerP(cs, 1, 0.24);
-    return gaps(ib, 4, 1, 0.76, "gdlpx", e ? 0.2 : 0.16);
+    return pulseStage(cs, ib, x, 2, e, kinds => gaps(ib, 4, 1, 0.76, kinds, e ? 0.2 : 0.16));
   }
   if (!od) {                     // 38.7-69.7 s: full sway; the breaks grow longer as the goal nears
     const u = clamp((cs - T_SWAY) / (T_GOAL - T_SWAY), 0, 1);
-    if (x < 0.1) return stone(ib, 0.2 - 0.03 * u);
-    if (x < 0.25) return pladder(ib, 5 + fl(u * 1.99), 0.19 - 0.03 * u);
+    if (x < 0.1) return stone(ib, 0.2 - 0.03 * u, false, 2);
+    if (x < 0.25) return pladder(ib, 5 + fl(u * 1.99), 0.19 - 0.03 * u, 2);
     // dotted-eighth runs: they grow from 5 to 7 blocks, their breaks lengthen and their safe window tightens from
     // about 0.1 s at 38.7 s to 0.05 s at about 63 s and stays there to the goal. Overdrive opens with one calm bar and
     // then runs tighter (0.035 s) for 10 s, so deaths per minute keep rising through 100 % instead of peaking just
     // before it (round 3: the squeeze was a wall right before the payoff, R1 and R2)
     const w = clamp(0.3 + 0.9 * u, 0, 1);
+    if (LV.vary && r() < 0.25) return cells(cs, pickCell(ZDECK), 4, 0.7 + 0.23 * w, "gd", 0.12 - 0.07 * w);
     if (x < 0.5 + 0.22 * u) return gaps(cs, 4 + fl(w * 3.99), 0.75, 0.7 + 0.23 * w, "gd", 0.12 - 0.07 * w);
     if (x < 0.58 + 0.14 * u) return centerP(cs, 1, 0.2);
     return gaps(ib, 4 + fl(u * 1.99), 1, 0.8 + 0.15 * u, "gdlpx", 0.12 - 0.04 * u);
@@ -560,12 +694,12 @@ function phrase() {
   // a beat (the 100 % moment), then 10 s of dotted-eighth runs a step tighter than the last ones before the goal,
   // before the eighth-note runs start
   if (cs < T_GOAL + BAR) return gaps(ib, 4, 1, 0.6, "gd", 0.2);
-  if (cs < T_GOAL + 10) return x < 0.12 ? pladder(ib, 6, 0.15) : gaps(cs, 7, 0.75, 0.9, "gd", 0.035);
-  if (x < 0.06) return pladder(ib, 6 + fl(r() * 3), 0.15 - 0.03 * v2);
+  if (cs < T_GOAL + 10) return x < 0.12 ? pladder(ib, 6, 0.15, 3) : gaps(cs, 7, 0.75, 0.9, "gd", 0.035);
+  if (x < 0.06) return pladder(ib, 6 + fl(r() * 3), 0.15 - 0.03 * v2, 3);
   // eighth-note runs; their breaks stop growing at 0.66 beat, past which the path proof failed more and more and left
   // empty beats, so the late game went flat (round 3, R2)
   if (x < 0.45 + 0.15 * v2 + 0.2 * v3) return gaps(ib, 8, 0.5, Math.min(0.66, 0.55 + 0.1 * v + 0.1 * v2 + 0.08 * v3), "gdg", 0.05 - 0.015 * v2);
-  if (x < 0.5) return stone(ib, 0.16);
+  if (x < 0.5) return stone(ib, 0.16, false, 3);
   if (x < 0.56) return centerP(cs, 0.75, 0.16);
   if (x < 0.82) return gaps(cs, 6, 0.75, 0.8 + 0.1 * v, "gd", 0.05);
   return gaps(ib, 5, 1, 0.9, "gdlpxx", 0.12);
@@ -583,7 +717,9 @@ function genNext() {
   for (let tries = 0; tries < 4 && !ok; tries++) {
     if (tries) restore(S);
     ok = phrase();
-    if (ok) ok = !spinClash(S.path) && verify(S.free, S.side, LV.cur + 0.3);
+    // the proof starts at the last planned flip, so the flight into the phrase is checked too (a far-rail block of a
+    // rhythm cell can start inside it)
+    if (ok) { const lf = S.path ? LV.path[S.path - 1] : -1; ok = !spinClash(S.path) && verify(lf >= 0 ? lf : S.free, lf >= 0 ? 1 - S.side : S.side, LV.cur + 0.3); }
   }
   if (!ok) { restore(S); LV.cur = cs + BEAT; LV.fails++; }
   if (LV.hist) LV.hist.push([+cs.toFixed(2), ok ? LV.last : "fail", LV.last]);
@@ -600,9 +736,13 @@ function setWin(a0, a1) {
   for (const p of LV.pl) if (p.a1 >= a0 - 20 && p.a0 <= a1 + 20) WP.push(p);
   for (const z of LV.lz) if (z.a >= a0 - 20 && z.a <= a1 + 20) WL.push(z);
 }
-// pulse rails hold on their lit beats, with 70 ms of grace at each edge
-const litOK = (t, par) => ((fl((t + 0.07) / BEAT) & 1) === par) || ((fl((t - 0.07) / BEAT) & 1) === par);
-const litNow = (t, par) => (fl(t / BEAT) & 1) === par;
+// pulse rails hold in their lit eighths, with 70 ms of grace at each edge (f: the rail piece, which carries its cycle)
+const litB = (f, e) => mod(e - f.ph, f.cyc) < f.on;
+const litOn = (f, e) => litB(f, e) && !litB(f, e - 1);            // the eighth a piece turns lit
+const litOK = (t, f) => litB(f, fl((t + PG) / EI)) || litB(f, fl((t - PG) / EI));
+const litNow = (t, f) => litB(f, fl(t / EI));
+// 0 to 1 through the last lit beat before the piece goes dark, so a long lit stretch glows steady and fades only then
+const litFade = (t, f) => { const e = fl(t / EI); let k = 1; while (k < f.cyc && litB(f, e + k)) k++; return clamp(1 - ((e + k) * EI - t) / BEAT, 0, 1); };
 // a laser is lethal in its live beat, except the last 80 ms while the beam fades
 function laserLive(z, t) { const b = fl(t / BEAT); return mod(b - z.ph, 4) === 0 && t - b * BEAT < BEAT - 0.08; }
 // seconds from t to the nearest lethal moment of a laser (0 inside)
@@ -620,7 +760,7 @@ function railAt(s, a, t) { // "" when the rail holds at altitude a and time t, e
   for (let i = 0; i < Lr.length; i++) {
     const f = Lr[i];
     if (f.k === 0) { if (a > f.a0 + 5 && a < f.a1 - 5 - 1.7 * HH) return "void"; }
-    else if (a > f.a0 - 5 && a < f.a1 + 5 && !f.forgive && !litOK(t, f.par)) return "pulse";
+    else if (a > f.a0 - 5 && a < f.a1 + 5 && !f.forgive && !litOK(t, f)) return "pulse";
   }
   return "";
 }
@@ -870,7 +1010,17 @@ function newRun(mode, seed, t0, o) {
   const quick = mode === "play" && t0 === 0 && !fresh && (o.quick != null ? !!o.quick : runsOf() >= 3);
   // t5: the first pulse rail of a run forgives one dark touch in a player's first five runs (it killed most new players)
   const t5 = mode === "play" && t0 === 0 && (o.t5 != null ? !!o.t5 : runsOf() < 5);
-  newLevel(seed, t0, { intro: fresh && t0 === 0, soft: soft && t0 === 0, quick, t5, lead: o.lead != null ? o.lead : mode === "play" && !fresh ? (runsOf() < 3 ? 6 : 4) : null });
+  // vary: every run after the first draws its opening, rhythm cells and wall colours; from the 3rd run the order of
+  // plates, lasers and pulse rails is drawn too (never the last run's order; pulse rails stay last until the player's
+  // best has passed the first one). ?demo=1 and the attract play keep the standard course.
+  const vary = mode === "play" && t0 === 0 && !fresh && (o.vary != null ? !!o.vary : true);
+  const shuf = vary && runsOf() >= 2;
+  newLevel(seed, t0, { intro: fresh && t0 === 0, soft: soft && t0 === 0, quick, t5, lead: o.lead != null ? o.lead : mode === "play" && !fresh ? (runsOf() < 3 ? 6 : 4) : null,
+    vary, ord: o.ord != null ? o.ord : shuf ? "seed" : "dlp", pEarly: o.pEarly != null ? !!o.pEarly : bestAltOf() >= ALT(T_PULSE + BAR),
+    lastOrd: o.lastOrd != null ? o.lastOrd : store.get("lastOrd", ""), lastOpen: o.lastOpen != null ? o.lastOpen : store.get("lastOpen", ""),
+    lastPal: o.lastPal != null ? o.lastPal : store.get("lastPal", -1) });
+  if (vary && o.ord == null) store.set("lastOrd", LV.ord);
+  if (mode === "play" && t0 === 0 && o.ord == null) store.set("lastPal", LV.pal0);   // the next run starts in another wall colour
   R = { mode, seed, t: t0, t0, alt: ALT(t0), side: 0, attached: true, ft0: 0, from: 0, x: -PX, wantAt: -1, buf: -1, acc: 0, sub: 0,
     dead: false, freeze: 0, dclock: 0, dk: "", dobj: null, dvx: 0, dva: 0, palt: ALT(t0), rot: 0, sq: 0, ring: 0, flips: 0, lastTap: -9, dieT: 0,
     goal: t0 >= T_GOAL ? 2 : 0, goalT: -9, beatI: -1, gate: 0, aiLo: -1, aiHi: -1, plan: null, rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
@@ -995,7 +1145,7 @@ function stepOnce() {
     const po = R.pulseOn;
     // the first pulse rail of a soft run forgives one dark contact: it flashes orange and a note beside the pod says
     // when it holds
-    if (po && po.forgive === 1 && !litOK(t, po.par)) { po.forgive = 2; po.ridden = 2; po.warnT = perfT; teach("pulseWarn"); addTrauma(0.3); if (loud()) sfx.warn(); }
+    if (po && po.forgive === 1 && !litOK(t, po)) { po.forgive = 2; po.ridden = 2; po.warnT = perfT; teach("pulseWarn"); addTrauma(0.3); if (loud()) sfx.warn(); }
     if (po && R.alt > po.a1 + 5) { if (po.ridden !== 2) { po.ridden = 2; pulseDone(); } R.pulseOn = null; }
   } else {
     const tau = t - R.ft0;
@@ -1331,8 +1481,8 @@ function schedSfx() {
   if (nb !== lastTickBeat && nb * BEAT - R.t < 0.12) {
     lastTickBeat = nb;
     let tick = false, big = false;
-    for (let s = 0; s < 2 && !tick; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > R.alt - 200 && (nb & 1) === f.par) { tick = true; break; }
-    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && (nb & 1) === tl.par) tick = big = true;   // the taught stone ticks 6 dB louder
+    for (let s = 0; s < 2 && !tick; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > R.alt - 200 && litOn(f, 2 * nb)) { tick = true; break; }
+    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && litOn(tl.st, 2 * nb)) tick = big = true;   // the taught stone ticks 6 dB louder
     if (tick) { const w = musAt(nb * BEAT); if (w > now) SFX.tick(w, big ? 2 : 1); }
   }
 }
@@ -1768,12 +1918,12 @@ function drawSpinMarks(c, t, aBot, aTop, camA, M) {
     c.globalAlpha = 1;
   }
 }
-function railPieces(s, aBot, aTop) { // flat list of [a0, a1, par, pulse?, piece] per stretch of rail
+function railPieces(s, aBot, aTop) { // flat list of [a0, a1, 0, pulse?, piece] per stretch of rail
   const out = [], Lr = LV.f[s]; let cur = aBot;
   for (let i = 0; i < Lr.length; i++) {
     const f = Lr[i]; if (f.a1 < aBot) continue; if (f.a0 > aTop) break;
     if (f.a0 > cur) out.push(cur, f.a0, -1, 0, null);
-    if (f.k === 1) out.push(Math.max(f.a0, aBot), Math.min(f.a1, aTop), f.par, 1, f);
+    if (f.k === 1) out.push(Math.max(f.a0, aBot), Math.min(f.a1, aTop), 0, 1, f);
     cur = Math.max(cur, f.a1);
   }
   if (cur < aTop) out.push(cur, aTop, -1, 0, null);
@@ -1784,7 +1934,7 @@ const RAILC = rgb(mix("steel", "steelD", 0.55));   // brushed steel: under the p
 function drawRails(c, t, aBot, aTop, camA, M, sh) {
   const pcs = [railPieces(0, aBot, aTop), railPieces(1, aBot, aTop)];
   const RW = [1 - 0.3 * sh, 1 + 0.5 * sh], RA = [1 - 0.55 * sh, 1], VR = Math.min(vs(), 1.2);
-  const off = mod(camA * 2, 44), bt = t / BEAT, fr = bt - fl(bt);
+  const off = mod(camA * 2, 44);
   const blink = R.dead && (fl(perfT * 6) & 1);
   let voidGap = null;
   if (R.dead && R.dk === "void") { const g = LV.f[R.side].find(f => f.k === 0 && R.palt > f.a0 - 10 && R.palt < f.a1 + 10); if (g) voidGap = { s: R.side, a0: g.a0, a1: g.a1 }; }
@@ -1827,13 +1977,18 @@ function drawRails(c, t, aBot, aTop, camA, M, sh) {
       for (let y = Math.ceil((y0 - off) / 44) * 44 + off; y < y1 - 6; y += 44) { c.moveTo(xf - 4.5, y + 4); c.lineTo(xf, y - 0.5); c.lineTo(xf + 4.5, y + 4); c.lineTo(xf + 4.5, y + 6); c.lineTo(xf, y + 1.5); c.lineTo(xf - 4.5, y + 6); c.closePath(); }
     }
     c.fillStyle = rgba("cyan", 0.35 + 0.35 * cam.beat); c.fill();   // filled chevrons (a stroked path redraws with different edges)
-    // the first pulse rail of a run is taught: this stretch of the far rail lights on the stone's beat for a bar
+    // the first pulse rail of a run is taught: this stretch of the far rail blinks in the stone's rhythm for a bar.
+    // Only the solid rail blinks: a break inside the stretch stays dark, so cyan never paints over a hole (fixer 10-11)
     const tl = LV.tele;
-    if (tl && tl.s === s && tl.a1 > aBot && tl.a0 < aTop && litNow(t, tl.par)) {
-      const lo = Math.max(tl.a0, aBot, R.attached && R.side === s ? R.alt + 60 : -1e9), hi = Math.min(tl.a1, aTop);
-      if (hi > lo) {
-      c.globalAlpha = RA[s] * (0.6 - 0.3 * fr); c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); c.globalAlpha = RA[s];
-      c.fillStyle = C("cyanL"); c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
+    if (tl && tl.s === s && tl.a1 > aBot && tl.a0 < aTop && litNow(t, tl.st)) {
+      const tlo = Math.max(tl.a0, aBot, R.attached && R.side === s ? R.alt + 60 : -1e9), thi = Math.min(tl.a1, aTop), ga = RA[s] * (0.6 - 0.3 * litFade(t, tl.st));
+      c.fillStyle = C("cyanL");
+      for (i = 0; i < P.length; i += 5) {
+        if (P[i + 3]) continue;
+        const lo = Math.max(tlo, P[i]), hi = Math.min(thi, P[i + 1]);
+        if (hi - lo < 2) continue;
+        c.globalAlpha = ga; c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); c.globalAlpha = RA[s];
+        c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
       }
     }
     // pulse rails: cyan when lit (cyan always means safe), dashed steel with a thin orange edge when dark (deadly, and
@@ -1843,9 +1998,9 @@ function drawRails(c, t, aBot, aTop, camA, M, sh) {
     const lead = R.dead ? 0 : TFLY;
     for (i = 0; i < P.length; i += 5) {
       if (!P[i + 3]) continue;
-      const lo = P[i], hi = P[i + 1], litN = litNow(t, P[i + 2]), litL = litNow(t + lead, P[i + 2]);
+      const lo = P[i], hi = P[i + 1], litN = litNow(t, P[i + 4]), litL = litNow(t + lead, P[i + 4]);
       if (litN) {
-        if (litL) { c.globalAlpha = RA[s] * (0.75 - 0.35 * fr); c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); }
+        if (litL) { c.globalAlpha = RA[s] * (0.75 - 0.35 * litFade(t, P[i + 4])); c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); }
         c.globalAlpha = RA[s] * (litL ? 1 : 0.7);
         c.fillStyle = C("cyan"); c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
         c.fillStyle = C("cyanL"); c.fillRect(xr - 1, camA - hi, 2, hi - lo);
@@ -2019,7 +2174,7 @@ function drawPod(c, t, camA, M, sh) {
     for (const f of WF[1 - R.side]) if (f.k === 1 && la > f.a0 - 5 && la < f.a1 + 5) { pcs = f; break; }
   }
   if (pcs) {
-    const ok = litOK(R.t + TFLY, pcs.par), lx = M * (R.side ? -PX : PX), ly = camA - la;
+    const ok = litOK(R.t + TFLY, pcs), lx = M * (R.side ? -PX : PX), ly = camA - la;
     c.beginPath();
     for (let q = 1; q <= 10; q++) { const tau = TFLY * q / 10; c.rect(flx(R.side, tau) * M - 2, camA - ALT(R.t + tau) - 2, 4, 4); }
     c.fillStyle = rgba("white", ok ? 0.75 : 0.25); c.fill();
@@ -2457,9 +2612,12 @@ function boardLeave() {
   if (state === "paused") boardOut = { kind: "pause", t: perfT };
   else if (isOver() && R && R.result) boardOut = { kind: "over", r: R.result, play: state === "over", demo: state === "demo-over", t: perfT };
 }
-function toTitle() { boardLeave(); pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+// the run's opening cell is kept however the run ends (death, restart from the pause menu, quit), so the next run opens
+// with a different one
+function keepOpen() { if (R && R.mode === "play" && LV && LV.vary && LV.seen.o0) store.set("lastOpen", LV.seen.o0); }
+function toTitle() { keepOpen(); boardLeave(); pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
 function startPlay() {
-  boardLeave();
+  keepOpen(); boardLeave();
   if (auInit()) auResume();
   sfx.ui(); hideAll();
   const g = R && R.mode === "play" && R.result ? R.result.goal : null;
@@ -2475,6 +2633,7 @@ function showOver(now) {
   if (R.result.newBest) store.set("best", R.pct);
   if (R.alt > bestAltOf()) store.set("bestAlt", Math.round(R.alt));
   store.set("runs", runsOf() + 1);
+  keepOpen();
   ovOver.hidden = false; overShownAt = T(); btnPause.hidden = true;
   platform("gameOver", R.pct);
 }
@@ -2651,10 +2810,13 @@ window.__game = {
   // ---- extra hooks for the balance bots and the generator check (C/bots in the build notes) ----
   sim: {
     get R() { return R; }, get LV() { return LV; },
-    ALT, SPEED, altInv, spinM, TFLY, BEAT, BAR, PX, HW, HH, HB, T_GOAL, A_GOAL, BARRELS, laserLive, litOK,
+    ALT, SPEED, altInv, spinM, TFLY, BEAT, BAR, PX, HW, HH, HB, T_GOAL, A_GOAL, BARRELS, laserLive, litOK, litNow, litB, PG, EI, PLV, T_PULSE, T_SWAY, SLOT, ORDS,
     // start a play run at run time t0 with a level seed; fresh: the first-run opening of a fresh save
-    // quick: the returning player's opening (default for a non-fresh start)
-    start(t0, seed, o) { hideAll(); o = o || {}; state = "play"; runCount++; newRun("play", seed >>> 0, t0 || 0, { fresh: !!o.fresh, soft: o.soft != null ? !!o.soft : !!o.fresh, t5: o.t5 != null ? !!o.t5 : !!o.fresh, lead: o.lead, quick: o.quick != null ? !!o.quick : !o.fresh }); btnPause.hidden = false; return R; },
+    // quick: the returning player's opening (default for a non-fresh start); vary: a returning run's drawn opening,
+    // cells and colours (default for a non-fresh start); ord: "dlp" (default), an order such as "pld", or "seed" (drawn
+    // like a 3rd run on: pEarly lets pulse rails come first, lastOrd is the order it may not repeat)
+    start(t0, seed, o) { hideAll(); o = o || {}; state = "play"; runCount++; newRun("play", seed >>> 0, t0 || 0, { fresh: !!o.fresh, soft: o.soft != null ? !!o.soft : !!o.fresh, t5: o.t5 != null ? !!o.t5 : !!o.fresh, lead: o.lead, quick: o.quick != null ? !!o.quick : !o.fresh,
+      vary: o.vary != null ? !!o.vary : !o.fresh, ord: o.ord || "dlp", pEarly: o.pEarly != null ? !!o.pEarly : true, lastOrd: o.lastOrd || "", lastOpen: o.lastOpen || "", lastPal: o.lastPal != null ? o.lastPal : -1 }); btnPause.hidden = false; return R; },
     // the AI's safe window for the next flip on the current rail: { lo, hi } run times, or null when staying is safe
     window() { if (!R || R.dead || !R.attached) return null; setWin(R.alt - 100, R.alt + 1700); const w = aiDecide(R); if (w < 0) return null; return R.aiLo < 0 ? { lo: w, hi: w, now: true } : { lo: R.aiLo, hi: R.aiHi }; },
     stay(h) { if (!R || R.dead) return null; setWin(R.alt - 100, R.alt + 1700); return stayDeath(R.side, R.t, h || 1.6); },
@@ -2662,7 +2824,7 @@ window.__game = {
     // generate a level up to tEnd and prove the whole intended path at once
     genCheck(seed, tEnd, o) {
       o = o || {};
-      newLevel(seed >>> 0, 0, { intro: !!o.intro, soft: !!o.soft, quick: !!o.quick });
+      newLevel(seed >>> 0, 0, Object.assign({ intro: !!o.intro, soft: !!o.soft, quick: !!o.quick }, o.lv || {}));   // lv: more level options (lead, t5, vary, ord, pEarly, lastOrd)
       LV.hist = [];
       while (LV.cur < tEnd) genNext();
       const ok = verify(0, 0, Math.min(LV.cur, tEnd));
