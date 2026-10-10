@@ -619,6 +619,7 @@ const rgbM = (c, m) => "rgb(" + Math.min(255, c[0] * m | 0) + "," + Math.min(255
 function mixc(a, b, f, o) { o[0] = a[0] + (b[0] - a[0]) * f; o[1] = a[1] + (b[1] - a[1]) * f; o[2] = a[2] + (b[2] - a[2]) * f; return o; }
 const sstep = (a, b, x) => smooth((x - a) / (b - a));
 const popc = m => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
+const easeIn = x => { x = clamp(x, 0, 1); return x * x * x; };
 const C1 = 1.28, C3 = C1 + 1;      // easeOutBack with about 6 % overshoot (the prototype's tap turn)
 const easeOutBack = x => { const y = x - 1; return 1 + C3 * y * y * y + C1 * y * y; };
 // section light: square cyan, triangle violet, hexagon amber
@@ -636,7 +637,9 @@ const HWG = 0.3;                   // half-window the generator plans with (stri
 const BLK = 0.3;                   // drawn half-depth of a block in rows
 const SIM_DT = 1 / 240;            // fixed rule step: a run plays the same at any frame rate (bar 1.10.2)
 const GRACE = 0.035;               // s: a tap this late still saves you (bar 1.5.6); it counts as a close call
-const EARLY = 0.07;                // s: a turn pressed this soon before the row at the shuttle would kill waits for it to clear
+const GRACE1 = 0.065;              // s: the same in the first lap, so a right count a hair late still lives (bar 1.4.3)
+const graceOf = s => s < 3 ? GRACE1 : GRACE;
+const EARLY = 0.12;                // s: a turn pressed this soon before the row at the shuttle would kill waits for it to clear
 const NEAR_T = 0.16;               // s: leaving a face this soon before its row arrives is a close call (half the gap at most)
 const NEAR_T1 = 0.2;               // s: the same in the first lap on one-tap rows, so a new player meets a close call early
 const NEAR_CD = 1.2;               // s: close calls inside this still score, but quietly (no popup, no sound)
@@ -653,14 +656,16 @@ const LAPS = [
 ];
 const lapOf = s => Math.min(LAPS.length - 1, fl(s / 3));
 const K_FIRST = [[0.3, 0.6, 0.1, 0], [0, 0.3, 0.7, 0]]; // the first square and triangle ask for fewer turns
+// the first square tightens from 8 s (4 s on a retry): shorter gaps, and the left wall three turns round appears
+const K_RAMP = [0.12, 0.56, 0.2, 0.12], rampAt = G => G.tut ? 8 : 4;
 // 8th notes between rows [gap, weight]; from the fourth lap the 1-8th share keeps climbing with every sector,
 // so there is no flat stretch a steady hand can hold for ever
-function gapsFor(s, local) {
-  if (s === 0) return [[3, 0.35], [4, 0.65]];
-  if (s === 1) return local < HALF ? [[2, 0.3], [3, 0.5], [4, 0.2]] : [[1, 0.12], [2, 0.58], [3, 0.3]];
-  if (s === 2) return local < HALF ? [[2, 0.5], [3, 0.5]] : [[1, 0.15], [2, 0.55], [3, 0.3]];
+function gapsFor(s, local, ramp) {
+  if (s === 0) return ramp ? [[2, 0.3], [3, 0.45], [4, 0.25]] : [[3, 0.35], [4, 0.65]];
+  if (s === 1) return local < HALF ? [[2, 0.3], [3, 0.5], [4, 0.2]] : [[1, 0.16], [2, 0.56], [3, 0.28]];
+  if (s === 2) return local < HALF ? [[2, 0.5], [3, 0.5]] : [[1, 0.2], [2, 0.52], [3, 0.28]];
   if (local < 2.4) return [[2, 0.5], [3, 0.5]];
-  if (s < 6) return [[1, 0.3], [2, 0.55], [3, 0.15]];
+  if (s < 6) return [[1, 0.42], [2, 0.48], [3, 0.1]];
   if (s < 9) return [[1, 0.5], [2, 0.42], [3, 0.08]];
   const x = Math.min(1, (s - 9) / 9);  // to 85 % one-8th rows by sector 19: a turn on nearly every 8th note
   return [[1, 0.55 + 0.3 * x], [2, 0.4 - 0.25 * x], [3, 0.05 - 0.05 * x]];
@@ -671,10 +676,12 @@ const RANKS = [1, 3, 4, 6, 7, 10];             // best sector reached -> rank
 const rankOf = sec => RANKS.reduce((a, t, i) => sec >= t ? i : a, 0);
 const LIVERY = [{ c: "cyan", at: 0 }, { c: "mint", at: 3 }, { c: "lilac", at: 4 }, { c: "ember", at: 6 }, { c: "plat", at: 8 }];
 const liveryOf = sec => LIVERY.reduce((a, l, i) => sec >= l.at ? i : a, 0);
-// ?demo=1: a loop of scripted runs (act times in s of run time, never by luck). A starts at once in the square
-// with a close call, another, then a crash by 21 s; B starts late in the triangle and runs through the hexagon.
+// ?demo=1: a loop of scripted runs (act times in s of run time from the clip's start, never by luck). A starts 3 s
+// in, already in the square's busy part: a close call at 1 s, another, a scripted three-turn row (the triple) at
+// about 9 s, the triangle at 11.5 s, then a crash in slow motion at about 17 s. B starts late in the triangle and
+// runs through the hexagon into the second lap.
 const DEMO_RUNS = [
-  { at: 0, script: [{ at: 4.2, act: "near" }, { at: 10.4, act: "near" }, { at: 19.6, act: "fail" }] },
+  { at: 3, script: [{ at: 1.0, act: "near" }, { at: 6.4, act: "near" }, { at: 8.6, act: "triple" }, { at: 16.6, act: "fail" }] },
   { at: 26.6, script: [{ at: 4.6, act: "near" }, { at: 13.8, act: "near" }, { at: 22.5, act: "near" }, { at: 30.5, act: "fail" }] }
 ];
 const ATTRACT_AT = [2, 16, 31, 45, 9, 24];
@@ -693,8 +700,9 @@ const STRINGS = {
     title: "ダイヤルトンネル", titleEn: "DIAL TUNNEL", start: "スタート", how1: "タップで世界が右に回る。", how2: "赤いブロックのない面へ乗りうつろう。",
     lang: "EN", paused: "一時停止", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
     close: "ギリ!", triple: "トリプル!", goldN: "+10  {n}連続", sector: "セクター {n}", shapes: ["四角", "三角", "六角"],
-    causeShort: "あと {n} 回タップ", causeShort1: "あと 1 回タップ", causeOver: "1 回多かった", causeEarly: "回るのが早かった", causeLock: "ロックの面を外した", causeShut: "シャッターの面に当たった",
-    rReached: "到達", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
+    causeShort: "あと {n} 回タップ", causeShort1: "あと 1 回タップ", causeOver: "1 回多かった", causeEarly: "回るのが早かった", causeLock: "ロックの面を外した", causeShut: "シャッターの面に当たった", causeLate: "少し遅かった",
+    noteShut: "シャッター: 止まった面を読もう", noteLock: "ロック: 開く面は 1 つだけ", spared: "1 回だけセーフ",
+    rReached: "到達", rBest: "ベスト", rOldBest: "前のベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
     g_sector: "次はセクター {n} へ", g_gold: "1 回でゴールド {n} 個", g_hex: "六角を抜けよう", g_triple: "トリプルタップを決めよう", g_near: "ギリを {n} 回",
     ranks: ["訓練生", "操縦士", "上級操縦士", "エース", "マスター", "伝説"], livery: ["標準", "ミント", "すみれ", "こはく", "白金"], newLivery: "新しい機体色 {n}",
     best: "ベスト", rank: "ランク", space: "スペースキー", credit: "Made with Claude"
@@ -703,8 +711,9 @@ const STRINGS = {
     title: "DIAL TUNNEL", titleEn: "DIAL TUNNEL", start: "START", how1: "Tap to turn the world to the right.", how2: "Ride onto a face with no red block.",
     lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
     close: "CLOSE!", triple: "TRIPLE!", goldN: "+10  {n} IN A ROW", sector: "SECTOR {n}", shapes: ["SQUARE", "TRIANGLE", "HEXAGON"],
-    causeShort: "{n} MORE TAPS NEEDED", causeShort1: "ONE MORE TAP NEEDED", causeOver: "ONE TAP TOO MANY", causeEarly: "TURNED TOO EARLY", causeLock: "MISSED THE OPEN FACE", causeShut: "HIT THE SHUTTER",
-    rReached: "REACHED", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
+    causeShort: "{n} MORE TAPS NEEDED", causeShort1: "ONE MORE TAP NEEDED", causeOver: "ONE TAP TOO MANY", causeEarly: "TURNED TOO EARLY", causeLock: "MISSED THE OPEN FACE", causeShut: "HIT THE SHUTTER", causeLate: "A BIT LATE",
+    noteShut: "SHUTTER: READ IT WHEN IT STOPS", noteLock: "LOCK: ONLY ONE FACE STAYS OPEN", spared: "SAVED, THIS ONCE",
+    rReached: "REACHED", rBest: "BEST", rOldBest: "OLD BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
     g_sector: "NEXT: REACH SECTOR {n}", g_gold: "{n} GOLD IN ONE RUN", g_hex: "CLEAR A HEXAGON", g_triple: "LAND A TRIPLE TAP", g_near: "{n} CLOSE CALLS",
     ranks: ["TRAINEE", "PILOT", "SENIOR PILOT", "ACE", "MASTER", "LEGEND"], livery: ["STANDARD", "MINT", "VIOLET", "AMBER", "PLATINUM"], newLivery: "NEW COLOUR: {n}",
     best: "BEST", rank: "RANK", space: "SPACE", credit: "Made with Claude"
@@ -818,17 +827,18 @@ const TUT = [
   { g: 5, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" }, { g: 2, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" },
   { g: 8, k: 1, b: 1, track: true, hint: true, fam: "tut" }, { g: 4, k: 1, b: 1, track: true, hint: true, fam: "tut" },
   { g: 4, k: 1, b: 1, track: true, hint: true, fam: "tut" }, { g: 4, k: 1, b: 1, track: true, fam: "tut" },
-  { g: 6, k: 2, b: 3, track: true, fam: "tut" }   // every face but one: the first ×2, at about 10 s
+  { g: 6, k: 2, b: 3, track: true, fam: "tut" },  // every face but one: the first ×2, at about 10 s
+  { g: 6, k: 3, b: 3, track: true, fam: "tut" }   // and the left wall, three turns round (×3, the 270 degree spin)
 ];
 function makeGen(seed, tut) {
   const G = { rnd: seeded(seed), lastM: 2, prevT: -5, prevBlocked: 0, path: 0, q: [], made: 0, tut: !!tut, lastSet: tut ? 4.5 : 3,
-    setI: seed & 1, shutN: 0, lockN: 0, id: 0 };
+    setI: seed & 1, shutN: 0, lockN: 0, id: 0, force: [] };
   G.q = tut ? TUT.map(o => Object.assign({}, o)) : entryRows(3, 4); // retries skip the tutorial: three one-face rows, then real rows
   return G;
 }
 function fillQueue(G, tt) {
   const rnd = G.rnd, s = fl(tt / SEC_LEN), N = secShape(s), b = N - 1, local = tt - s * SEC_LEN, LP = LAPS[lapOf(s)];
-  const gaps = gapsFor(s, local), lvl = gateLv(s); // lvl: from the second lap the families tighten too
+  const gaps = gapsFor(s, local, s === 0 && local >= rampAt(G)), lvl = gateLv(s); // lvl: from the second lap the families tighten too
   let fam, i;
   if (tt - G.lastSet > lerp(5.5, 4, lvl) && local > 2.6 && local < SEC_LEN - 3) {
     // a set piece every 5.5 s or more: the first shutter in the triangle, the first lock in the hexagon
@@ -890,7 +900,7 @@ function makeRow(G, out, step, m, tt, s, live) {
   const maxT = Math.min(3, raw);                          // never force more than 3 taps; 4 and 5 are only gold lures
   let path = G.path, i;
   if (step.track && live) { const lf = live(s); if (lf >= 0) path = lf; }
-  let k = step.k >= 0 ? Math.min(step.k, maxT) : pickK(rnd, maxT, N, s < 2 ? K_FIRST[s] : LP.k);
+  let k = step.k >= 0 ? Math.min(step.k, maxT) : pickK(rnd, maxT, N, s === 0 && tt >= rampAt(G) ? K_RAMP : s < 2 ? K_FIRST[s] : LP.k);
   if (step.shut && maxT > 0) k = Math.max(1, k);
   let b = step.b >= 0 ? step.b : pickB(rnd, N, diff, s);
   if (step.shut) b = N === 3 || lap === 0 ? 1 : 2;
@@ -940,6 +950,8 @@ function makeRow(G, out, step, m, tt, s, live) {
 }
 function generate(G, out, posLimit, live) {
   for (let guard = 0; guard < 64; guard++) {
+    // ?demo=1: a scripted row that asks for three turns (the triple) cuts in at its set run time
+    if (G.force.length && (G.lastM + 4) * EIGHTH >= G.force[0]) { G.force.shift(); G.q.unshift({ g: 4, k: 3, b: 3, track: true, fam: "single" }); }
     if (!G.q.length) fillQueue(G, (G.lastM + 3) * EIGHTH);
     const step = G.q[0], m = G.lastM + step.g, tt = m * EIGHTH;
     if (posAt(tt) > posLimit) return;
@@ -1001,7 +1013,7 @@ function verify(runs, secs) {
 function newFx() {
   return { vt: 0, Rd: 0, twFrom: 0, twT0: -1, twDur: 0.11, bank: 0, bankV: 0, railT: -9, zoomT: -9, beatT: -9, swayT: -9, swaySign: 1,
     kicks: [], posVis: 0, deadVt: 0, shattered: false, call: null, scoreT: -1e9, disp: 0, pauseT: 0, label: null, tapT: -9, slamT: -9,
-    nearF: 0, nearN: 4, nearVt: -9, tripVt: -9 };
+    nearF: 0, nearN: 4, nearVt: -9, tripVt: -9, cockT: -9, streakT: -9, notice: null };
 }
 function newRun(mode, seed, o) {
   o = o || {};
@@ -1009,13 +1021,16 @@ function newRun(mode, seed, o) {
   run = {
     mode, ai: mode !== "play", prof: o.prof || null, seed, tut, gen: makeGen(seed, tut), rows: [], rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
     t: 0, t0: 0, acc: 0, pos: 0, speedSeg: 0, visR: VIS, curSec: 0, curN: 4, cur: 0, Rt: 0, alive: true, dead: null, grace: null, hold: false,
-    bonus: 0, score: 0, golds: 0, gStreak: 0, gStreakMax: 0, goldT: -9, nears: 0, triples: 0, chain: 0, lastTapT: -9, tq: [], tapsFor: 0, taps: 0,
+    bonus: 0, score: 0, golds: 0, gStreak: 0, gStreakMax: 0, goldT: -9, nears: 0, triples: 0, chain: 0, lastTapT: -9, turnT: -9, tq: [], tapsFor: 0, taps: 0,
     prevFace: 0, beatIdx: -1, held: 0, heldW: null, nearT: -9, labUsed: 0, labRow: null, labNeed: 0, best: mode === "play" ? bestOf() : 0, bestPassed: false, maxSec: 0, hexClear: false,
-    plan: [], planRow: 0, planAct: null, script: (o.script || []).map(e => Object.assign({}, e)), startAt: T(), result: null, saved: false
+    plan: [], planRow: 0, planAct: null, script: (o.script || []).filter(e => e.act !== "triple").map(e => Object.assign({}, e)), startAt: T(), result: null, saved: false,
+    failW: null, slow: false
   };
   fx = newFx(); PN = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
   if (o.at > 0) skipTo(o.at);
   run.t0 = run.t;
+  run.gen.force = (o.script || []).filter(e => e.act === "triple").map(e => run.t0 + e.at);
+  run.tripAt = run.gen.force.slice();
   if (mode === "play") hint.begin();
   musicLevel(mode === "attract" ? "title" : "play");
   musicSync();
@@ -1047,18 +1062,27 @@ function liveFace(s) {
 // the core verb: the face on the right becomes the floor, at once (the picture follows in 110 ms). A turn pressed
 // a hair early, while the row at the shuttle would catch the face you turn onto, waits until that row has passed
 // (bar 1.5.6, the mirror of GRACE); it then lands at the first moment the row allows, so no row gets harder.
+// The held press is heard and seen at once: the click, the rail pulse, the lean, and the dial winding a little
+// toward the turn (an anticipation), which the turn then finishes.
 function doTap() {
   const R = run;
   if (!R || !R.alive) return false;
-  if (R.held) { if (R.held < 3) R.held++; return true; }
+  if (R.held) { if (R.held < 3) { R.held++; pressFeel(); } return true; }
   const nf = (R.cur - 1 + R.curN) % R.curN, lead = EARLY * speedAt(R.t);
   for (const w of R.rows) {
     if (w.done || w.s !== R.curSec) continue;
     if (w.c - HW - R.pos > lead) break;
-    if (!(w.blocked & (1 << R.cur)) && (w.blocked & (1 << nf))) { R.held = 1; R.heldW = w; return true; }
+    if (!(w.blocked & (1 << R.cur)) && (w.blocked & (1 << nf))) { R.held = 1; R.heldW = w; pressFeel(); return true; }
     break;
   }
   return applyTap(false);
+}
+function pressFeel() {
+  const R = run, t = R.t;
+  R.chain = t - R.lastTapT < 0.34 ? Math.min(R.chain + 1, 3) : 0;
+  R.lastTapT = t;
+  fx.railT = fx.vt; fx.bankV += 8; fx.tapT = fx.vt; fx.cockT = fx.vt;
+  if (loud()) sfx.tap(R.chain);
 }
 function applyTap(released) {
   const R = run, t = R.t, q = R.tq;
@@ -1067,9 +1091,12 @@ function applyTap(released) {
   R.prevFace = R.cur; R.cur = (R.cur - 1 + R.curN) % R.curN;
   R.Rt += TAU / R.curN;
   if (R.Rt > TAU * 4) { R.Rt -= TAU * 4; fx.Rd -= TAU * 4; }
-  fx.twFrom = fx.Rd; fx.twT0 = fx.vt; fx.twDur = 0.11; fx.railT = fx.vt; fx.bankV += 8; fx.tapT = fx.vt;
+  fx.twFrom = fx.Rd; fx.twT0 = fx.vt; fx.twDur = DEMO ? 0.17 : 0.11;   // a recording shows the turn over 5 video frames
+  R.tapsFor++; R.taps++; R.turnT = t;          // turnT: when the rule face last changed (a held press lands later)
+  if (released) return true;                    // the press was already heard and seen (pressFeel)
+  fx.railT = fx.vt; fx.bankV += 8; fx.tapT = fx.vt;
   R.chain = t - R.lastTapT < 0.34 ? Math.min(R.chain + 1, 3) : 0;
-  R.lastTapT = t; R.tapsFor++; R.taps++;
+  R.lastTapT = t;
   if (loud()) sfx.tap(R.chain);
   return true;
 }
@@ -1092,7 +1119,8 @@ function onBeat() {
   if (fx.kicks.length > 8) fx.kicks.shift();
   fx.beatT = fx.vt; fx.swayT = fx.vt; fx.swaySign = -fx.swaySign;
 }
-function onSpeed() { fx.zoomT = fx.vt; addTrauma(0.2); if (loud()) sfx.whoosh(); }
+// a speed step is heard and seen as a burst of longer, brighter streaks (no camera punch: that is kept for the triple)
+function onSpeed() { fx.streakT = fx.vt; addTrauma(0.12); if (loud()) sfx.whoosh(); }
 function zoomGate() { if (!Juice.reduce) fx.zoomT = fx.vt; }
 
 function simStep(dt) {
@@ -1112,6 +1140,11 @@ function simStep(dt) {
     const w = R.rows[i];
     if (w.c - R.pos > R.visR) break;
     if (w.done || w.s !== R.curSec) continue;
+    // the first shutter and the first lock a player ever meets are named once, in the world, before they arrive
+    if (w.first && !w.noted && w.tc - t < 1.45 && R.mode === "play" && !R.prof) {
+      w.noted = true; const nk = w.lock ? "noteLock" : "noteShut";
+      if (!store.get(nk, false)) { store.set(nk, true); fx.notice = { str: S(nk), t: fx.vt }; }
+    }
     if (w.lock && !w.slammed && t >= w.slamT) { w.slammed = true; fx.slamT = fx.vt; addTrauma(0.1); if (loud()) sfx.slam(); }
     if (w.lockT > 0) {
       if (t < w.lockT) { const st = Math.ceil((w.lockT - t) / EIGHTH - 1e-6); if (st !== w.rStep) { if (w.rStep > 0 && loud()) sfx.ratchet(); w.rStep = st; } }
@@ -1128,10 +1161,10 @@ function simStep(dt) {
     if (!w.taken && p0 < c && R.pos >= c && (w.gold & (1 << R.cur))) takeGold(w);
     if (R.pos > c + HW && !(R.grace && R.grace.w === w)) passRow(w);
   }
-  if (R.grace) { // touching a block: a tap in the next GRACE s onto a free face still saves the run
-    const g = R.grace, w = g.w;
+  if (R.grace) { // touching a block: a tap in the next GRACE s onto a free face still saves the run (first lap: GRACE1)
+    const g = R.grace, w = g.w, gr = graceOf(w.s);
     if (!(w.blocked & (1 << R.cur))) { R.grace = null; w.closed = true; closeCall(w, true); }
-    else if (t - g.t0 >= GRACE || R.pos > w.c + HW) { die(w); return; }
+    else if (t - g.t0 >= gr || (gr <= GRACE && R.pos > w.c + HW)) { die(w); if (!R.alive) return; }
   }
   if (R.held && (R.heldW.done || R.pos > R.heldW.c + HW + 0.5)) { // the early turn lands now that its row has passed
     const n = R.held; R.held = 0; R.heldW = null;
@@ -1169,7 +1202,7 @@ function passRow(w) {
   // a close call: you left this row's blocked face just before it arrived (within 0.8 of the gap before it, so dense
   // rows do not make every turn a close call; the first lap's one-tap rows allow a little more)
   const gapB = Math.max(0, w.tc - w.hw - (w.pw + w.hw)), nearW = lapOf(w.s) === 0 && w.need <= 1 ? NEAR_T1 : Math.min(NEAR_T, 0.8 * gapB);
-  if (!w.closed && (w.blocked & (1 << R.prevFace)) && R.prevFace !== R.cur && R.lastTapT >= w.tc - w.hw - nearW) { w.closed = true; closeCall(w, false); }
+  if (!w.closed && (w.blocked & (1 << R.prevFace)) && R.prevFace !== R.cur && R.turnT >= w.tc - w.hw - nearW) { w.closed = true; closeCall(w, false); }
   if (w.lab && !w.hint && R.mode === "play" && !R.prof && labsSeen < 3) { labsSeen++; store.set("labs", labsSeen); }
   // a clean triple: the row needed three taps from where you stood and you made exactly three
   if (w.needAt === 3 && R.tapsFor === 3) tripleTap(w);
@@ -1201,17 +1234,19 @@ function closeCall(w, late) {
   // at the spot: white chips where the block passes the face you left; the word sits between it and the shuttle
   const p = faceScreen(f, 1.02), s = shipXY(0.7);
   for (let z = 0; z < 14; z++) spawn(p[0] + (Math.random() - 0.5) * 40, p[1], (Math.random() - 0.5) * 320, -60 - Math.random() * 240, 0.25 + Math.random() * 0.25, 0, 2 + Math.random() * 2);
-  if (R.mode !== "attract") call(S("close") + " +5", "white", (p[0] + s[0]) / 2, (p[1] + s[1]) / 2 - 20 * wsNow());
+  if (R.mode !== "attract") { call(S("close") + " +5", "white", (p[0] + s[0]) / 2, (p[1] + s[1]) / 2 - 20 * wsNow()); fx.call.near = true; }
 }
 function tripleTap(w) {
   const R = run;
   R.triples++; R.bonus += 10;
   if (loud()) sfx.triple();
   // the second-strongest moment after a crash: a zoom punch, a ring off the shuttle, a big word (rules never pause)
-  addTrauma(0.45); fx.tripVt = fx.vt;
+  addTrauma(0.5); fx.tripVt = fx.vt; hitstop(0.07);   // the top tier: the only zoom over 3 %, and the only hitstop
   const p = shipXY(0.8);
   for (let q = 0; q < 16; q++) { const an = Math.random() * TAU, sp = 160 + Math.random() * 300; spawn(p[0], p[1], Math.cos(an) * sp, Math.sin(an) * sp - 100, 0.4 + Math.random() * 0.3, 1, 3); }
-  if (R.mode !== "attract") call(S("triple") + " +10", "uiA", p[0], p[1] - 48 * wsNow(), 1.3);
+  // a close call on the same row keeps its words, as a second line under the triple
+  const both = fx.call && fx.call.near && fx.vt - fx.call.t < 0.1;
+  if (R.mode !== "attract") call(S("triple") + " +10", "uiA", p[0], p[1] - 48 * wsNow(), 1.3, both ? S("close") + " +5" : null);
 }
 function bestPassed() {
   const R = run;
@@ -1224,15 +1259,36 @@ function bestPassed() {
   call(S("newBest"), "gold", p[0], p[1] - 56 * wsNow());
 }
 // ---------- KEEP: one judgement slot at the spot (never stacked popups) ----------
-function call(str, col, x, y, k) { fx.call = { str, col, x, y, t: fx.vt, k: k || 1 }; }
+function call(str, col, x, y, k, sub) { fx.call = { str, col, x, y, t: fx.vt, k: k || 1, sub }; }
 
+// the first shutter and the first lock a player ever meets forgive one mistake (bar 1.7.2): the machine shoves the
+// shuttle round onto its open face with a bang, the block you hit cracks, and the slot says so. Saved per player.
+function spare(w) {
+  const R = run, kind = w.lock ? "L" : w.lockT > 0 ? "S" : "";
+  if (!kind || !w.first || R.mode !== "play" || R.prof || store.get("spare" + kind, false)) return false;
+  store.set("spare" + kind, true);
+  const N = R.curN, k = needFrom(w, R.cur);
+  w.spared = true; w.spareF = R.cur; w.spareVt = fx.vt; w.closed = true; R.grace = null;
+  for (let i = 0; i < k; i++) { R.cur = (R.cur - 1 + N) % N; R.Rt += TAU / N; }
+  fx.twFrom = fx.Rd; fx.twT0 = fx.vt; fx.twDur = 0.2; fx.bankV += 10;
+  addTrauma(0.4);
+  if (loud()) { sfx.slam(); sfx.near(); }
+  const p = shipXY(0.9);
+  for (let q = 0; q < 26; q++) { const a = Math.random() * TAU, sp = 140 + Math.random() * 360; spawn(p[0], p[1], Math.cos(a) * sp, Math.sin(a) * sp - 120, 0.35 + Math.random() * 0.3, q < 18 ? 2 : 0, 3); }
+  call(S("spared"), "white", p[0], p[1] - 52 * wsNow(), 1.1);
+  return true;
+}
+// a press in the first 250 ms of the freeze that would have made the count: the cause is "a bit late" (bar 1.4.7)
+function lateTap() { const d = run && run.dead; if (state === "dying" && d && T() - d.at < 250) d.post++; }
 // ---------- KEEP: failure. Freeze with the cause on screen, then the result (bar 1.4.1) ----------
-function die(w) {
+function die(w, force) {
   const R = run;
+  if (!force && spare(w)) return;
   R.alive = false; R.grace = null;
   const need = needFrom(w, R.cur);
   let cause = "short";
-  const wasFree = R.prevFace !== R.cur && !(w.blocked & (1 << R.prevFace)) && R.lastTapT > w.tc - w.hw - 0.5;
+  // you stood on a face this row left free and turned off it after the row before (the turn was for this row)
+  const wasFree = R.prevFace !== R.cur && !(w.blocked & (1 << R.prevFace)) && R.turnT > w.pw;
   if (wasFree) {
     // a quick burst whose first tap this row needed: the second was one too many (not an early turn)
     const q = R.tq, f0 = (R.cur + 2) % R.curN, burst = q.length >= 2 && q[q.length - 1] - q[q.length - 2] < 0.25, n = nextRow(w);
@@ -1242,7 +1298,7 @@ function die(w) {
   else if (w.lockT > 0) cause = "shut";
   // safe: the face that would have lived (the one you left, or the nearest free one), shown in the freeze
   const safe = cause === "over" || cause === "early" ? R.prevFace : (R.cur - need + R.curN) % R.curN;
-  R.dead = { cause, need, fam: w.fam, sec: R.curSec, N: R.curN, face: R.cur, safe, w, at: T(), t: R.t };
+  R.dead = { cause, need, fam: w.fam, sec: R.curSec, N: R.curN, face: R.cur, safe, w, at: T(), t: R.t, post: 0 };
   kill();
 }
 function kill() {
@@ -1260,6 +1316,7 @@ function causeText(d) {
   if (d.cause === "early") return S("causeEarly");
   if (d.cause === "lock") return S("causeLock");
   if (d.cause === "shut") return S("causeShut");
+  if (d.post > 0 && d.post >= d.need) return S("causeLate");
   return d.need < 1 ? S("causeOver") : d.need === 1 ? S("causeShort1") : S("causeShort", d.need);
 }
 
@@ -1293,7 +1350,8 @@ function aiStep() {
     if (w.blocked & (1 << g)) continue;
     if (!room(k)) break;
     if (n < 0 && okNext(k)) n = k;
-    if (k > need && (w.gold & (1 << g)) && w.greedy && R.rAI() < P.greed && okNext(k)) { n = k; break; }
+    const calm = R.tripAt && R.tripAt.some(a => w.tc > a - 3 && w.tc < a + 1.5);   // no lure detours around the scripted triple
+    if (k > need && (w.gold & (1 << g)) && w.greedy && !calm && R.rAI() < P.greed && okNext(k)) { n = k; break; }
   }
   if (n < 0) n = need;
   let act = null;
@@ -1313,7 +1371,8 @@ function aiStep() {
     for (let j = 0; j < n; j++) times.push(Math.max(start, last - (n - 1 - j) * P.gap));
   } else if (act === "fail") { // one tap short on a 2+ row, or a tap that comes too late
     if (need >= 2) for (let j = 0; j < need - 1; j++) times.push(start + j * P.gap);
-    else times.push(w.tc - w.hw + GRACE + 0.04);
+    else times.push(w.tc - w.hw + graceOf(w.s) + 0.04);
+    R.failW = w;                                   // ?demo=1 slows the clock into this impact
   } else for (let j = 0; j < n; j++) times.push(start + j * P.gap + gauss(R.rAI, 0, P.jit));
   for (let j = 1; j < times.length; j++) times[j] = Math.max(times[j], times[j - 1] + 0.03);
   R.plan = times.map(x => Math.max(x, t));
@@ -1330,55 +1389,70 @@ function zip(w, f0, f1, dur, peak, band) {
   o.connect(lp); lp.connect(bp); bp.connect(g); g.connect(AU.sfx); o.start(w); o.stop(w + dur + 0.05);
 }
 let tapW = -9, tapDens = 0;  // tap density (decays over 0.6 s): a stream on every 8th note sits about 4 dB lower
+const chordNow = () => CHORD[run ? fl(Math.max(0, run.t) / BAR) % 4 : 0];   // the chord of the bar the music plays now
+// Levels: every gameplay SFX peaks between about -9 and -15 dBFS alone through the bus, and carries a 0.8-4 kHz body
+// so a phone speaker plays it (the low thumps are kept small). Repeats vary: noise layers about +-45 cents, tonal
+// layers +-20 cents (they stay in key over the music), gain +-10 %.
 const SFX = {
-  // the ratchet: two clicks, a 900 Hz body and a blip that a phone speaker carries, over a thump; chained taps climb
-  // (root, minor third, fifth, octave), the top step a little softer so a fast stream does not tire the ear
+  // the ratchet: a click whose band follows the shape (square 3.0 kHz, triangle 2.6, hexagon 3.4), a blip on a chord
+  // tone of the bar now playing (chained taps climb the chord: root, third, fifth, octave) with a body a true fifth
+  // above it, over a small thump
   tap(w, chain) {
     tapDens = w < tapW ? 1 : tapDens * Math.exp((tapW - w) / 0.6) + 1; tapW = w;
-    const m = [1, 1.189, 1.498, 2][chain || 0], q = vary(35, 0.1), g = q.g * (chain === 3 ? 0.8 : 1) / (1 + 0.3 * (tapDens - 1));
-    hiss("bandpass", 3000 * m * q.f, 5, 0.02, 0.8 * g, w);
-    hiss("bandpass", 4100 * m * q.f, 5, 0.02, 0.5 * g, w + 0.024);
-    tone("sine", 150 * m * q.f, 72 * m, 0.09, 0.3 * g, w, null, 0.002);
-    tone("triangle", 900 * m * q.f, 0, 0.05, 0.21 * g, w, null, 0.002);
-    tone("square", midi(74) * m * q.f, 0, 0.08, 0.16 * g, w + 0.01, null, 0.003, 3000);
+    chain = chain || 0;
+    const N = run ? run.curN : 4, cb = N === 3 ? 2600 : N === 6 ? 3400 : 3000, qn = vary(45, 0.1), qt = vary(20, 0);
+    const g = qn.g * (chain === 3 ? 0.8 : 1) / (1 + 0.3 * (tapDens - 1)), f = midi(chordNow()[chain] + 12) * qt.f, cm = [1, 1.06, 1.12, 1.19][chain];
+    hiss("bandpass", cb * cm * qn.f, 3.5, 0.02, 0.8 * g, w);
+    hiss("bandpass", cb * 1.37 * cm * qn.f, 5, 0.02, 0.5 * g, w + 0.024);
+    tone("sine", 150 * f / 587, 72 * f / 587, 0.09, 0.26 * g, w, null, 0.002);
+    tone("triangle", f * 1.5, 0, 0.05, 0.2 * g, w, null, 0.002);
+    tone("square", f, 0, 0.08, 0.16 * g, w + 0.01, null, 0.003, 3000);
   },
-  // gold: a bright ping that climbs with the streak, two octaves at most
+  // gold: a bright ping that climbs the D minor pentatonic with the streak, two octaves at most
   gold(w, n) {
-    const semi = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24][Math.min(10, n | 0)], q = vary(12, 0.08), f = midi(86 + semi) * q.f;
-    hiss("highpass", 7000, 1, 0.03, 0.1, w);
-    tone("sine", f, 0, 0.3, 0.3 * q.g, w); tone("sine", f * 2, 0, 0.16, 0.06, w); tone("triangle", f * 1.5, 0, 0.12, 0.05, w + 0.05);
+    const semi = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24][Math.min(10, n | 0)], q = vary(20, 0.1), qn = vary(45, 0), f = midi(86 + semi) * q.f;
+    hiss("highpass", 7000 * qn.f, 1, 0.03, 0.1, w);
+    tone("sine", f, 0, 0.3, 0.24 * q.g, w); tone("sine", f * 2, 0, 0.16, 0.05, w); tone("triangle", f * 1.5, 0, 0.12, 0.05, w + 0.05);
   },
-  near(w) { const q = vary(45, 0.1); hiss("highpass", 4800 * q.f, 0.8, 0.06, 0.3 * q.g, w); zip(w, 2600 * q.f, 500, 0.11, 0.5 * q.g, 2200); },
-  // the gate: a rising rush, then the ka-chunk of the tunnel changing shape
+  near(w) { const q = vary(45, 0.1); hiss("highpass", 4800 * q.f, 0.8, 0.06, 0.34 * q.g, w); zip(w, 2600 * q.f, 500, 0.11, 0.48 * q.g, 2000); hiss("bandpass", 1400 * q.f, 2, 0.05, 0.4 * q.g, w); },
+  // the gate: a rising rush, then the ka-chunk of the tunnel changing shape (a 1.2 kHz metal hit carries it on a phone)
   chunk(w) {
-    hiss("bandpass", 300, 1.5, 0.26, 0.14, w, null, 5000);
-    hiss("highpass", 3000, 0.7, 0.05, 0.12, w + 0.2); tone("square", 1500, 900, 0.05, 0.1, w + 0.2, null, 0.002, 4000);
-    tone("sine", 95, 42, 0.3, 0.13, w + 0.2, null, 0.002);
+    const q = vary(40, 0.1);
+    hiss("bandpass", 300 * q.f, 1.5, 0.26, 0.12, w, null, 5000 * q.f);
+    hiss("highpass", 3000 * q.f, 0.7, 0.05, 0.12, w + 0.2); hiss("bandpass", 1200 * q.f, 1.2, 0.08, 0.5 * q.g, w + 0.2);
+    tone("square", 1500 * q.f, 900, 0.06, 0.15 * q.g, w + 0.2, null, 0.002, 4000);
+    tone("sine", 95, 42, 0.26, 0.07, w + 0.2, null, 0.002);
   },
-  whoosh(w) { hiss("bandpass", 380, 1.2, 0.38, 0.32, w, null, 3400); },
+  // a speed step: a rush through the phone band
+  whoosh(w) { const q = vary(45, 0.1); hiss("bandpass", 800 * q.f, 1.1, 0.42, 0.85 * q.g, w, null, 4000 * q.f); hiss("highpass", 5000 * q.f, 0.7, 0.3, 0.12, w + 0.1); },
   crash(w) {
-    hiss("lowpass", 5000, 0.8, 0.75, 0.38, w, null, 140); hiss("highpass", 4000, 0.7, 0.05, 0.3, w);
-    tone("sine", 96, 26, 0.65, 0.3, w, null, 0.002); tone("square", 220, 70, 0.3, 0.08, w, null, 0.002, 900);
+    const q = vary(40, 0.08);
+    hiss("lowpass", 5000 * q.f, 0.8, 0.75, 0.22 * q.g, w, null, 140); hiss("highpass", 4000 * q.f, 0.7, 0.05, 0.18, w);
+    hiss("bandpass", 1100 * q.f, 1.2, 0.3, 0.3 * q.g, w, null, 300);
+    tone("sine", 96 * q.f, 26, 0.6, 0.16, w, null, 0.002); tone("square", 220 * q.f, 70, 0.3, 0.08, w, null, 0.002, 900);
   },
-  best(w) { [86, 90, 93, 98].forEach((n, i) => tone("triangle", midi(n), 0, 0.28, 0.12, w + i * 0.07)); hiss("highpass", 6000, 1, 0.3, 0.05, w + 0.2); },
-  start(w) { tone("sine", 70, 140, 0.18, 0.5, w, null, 0.002); hiss("highpass", 3500, 0.7, 0.05, 0.3, w); },
+  // a new best: four bright notes on the chord of the bar now playing, an octave up (they always land in key)
+  best(w) { const c = chordNow(), q = vary(15, 0.08); c.forEach((n, i) => tone("triangle", midi(n + 24) * q.f, 0, 0.3, 0.22 * q.g, w + i * 0.07)); hiss("highpass", 6000, 1, 0.3, 0.07, w + 0.2); },
+  start(w) { const q = vary(30, 0.08); tone("sine", 70, 140, 0.18, 0.16, w, null, 0.002); hiss("highpass", 3500 * q.f, 0.7, 0.05, 0.26, w); hiss("bandpass", 1300 * q.f, 1.1, 0.1, 0.75 * q.g, w); tone("triangle", midi(74) * q.f, midi(86), 0.14, 0.12, w + 0.02); },
   // the lock row slams shut on the beat before it arrives
-  slam(w) { const q = vary(30, 0.08); hiss("lowpass", 1400, 1, 0.16, 0.4 * q.g, w, null, 200); tone("sine", 120 * q.f, 38, 0.24, 0.62 * q.g, w, null, 0.002); tone("square", 700, 300, 0.05, 0.08, w, null, 0.002, 2500); },
+  slam(w) { const q = vary(40, 0.08); hiss("lowpass", 1400 * q.f, 1, 0.16, 0.28 * q.g, w, null, 200); hiss("bandpass", 1000 * q.f, 1, 0.14, 0.8 * q.g, w); tone("sine", 120 * q.f, 38, 0.24, 0.32 * q.g, w, null, 0.002); tone("square", 700 * q.f, 300, 0.06, 0.14, w, null, 0.002, 2500); },
   // a shutter clamps where it stops; while it turns it ratchets quietly
-  clamp(w) { const q = vary(30, 0.1); hiss("bandpass", 2600 * q.f, 3, 0.05, 0.42 * q.g, w); tone("square", 1180 * q.f, 900, 0.05, 0.08, w, null, 0.002, 3500); tone("sine", 200, 90, 0.1, 0.32, w, null, 0.002); },
+  clamp(w) { const q = vary(40, 0.1); hiss("bandpass", 2600 * q.f, 3, 0.05, 0.36 * q.g, w); hiss("bandpass", 1200 * q.f, 1.2, 0.07, 0.7 * q.g, w); tone("square", 1180 * q.f, 900, 0.06, 0.16, w, null, 0.002, 3500); tone("sine", 200, 90, 0.1, 0.22, w, null, 0.002); },
   ratchet(w) { const q = vary(50, 0.1); hiss("bandpass", 3600 * q.f, 6, 0.012, 0.18 * q.g, w); },
-  triple(w) { const q = vary(10, 0.06); [74, 78, 81, 86].forEach((n, i) => tone("triangle", midi(n) * q.f, 0, 0.18, 0.2, w + i * 0.045)); hiss("highpass", 5000, 1, 0.12, 0.08, w); },
+  // the triple: the chord of the bar now playing, climbing fast, plus a shimmer
+  triple(w) { const c = chordNow(), q = vary(20, 0.08); c.forEach((n, i) => tone("triangle", midi(n + 12) * q.f, 0, 0.18, 0.2 * q.g, w + i * 0.045)); hiss("highpass", 5000 * q.f, 1, 0.12, 0.1, w); },
   tick(w, i) { tone("sine", 900 + (i % 12) * 40, 0, 0.035, 0.24, w); },
-  stamp(w) { tone("sine", 140, 60, 0.15, 0.5, w); hiss("lowpass", 1200, 1, 0.08, 0.3, w); },
-  ui(w) { tone("sine", 880, 1320, 0.09, 0.32, w); hiss("bandpass", 3000, 4, 0.015, 0.2, w); }
+  stamp(w) { const q = vary(30, 0.08); tone("sine", 140, 60, 0.15, 0.25, w); hiss("lowpass", 1200 * q.f, 1, 0.08, 0.3, w); hiss("bandpass", 1500 * q.f, 2, 0.09, 0.85 * q.g, w); },
+  ui(w) { const q = vary(30, 0.08); tone("sine", 880 * q.f, 1320, 0.09, 0.32, w); hiss("bandpass", 3000 * q.f, 4, 0.015, 0.2, w); }
 };
 const sfx = {};
 for (const k in SFX) sfx[k] = n => { if (audioOn()) SFX[k](AU.ctx.currentTime + 0.004, n); };
 const PEAK_SET = ["crash", "slam", "chunk", "tap", "gold", "clamp", "near", "best"]; // the 8 loudest, for the peak test
 // Music: an original 132 BPM loop on the run clock (D, Bb, F, C), scheduled ahead on the audio clock. The run clock
-// leads: the music slides to it, never the other way. Layers: kick, hats and the bass always; the snare from the
-// second bar; arpeggios by sector (triangle 2 per bar, hexagon every off-beat); a riser before each gate; an engine
-// hum that follows the speed. It muffles on the title, sweeps down at a crash and plays a soft bed on the result.
+// leads: the music slides to it, never the other way. It muffles on the title, sweeps down at a crash and plays a soft
+// bed on the result. Layers by progress (bar 1.3.5), from the table MUSIC_LAYERS: the kick, off-beat hats and the bass
+// always; the snare from the second bar; the shape's arpeggio (triangle 2 a bar, hexagon every off-beat); a riser
+// before each gate; then one more layer at each speed step and lap, so a player hears how far they are.
 const ROOTS = [38, 34, 41, 36], CHORD = [[62, 65, 69, 74], [58, 62, 65, 70], [65, 69, 72, 77], [60, 64, 67, 72]], BASSN = [0, 0, 12, 0, 0, 12, 0, 7];
 const mus = { bus: null, filt: null, t0: 0, i: 0, level: "title" };
 const LEVELS = { title: [0.5, 1500], play: [0.8, 16000], duck: [0.45, 160], bed: [0.42, 900], off: [0, 900] };
@@ -1399,38 +1473,50 @@ function musicSync() { // the audio time at which the run clock reads 0
   const c = AU.ctx.currentTime;
   mus.t0 = c - run.t - auLat(); mus.i = Math.max(0, Math.ceil((c + 0.02 - mus.t0) / EIGHTH));
 }
-function hum(f, w, dur, peak) { // the engine: a held saw pair through a lowpass, swelling in and out (never a click)
-  const c = AU.ctx, g = c.createGain(), lp = c.createBiquadFilter();
-  lp.type = "lowpass"; lp.frequency.value = 420; g.gain.value = 0;
-  g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(peak, w + 0.06); g.gain.setValueAtTime(peak, w + dur - 0.06); g.gain.linearRampToValueAtTime(0, w + dur);
-  lp.connect(g); g.connect(mus.bus);
-  for (const d of [0, 0.9]) { const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = f + d; o.connect(lp); o.start(w); o.stop(w + dur + 0.05); }
-}
+// [speed segment from which a layer plays, what it adds]
+const MUSIC_LAYERS = { hat16: 1, arpUp: 2, lead: 3, openHat: 4, crashAtGate: 4, leadFifth: 6 };
+// a two-bar lead motif on chord tones: [8th note in the two bars, chord tone index]
+const LEAD = [[0, 3], [3, 2], [6, 1], [8, 2], [11, 3], [13, 1], [14, 0]];
 function playStep(i, w) {
   const lv = mus.level, full = lv === "play" || lv === "title", tt = i * EIGHTH, bar = fl(i / 8), st = i % 8, sec = fl(tt / SEC_LEN), ch = bar % 4, b = mus.bus;
-  const preGate = tt % SEC_LEN > SEC_LEN - BEAT * 2;
+  const seg = segOf(tt), ML = MUSIC_LAYERS, local = tt - sec * SEC_LEN;
+  const preGate = local > SEC_LEN - BEAT * 2;
   if (full) {
     if (st % 2 === 0 && !(preGate && st >= 4)) {
-      tone("sine", 150, 42, 0.32, 0.8, w, b, 0.002);
+      tone("sine", 150, 42, 0.3, 0.55, w, b, 0.002);
       hiss("bandpass", 2300, 1.4, 0.016, 0.28, w, b);           // a 1-3 kHz click so the kick reads on phone speakers
       tone("triangle", 240, 120, 0.06, 0.13, w, b, 0.002);
     }
-    if (st % 2 === 1) hiss("highpass", 7600, 0.7, 0.035, 0.15, w, b);
+    if (st % 2 === 1) {
+      if (seg >= ML.openHat) hiss("bandpass", 8000, 0.9, 0.12, 0.17, w, b);   // from lap 2: open hats on the off-beats
+      else hiss("highpass", 7600, 0.7, 0.035, 0.15, w, b);
+    }
+    if (seg >= ML.hat16) hiss("bandpass", 6500, 1.2, 0.025, 0.16, w + EIGHTH / 2, b);   // 16th hats from the first speed step
     if ((st === 2 || st === 6) && (bar >= 2 || sec > 0)) { hiss("bandpass", 1900, 0.9, 0.13, 0.36, w, b); tone("triangle", 210, 170, 0.07, 0.15, w, b); }
     if (preGate && st >= 4) hiss("bandpass", 2400 + st * 300, 1.2, 0.07, 0.26, w, b);
-    if (st % 2 === 0 && run && lv === "play") hum(110 * speedAt(tt) / 10, w, BEAT + 0.04, 0.022);
+    if (seg >= ML.crashAtGate && sec >= 3 && st === 0 && local < EIGHTH / 2) hiss("highpass", 4200, 0.6, 1.3, 0.3, w, b);   // a cymbal on each gate from lap 2
+    if (seg >= ML.lead) {
+      const li = i % 16;
+      for (const [p, ci] of LEAD) if (p === li) {
+        const n = CHORD[ch][ci] + 12;
+        tone("triangle", midi(n), 0, 0.22, 0.15, w, b, 0.006, 3000);
+        if (seg >= ML.leadFifth) tone("triangle", midi(n - 5), 0, 0.2, 0.08, w, b, 0.006, 2400);
+      }
+    }
   }
   if (lv !== "off") {
     const bm = ROOTS[ch] + BASSN[st];
     if (lv !== "bed" || st % 2 === 0) {
       const c = AU.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
       o.type = "sawtooth"; o.frequency.value = midi(bm);
-      f.type = "lowpass"; f.Q.value = 6; f.frequency.setValueAtTime(900 + Math.min(sec, 8) * 250, w); f.frequency.exponentialRampToValueAtTime(220, w + 0.18);
+      f.type = "lowpass"; f.Q.value = 6; f.frequency.setValueAtTime(900 + Math.min(sec, 8) * 250, w); f.frequency.exponentialRampToValueAtTime(450, w + 0.18);
       env(g, lv === "bed" ? 0.12 : 0.19, w, 0.005, 0.21);
       o.connect(f); f.connect(g); g.connect(b); o.start(w); o.stop(w + 0.26);
+      // an octave-up square double through a lowpass, so the bass line is heard on a phone speaker
+      if (lv !== "bed") tone("square", midi(bm + 12), 0, 0.16, 0.11, w, b, 0.005, 1400);
     }
     const arp = sec % 3 === 1 ? (st === 3 || st === 7) : sec % 3 === 2 ? (st % 2 === 1) : (sec >= 3 && st === 7);
-    if (arp || (lv === "bed" && st === 3)) tone("triangle", midi(CHORD[ch][(i >> 1) % 4] + 12), 0, 0.14, 0.07, w, b);
+    if (arp || (lv === "bed" && st === 3)) tone("triangle", midi(CHORD[ch][(i >> 1) % 4] + 12), 0, 0.14, seg >= ML.arpUp ? 0.13 : 0.07, w, b);
   }
 }
 function musicStep() {
@@ -1441,7 +1527,7 @@ function musicStep() {
     mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(mus.filt); mus.filt.connect(AU.music);
     musicLevel(mus.level); musicSync();
   }
-  const live = run && run.alive && !run.hold && (state === "play" || state === "title" || state === "demo");
+  const live = run && run.alive && !run.hold && !run.slow && (state === "play" || state === "title" || state === "demo");
   if (live) { // slide toward the run clock; jump when far off (a stall, a resume)
     const want = c.currentTime - run.t - auLat(), d = want - mus.t0;
     if (Math.abs(d) > 0.12) { mus.t0 = want; mus.i = Math.max(0, Math.ceil((c.currentTime + 0.02 - mus.t0) / EIGHTH)); }
@@ -1532,8 +1618,10 @@ function palOfRing(r, out, outA) {
   if (f >= 1) { out[0] = PAL3[b].light[0]; out[1] = PAL3[b].light[1]; out[2] = PAL3[b].light[2]; outA[0] = PAL3[b].acc[0]; outA[1] = PAL3[b].acc[1]; outA[2] = PAL3[b].acc[2]; }
   else { mixc(PAL3[a].light, PAL3[b].light, f, out); mixc(PAL3[a].acc, PAL3[b].acc, f, outA); }
 }
-// panel light: walls a little lifted near the runner, brighter toward the far light, which stops at about 60 %
-function litAt(u) { u = u < 0 ? 0 : u; const a = 0.08 + 0.44 * Math.pow(u, 1.3); return a + (0.6 - a) * sstep(0.72, 1.1, u); }
+// panel light: walls a little lifted near the runner, brighter toward the far light, which stops at about 38 %, so the
+// far core stays the bright backdrop and a red block always reads darker at its rim than the lit wall (grey check)
+const RAIL_U = [0.14, 0.86];
+function litAt(u) { u = u < 0 ? 0 : u; const a = 0.08 + 0.3 * Math.pow(u, 1.3); return a + (0.38 - a) * sstep(0.72, 1.1, u); }
 const rotMask = (m, k, N) => { k = ((k % N) + N) % N; return ((m << k) | (m >>> (N - k))) & ((1 << N) - 1); };
 let viewA = 0, viewX = 0, viewY = 0, labX = 0, labY = 0, labA = 0, ringPath = null, ghX = -1, ghY = -1;
 function ringLine(x, A, k) { x.moveTo(A[0] * k, A[1] * k); for (let j = 1; j < 24; j++) x.lineTo(A[j * 2] * k, A[j * 2 + 1] * k); x.closePath(); }
@@ -1542,8 +1630,9 @@ function drawWorld() {
   const x = ctx, R = run, dpr = L.dpr, vt = fx.vt;
   x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalCompositeOperation = "source-over"; x.globalAlpha = 1;
   x.fillStyle = HX.base; x.fillRect(0, 0, TW, TH);
-  const ze = (vt - fx.zoomT) / 0.22, zt = (vt - fx.tripVt) / 0.18;
-  const zf = Juice.reduce ? 1 : Math.max(ze >= 0 && ze < 1 ? 1 + 0.05 * (1 - ze) * (1 - ze) : 1, zt >= 0 && zt < 1 ? 1 + 0.04 * (1 - zt) * (1 - zt) : 1);
+  // camera: a light 2.5 % push at a gate, a 6 % punch on the triple (the top success tier, bar 1.2.7)
+  const ze = (vt - fx.zoomT) / 0.22, zt = (vt - fx.tripVt) / 0.26;
+  const zf = Juice.reduce ? 1 : Math.max(ze >= 0 && ze < 1 ? 1 + 0.025 * (1 - ze) * (1 - ze) : 1, zt >= 0 && zt < 1 ? 1 + 0.06 * (1 - zt) * (1 - zt) : 1);
   const U = unit * zf * (1 + (Juice.reduce ? 0 : 0.012 * Math.exp(-(vt - fx.beatT) * 10)));
   const sway = swayNow() + rollNow(), sh = shake(), vx = TW / 2 + sh.x, vy = vpY + sh.y, pv = fx.posVis, visR = R.visR;
   x.translate(vx, vy); x.rotate(fx.Rd + sway);
@@ -1577,12 +1666,18 @@ function drawWorld() {
         const m = (0.62 + 0.3 * ca + 0.12 * ca * ca * (ca > 0 ? 1 : 0)) * (((rgR[i] + j) & 1) ? 0.8 : 1);
         x.beginPath(); x.moveTo(A[fa], A[fa + 1]); x.lineTo(A[fb], A[fb + 1]); x.lineTo(B[fb], B[fb + 1]); x.lineTo(B[fa], B[fa + 1]); x.closePath();
         x.fillStyle = rgbM(tmpC, m); x.fill();
-        if ((rgR[i] & 7) === 0 && rgZ[i] < 2.2) { // a machined inset plate every 8 rows, so the near walls read as machinery
+        if ((rgR[i] & (L.wide ? 3 : 7)) === 0 && rgZ[i] < 2.2) { // a machined inset plate every 8 rows (4 on a wide screen, whose outer thirds are near wall)
           const ax = A[fa], ay = A[fa + 1], bx = A[fb], by = A[fb + 1], cx = B[fa], cy = B[fa + 1], dx = B[fb], dy = B[fb + 1];
           const pt = (u, v) => [lerp(lerp(ax, bx, u), lerp(cx, dx, u), v), lerp(lerp(ay, by, u), lerp(cy, dy, u), v)];
           const p0 = pt(0.2, 0.25), p1 = pt(0.8, 0.25), p2 = pt(0.8, 0.75), p3 = pt(0.2, 0.75);
           x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]); x.lineTo(p3[0], p3[1]); x.closePath();
           x.fillStyle = rgbM(tmpC, m * 0.82); x.fill(); x.strokeStyle = rgbA(SEAM, 1); x.lineWidth = 1; x.stroke();
+        }
+        if (L.wide && rgZ[i] < 1.3) { // wide screens: two trim rails along each near face, so the big near walls are not flat
+          const ra = 1 - sstep(0.55, 1.3, rgZ[i]);
+          x.beginPath();
+          for (const u of RAIL_U) { x.moveTo(lerp(A[fa], A[fb], u), lerp(A[fa + 1], A[fb + 1], u)); x.lineTo(lerp(B[fa], B[fb], u), lerp(B[fa + 1], B[fb + 1], u)); }
+          x.strokeStyle = rgbA(SEAM, 0.75 * ra); x.lineWidth = 1.5; x.stroke();
         }
       }
     } else {
@@ -1657,19 +1752,21 @@ function drawWorld() {
   drawRing(gateRow(R.curSec + 1), nR, U, true);
   if (R.alive) drawRing(gateRow(R.curSec + 2), nR, U, true);
   if (R.alive && R.mode === "play" && R.best > 0 && !R.bestPassed && R.best - R.bonus > pv + 0.5) drawRing(R.best - R.bonus, nR, U, false);
-  // streaks
-  const sv = Math.max(R.alive ? speedAt(R.t) : 0, 0.01), slen = 0.5 + sv * 0.09;
+  // streaks stay in the tunnel's middle distance (never across the near walls, where they read as scratches); the
+  // nearest band at half strength. A speed step bursts them longer and brighter for 0.6 s.
+  const sb = Math.max(0, 1 - (vt - fx.streakT) / 0.6), sv = Math.max(R.alive ? speedAt(R.t) : 0, 0.01), slen = (0.5 + sv * 0.09) * (1 + 1.2 * sb);
   x.globalCompositeOperation = "screen";
-  x.beginPath();
-  for (let k = 0; k < SN; k++) {
-    const za = 1 + sW[k] * DEPTH, zb = 1 + (sW[k] + slen) * DEPTH;
-    if (za < 0.45) continue;
-    if (zb <= za) continue;
-    const px = -Math.sin(sPhi[k]) * sRho[k], py = Math.cos(sPhi[k]) * sRho[k];
-    x.moveTo(px * U / za, py * U / za); x.lineTo(px * U / zb, py * U / zb);
-  }
   tmpA[0] = rgL[3]; tmpA[1] = rgL[4]; tmpA[2] = rgL[5];
-  x.strokeStyle = rgbA(tmpA, R.alive ? 0.12 + sv * 0.012 : 0.08); x.lineWidth = 1.6; x.stroke();
+  for (let band = 0; band < 2; band++) {
+    x.beginPath();
+    for (let k = 0; k < SN; k++) {
+      const za = 1 + sW[k] * DEPTH, zb = 1 + (sW[k] + slen) * DEPTH;
+      if (za < 0.9 || zb <= za || (za < 1.25) !== (band === 0)) continue;
+      const px = -Math.sin(sPhi[k]) * sRho[k], py = Math.cos(sPhi[k]) * sRho[k];
+      x.moveTo(px * U / za, py * U / za); x.lineTo(px * U / zb, py * U / zb);
+    }
+    x.strokeStyle = rgbA(tmpA, (R.alive ? 0.12 + sv * 0.012 : 0.08) * (1 + 0.8 * sb) * (band === 0 ? 0.5 : 1)); x.lineWidth = 1.6; x.stroke();
+  }
   x.globalCompositeOperation = "source-over";
   // hazards, far to near
   for (i = R.rows.length - 1; i >= 0; i--) {
@@ -1737,6 +1834,7 @@ function drawRow(w, U, pv) {
   // a shutter before it locks: its blocks stand where they are now, one face further on each 8th note
   let mask = w.blocked, holes = w.holes, hgt = 0.34;
   if (w.lockT > 0 && R.t < w.lockT) { const st = Math.ceil((w.lockT - R.t) / EIGHTH - 1e-6); mask = rotMask(w.blocked, st, N); holes = 0; }
+  if (w.spared) mask &= ~(1 << w.spareF);       // forgiven once: the block you hit has cracked away
   const slam = w.lock ? (R.t >= w.slamT ? easeBack(clamp((R.t - w.slamT) / 0.12, 0, 1)) : 0) : 1;
   const killF = run.dead && run.dead.w === w ? run.dead.face : -1, blink = killF >= 0 && (fl((fx.vt - fx.deadVt) / 0.2) & 1) === 0;
   if (w.lockT > 0 || w.lock) drawCollar(x, w, U, ahead, al);
@@ -1775,10 +1873,10 @@ function drawRow(w, U, pv) {
         x.beginPath(); x.moveTo(lerp(mx0, mx1, 0.08) * s1, lerp(my0, my1, 0.08) * s1); x.lineTo(lerp(mx0, mx1, 0.92) * s1, lerp(my0, my1, 0.92) * s1);
         x.strokeStyle = rgbA(TC.dangerSlot, 0.7); x.lineWidth = Math.max(1, 0.03 * s1); x.stroke();
         x.beginPath(); x.moveTo(Ix * s1, Iy * s1); x.lineTo(Jx * s1, Jy * s1); x.strokeStyle = HX.dangerHi; x.lineWidth = Math.max(1, 0.018 * s1); x.stroke();
-        if (ink > 0.02 || j === killF) {
+        { // every block has a dark machined rim (the killer blinks white in the freeze)
           x.beginPath(); x.moveTo(Ax * s1, Ay * s1); x.lineTo(Bx * s1, By * s1); x.lineTo(Jx * s1, Jy * s1); x.lineTo(Jx * s2, Jy * s2); x.lineTo(Ix * s2, Iy * s2); x.lineTo(Ix * s1, Iy * s1); x.closePath();
           if (j === killF) { x.strokeStyle = blink ? HX.white : HX.ink; x.lineWidth = 3; }
-          else { x.strokeStyle = rgbA(TC.ink, 0.9 * ink); x.lineWidth = 1.4; }
+          else { x.strokeStyle = rgbA(TC.ink, 0.9); x.lineWidth = ink > 0.5 ? 1.4 : 1.8; }
           x.stroke();
         }
         if (nearK > 0) {
@@ -1852,7 +1950,7 @@ function drawShuttle(x, U) {
   x.save();
   x.translate(0, y0 + (dead ? 0 : Math.sin(vt * 7) * 1.2));
   // each tap leans the shuttle into the turn (a spring that settles in about 150 ms) and squashes it for 80 ms
-  x.rotate(clamp(-fx.bank * 0.4, -0.2, 0.2));
+  x.rotate(clamp(-fx.bank, -0.12, 0.12));   // up to about 6 degrees, so the wing tips move 2 to 3 px
   const sq = dead || Juice.reduce ? 0 : Math.exp(-(vt - fx.tapT) / 0.04);
   if (sq > 0.01) x.scale(1 + 0.06 * sq, 1 - 0.06 * sq);
   const frozen = dead;
@@ -1905,6 +2003,8 @@ function shatter() {
     spawn(p[0] + (Math.random() - 0.5) * unit * 0.3, p[1] + (Math.random() - 0.5) * 10, Math.cos(a) * sp, Math.sin(a) * sp - 160, 0.45 + Math.random() * 0.45, i < 40 ? 0 : lvc, 2 + Math.random() * 4);
   }
   for (let i = 0; i < 34; i++) { const b = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sq = 200 + Math.random() * 600; spawn(p[0], p[1] - 6, Math.cos(b) * sq, Math.sin(b) * sq, 0.3 + Math.random() * 0.4, 2, 2); }
+  // a few big hull plates tumble out, so the break reads at phone size and in a shrunk video
+  for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i / 6 - 0.5) * 2.8, sp = 180 + Math.random() * 260; spawn(p[0] + (i - 3) * unit * 0.04, p[1], Math.cos(a) * sp, Math.sin(a) * sp - 140, 0.7 + Math.random() * 0.3, 0, unit * (0.06 + Math.random() * 0.03)); }
 }
 function drawParticles(x) {
   if (!PN) return;
@@ -1938,6 +2038,9 @@ function drawWorldText(x, U, vx, vy, pv, nR) {
     }
     const since = R.t - R.t0;
     if (since < 2.4 && R.mode !== "attract") { x.globalAlpha = 1 - sstep(1.6, 2.4, since); text(x, sectorName(R.curSec), vx, vy - U * 0.62, 17 * ws, "uiT", { ol: "ink", ow: 0.24, w: 800 }); x.globalAlpha = 1; }
+    // the one-time name of a new machine, in amber like its warning rails, held 2.2 s
+    const nt = fx.notice, na = nt ? vt - nt.t : 9;
+    if (na < 2.2) { x.globalAlpha = Math.min(1, na / 0.12) * (1 - sstep(1.8, 2.2, na)); text(x, nt.str, vx, vy - U * 0.62, 17 * ws, "amberL", { ol: "ink", ow: 0.26, w: 900, max: TW - 24 }); x.globalAlpha = 1; }
   }
   const cl = fx.call;
   if (cl) {
@@ -1946,7 +2049,10 @@ function drawWorldText(x, U, vx, vy, pv, nR) {
     else {
       const sc = (age < 0.16 ? lerp(0.8, 1, easeBack(age / 0.16)) : 1) * cl.k;
       x.globalAlpha = age > 0.55 ? 1 - (age - 0.55) / 0.25 : 1;
-      at(x, cl.x, cl.y - Math.min(age, 0.55) * 40 * ws, sc, 0, () => text(x, cl.str, 0, 0, 21 * ws, cl.col, { ol: "ink", ow: 0.3, w: 900 }));
+      at(x, cl.x, cl.y - Math.min(age, 0.55) * 40 * ws, sc, 0, () => {
+        text(x, cl.str, 0, 0, 21 * ws, cl.col, { ol: "ink", ow: 0.3, w: 900 });
+        if (cl.sub) text(x, cl.sub, 0, 20 * ws, 13 * ws, "white", { ol: "ink", ow: 0.3, w: 900 });
+      });
       x.globalAlpha = 1;
     }
   }
@@ -1977,15 +2083,23 @@ function visualStep(dt) { // springs, the turn tween, particles and streaks (the
   const R = run;
   fx.vt += dt;
   // the turn tween runs on through the freeze, so a fatal tap is seen landing on the face that killed you
-  if (fx.twT0 >= 0) { const a = (fx.vt - fx.twT0) / fx.twDur; if (a >= 1) { fx.Rd = R.Rt; fx.twT0 = -1; } else fx.Rd = fx.twFrom + (R.Rt - fx.twFrom) * easeOutBack(a); }
+  // after the overshoot the dial clicks into its detent: a small back-swing over 90 ms
+  if (fx.twT0 >= 0) {
+    const e = fx.vt - fx.twT0, a = e / fx.twDur;
+    if (a < 1) fx.Rd = fx.twFrom + (R.Rt - fx.twFrom) * easeOutBack(a);
+    else { const k = (e - fx.twDur) / 0.09; if (k >= 1 || Juice.reduce) { fx.Rd = R.Rt; fx.twT0 = -1; } else fx.Rd = R.Rt - 0.035 * (R.Rt - fx.twFrom) * Math.sin(Math.PI * k) * (1 - k); }
+  }
   else if (R.alive) fx.Rd = R.Rt;
+  // a press held for the row in front winds the dial a little toward its turn; the turn then finishes from there
+  if (R.held && R.alive) fx.Rd += Math.min(0.2, 0.1 * R.held) * (TAU / R.curN) * easeOut((fx.vt - fx.cockT) / 0.04);
   if (R.alive) {
     fx.posVis = R.pos;
   } else {
     const ag = fx.vt - fx.deadVt;
     if (!fx.shattered && ag >= SHATTER) shatter();
-    const ra = clamp((ag - SHATTER) / 0.3, 0, 1);
-    fx.posVis = R.pos - 0.45 * (1 - (1 - ra) * (1 - ra));   // the tunnel eases back a little from the crash
+    const ra = clamp((ag - SHATTER) / 0.3, 0, 1), hit = R.dead ? Math.min(R.pos, R.dead.w.c) : R.pos;
+    // the freeze recoils to the point of impact in 80 ms (a late tap's grace can carry the run past it), then eases back
+    fx.posVis = lerp(R.pos, hit, easeOut(ag / 0.08)) - 0.45 * (1 - (1 - ra) * (1 - ra));
   }
   fx.bankV += (-fx.bank * 500 - fx.bankV * 36) * dt; fx.bank += fx.bankV * dt;
   if (fx.bank > 1.5) fx.bank = 1.5;
@@ -2008,14 +2122,14 @@ function visualStep(dt) { // springs, the turn tween, particles and streaks (the
 
 // ---------- KEEP: result screen. Steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
 // the labels and row guides show with the cause, so the board is never an empty plate; values follow in order
-const RES = { drop: 260, head: 200, count: 320, countDur: 560, rank: 900, rows: 940, best: 1060, goal: 1180 };
+const RES = { drop: 260, head: 200, count: 320, countDur: 560, rank: 900, rows: 940, best: 1060, goal: 1180, leave: 180 };
 function makeResult(now) {
   const R = run, play = R.mode === "play", best = bestOf(), runs = runsOf(), bs0 = bestSecOf(), reached = R.maxSec + 1, bs = Math.max(bs0, reached);
   // a new shuttle colour is a lasting reward from the second run on (bar 1.6.2): one earned on the first run waits
   const earned = play && liveryOf(bs) > liveryOf(bs0) ? liveryOf(bs) : -1, pend = Number(store.get("livNew", -1));
   const bestGold = Math.max(Number(store.get("bestGold", 0)) || 0, R.golds), bestNear = Math.max(Number(store.get("bestNear", 0)) || 0, R.nears);
   const r = { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, sec: R.maxSec, nears: R.nears, golds: R.golds,
-    rank: rankOf(bs), showRank: play && runs >= 1, cause: causeText(R.dead), ticks: 0, rankDone: false, stamped: false, goal: null,
+    rank: rankOf(bs), showRank: play && runs >= 1 && rankOf(bs) > rankOf(bs0), cause: causeText(R.dead), ticks: 0, rankDone: false, stamped: false, goal: null,
     livery: play && runs >= 1 ? Math.max(earned, pend) : -1, livPend: play && runs < 1 ? earned : -1, bestGold, bestNear };
   // one concrete next goal from a small rotating pool (bar 1.6.1), always above the saved best
   const pool = [{ k: "g_sector", n: reached + 1 }, { k: "g_gold", n: Math.max(3, bestGold + 1) }, store.get("hexDone", false) || R.hexClear ? null : { k: "g_hex" },
@@ -2029,7 +2143,7 @@ function resultStep(now) {
   if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
   if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
     r.stamped = true; sfx.best(); platform("happytime");
-    const p = boardPt(70, 168);
+    const p = boardPt(40, 132);
     for (let q = 0; q < 18; q++) { const a = Math.random() * TAU, sp = 160 + Math.random() * 260; spawn(p[0], p[1], Math.cos(a) * sp, Math.sin(a) * sp - 120, 0.5 + Math.random() * 0.3, 3, 2); }
   }
 }
@@ -2086,22 +2200,26 @@ function pointAt(x, e, vt) {
   x.fillStyle = C("uiA"); x.strokeStyle = C("ink"); x.lineWidth = 1.5;
   x.beginPath(); x.moveTo(X, Y); x.lineTo(X - 16 * s, Y - 11 * s); x.lineTo(X - 11 * s, Y); x.lineTo(X - 16 * s, Y + 11 * s); x.closePath(); x.fill(); x.stroke();
 }
-// a stamp: a cut-corner frame with a word, landing from 1.5x with a thump (age in ms)
+// a stamp: a cut-corner frame with a word, landing from 1.5x with a thump (age in ms); its frame path is made once
+const STAMP_P = new Map();
 function stamp(x, X, Y, label, age, col, size) {
   size = size || 16;
-  const s = 1 + 0.5 * (1 - easeOut(age / 140)), w = textW(x, label, size, { f: SANS, w: 900 }) + size * 1.2, h = size * 1.8;
+  const s = 1 + 0.5 * (1 - easeOut(age / 140)), key = label + "|" + size;
+  let pc = STAMP_P.get(key);
+  if (!pc) { const w = textW(x, label, size, { f: SANS, w: 900 }) + size * 1.2, h = size * 1.8; pc = pCut(-w / 2, -h / 2, w, h, 4); if (STAMP_P.size > 40) STAMP_P.clear(); STAMP_P.set(key, pc); }
   at(x, X, Y, s, -0.06, () => {
-    x.fillStyle = C("uiD"); x.fill(pCut(-w / 2, -h / 2, w, h, 4));
-    x.lineWidth = 2; x.strokeStyle = C(col); x.stroke(pCut(-w / 2, -h / 2, w, h, 4));
+    x.fillStyle = C("uiD"); x.fill(pc);
+    x.lineWidth = 2; x.strokeStyle = C(col); x.stroke(pc);
     text(x, label, 0, 1, size, col, { f: SANS, w: 900 });
   });
 }
+const SPEAKER_P = pPoly([[-11, 16], [-6, 16], [0, 11], [0, 29], [-6, 24], [-11, 24]]);   // made once
 function drawPlaques(x) {
   const pq = (e, kind) => at(x, e.cx, e.y, e.s, 0, () => {
     put(x, plate(e.w, e.h, "dark"), 0, 0);
     x.fillStyle = x.strokeStyle = C("uiT"); x.lineWidth = 2; x.lineCap = "butt";
     if (kind === "pause") { x.fillRect(-7, 12, 5, 16); x.fillRect(2, 12, 5, 16); }
-    if (kind === "sound" || kind === "mute") x.fill(pPoly([[-11, 16], [-6, 16], [0, 11], [0, 29], [-6, 24], [-11, 24]]));
+    if (kind === "sound" || kind === "mute") x.fill(SPEAKER_P);
     if (kind === "sound") { for (const r of [6, 10]) { x.beginPath(); x.arc(0, 20, r, -0.75, 0.75); x.stroke(); } }
     if (kind === "mute") { x.beginPath(); x.moveTo(4, 15); x.lineTo(12, 25); x.moveTo(12, 15); x.lineTo(4, 25); x.stroke(); }
     if (kind === "lang") text(x, S("lang"), 0, e.h / 2 + 1, 16, "uiT", { f: SANS, w: 800 });
@@ -2120,9 +2238,12 @@ function drawHud(x, now) { // two things only: the score and (in play) the best;
     if (!DEMO && R.mode === "play" && R.best > 0) text(x, S("best") + " " + Math.max(R.best, R.score), 0, 50, 15, R.bestPassed ? "gold" : "uiS", { a, w: 800, f: SANS, ol: "ink", ow: 0.22 });
   });
 }
-function drawTitle(x, now) { // the title is a machined sign hung in the tunnel; the start plate sits under the shuttle
-  const u = L.u, wide = L.wide, ja = lang === "ja", W = 320, H = 156, s = wide ? sideS(W) : u;
-  const cx = wide ? sideX(-1) : 180, y = wide ? vTop() + 70 * s : signY();
+// the title is a machined sign hung in the tunnel; the start plate sits under the shuttle. k: leaving (0..1): the sign
+// rises off the top and the plates fade, over 180 ms
+function drawTitle(x, now, k) {
+  k = k || 0;
+  const u = L.u, wide = L.wide, ja = lang === "ja", W = 320, H = 156, s = wide ? sideS(W) : u, up = (H + 90) * s * easeIn(k);
+  const cx = wide ? Math.max(sideX(-1), vLeft() + W * s / 2 + 8) : 180, y = (wide ? vTop() + 70 * s : signY()) - up;
   struts(x, cx, y, W, s);
   at(x, cx, y, s, 0, () => {
     put(x, plate(W, H, "sign"), 0, 0);
@@ -2136,78 +2257,96 @@ function drawTitle(x, now) { // the title is a machined sign hung in the tunnel;
   if (b > 0) { // best and, from the second run, the rank: a plate under the sign, or in the right side area
     const rk = runsOf() >= 2 ? S("ranks")[rankOf(bestSecOf())] : "", t = S("best") + " " + b, bs = wide ? sideS(240) : u;
     const w = Math.round((textW(x, t, 16, { f: SANS }) + (rk ? textW(x, rk, 15, { f: SANS }) + 40 : 0) + 40) / 10) * 10;
-    at(x, wide ? sideX(1) : 180, wide ? vTop() + 70 * bs : y + (H + 12) * u, bs, 0, () => {
+    at(x, wide ? Math.min(sideX(1), vRight() - w * bs / 2 - 8) : 180, wide ? vTop() + 70 * bs - up : y + (H + 12) * u, bs, 0, () => {
       put(x, plate(w, 38, "dark"), 0, 0);
       text(x, t, rk ? -w / 2 + 18 : 0, 20, 16, "uiT", { a: rk ? "left" : "center", w: 800, f: SANS });
       if (rk) text(x, rk, w / 2 - 16, 20, 15, "uiA", { a: "right", w: 800, f: SANS });
     });
   }
   const st = UI.start;
+  x.globalAlpha = 1 - k;
   btn(x, st, S("start"), 24, "main", Juice.reduce ? 0 : Math.sin(now / 260) * 1.2);
-  pointAt(x, st, fx.vt);
+  if (!k) pointAt(x, st, fx.vt);
   if (finePointer) { // the key hint: right of the plate when it fits, else under it
     const kw = textW(x, S("space"), 14 * u, { f: SANS, w: 700 }), rx = st.cx + (st.w / 2 + 12) * u, by = st.y + (st.h + 16) * u;
     if (rx + kw < vRight() - 10) text(x, S("space"), rx, st.y + st.h / 2 * u, 14 * u, "uiS", { a: "left", ol: "ink", ow: 0.3, w: 700, f: SANS });
     else if (by < vBot() - 34 * u) text(x, S("space"), st.cx, by, 14 * u, "uiS", { ol: "ink", ow: 0.3, w: 700, f: SANS });
   }
   text(x, S("credit"), vLeft() + 12, vBot() - 16, 14 * u, "uiS", { a: "left", ol: "ink", ow: 0.3, w: 700, f: SANS });
+  x.globalAlpha = 1;
 }
-function drawPause(x, now) {
-  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
-  const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 240)), y = pauseY() + dy;
+function drawPause(x, now, k) { // k: leaving (0..1), the board rises off over 180 ms
+  k = k || 0;
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5 * (1 - k)); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 240)) - (pauseY() - vTop() + 300 * u) * easeIn(k), y = pauseY() + dy;
   struts(x, 180, y, 300, u);
   at(x, 180, y, u, 0, () => { put(x, plate(300, 214, "board"), 0, 0); text(x, S("paused"), 0, 40, 26, "uiT", { w: 900, f: SANS }); });
   btn(x, UI.resume, S("resume"), 22, "main", dy); btn(x, UI.restart, S("restart"), 17, "plain", dy); btn(x, UI.quit, S("toTitle"), 17, "plain", dy);
 }
 let BOARD = { x: 180, y: 0, s: 1 };
 const boardPt = (bx, by) => [(BOARD.x + bx * BOARD.s + L.x0) * L.kc, (BOARD.y + by * BOARD.s + L.y0) * L.kc]; // board coords -> screen px
-function drawOver(x, now) {
-  const r = run.result, play = state === "over", age = resAge(r, now), W = 312, H = play ? (r.livery >= 0 ? 290 : 258) : 168;
-  const wide = L.wide, s = wide ? sideS(W) : L.u, cx = wide ? sideX(1) : 180, y0 = wide ? vTop() + 60 * s : signY();
-  const y = y0 - (H + 80) * s * (1 - easeBack(age / RES.drop));
-  BOARD = { x: cx, y, s };
+// the result: the cause, the score, the best or the gap, one goal (kouhei: two or three things at a glance). A rank
+// stamp only when the rank goes up, and a new colour only on the run that earns it. lv: the board leaving (k 0..1).
+function drawOver(x, now, lv) {
+  const r = lv ? lv.r : run.result, play = lv ? lv.play : state === "over", age = lv ? 1e5 : resAge(r, now);
+  const W = 312, H = play ? (r.livery >= 0 ? 238 : 206) : 130;
+  const wide = L.wide, s = wide ? sideS(W) : L.u, cx = wide ? Math.min(sideX(1), vRight() - W * s / 2 - 8) : 180, y0 = wide ? vTop() + 60 * s : signY();
+  const y = y0 - (H + 80) * s * (lv ? easeIn(lv.k) : 1 - easeBack(age / RES.drop));
+  if (!lv) BOARD = { x: cx, y, s };
   struts(x, cx, y, W, s);
   at(x, cx, y, s, 0, () => {
     put(x, plate(W, H, "board"), 0, 0);
-    // cause, score with rank, reached, best or the gap, one goal: five things, read top to bottom
     const hasBest = play && (r.newBest || r.best > 0);   // no "BEST 0 / 0 TO GO" on a first record
-    const rowIn = k => clamp((age - RES.rows - k * 70) / 70, 0, 1);
-    const row = (ry, k, v, a) => {
-      const lw = textW(x, S(k), 15, { w: 700, f: SANS });
-      text(x, S(k), -136, ry, 15, "uiS", { a: "left", w: 700, f: SANS });
-      x.fillStyle = C("uiL"); for (let i = -136; i < 136; i += 5) x.fillRect(i, ry + 14, 2, 1.5);
-      if (v != null && a > 0) { x.globalAlpha = a; text(x, v, 136, ry, 17, "uiT", { a: "right", w: 800, f: SANS, max: 272 - lw - 14 }); x.globalAlpha = 1; }
-    };
-    if (age > RES.head) {
-      text(x, r.cause, 0, 32, 18, "dangerHi", { w: 900, f: SANS, max: W - 30 });
-      row(130, "rReached", sectorName(r.sec), rowIn(0));
-      if (hasBest) row(164, "rBest", r.newBest ? null : r.best, rowIn(1));
-    }
+    const rowIn = clamp((age - RES.rows) / 70, 0, 1);
+    if (age > RES.head) text(x, r.cause, 0, 32, 18, "dangerHi", { w: 900, f: SANS, max: W - 30 });
     if (age > RES.count) {
       text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -50 : 0, 82, 52, "uiT", { w: 900, f: SANS });
       if (r.showRank && r.rankDone) stamp(x, 88, 82, S("ranks")[r.rank], age - RES.rank, "uiA", 15);
     }
-    if (hasBest && age > RES.rows + 70) {
-      if (r.newBest) { if (age > RES.best) stamp(x, 70, 164, S("newBest"), age - RES.best, "gold", 15); }
-      else { x.globalAlpha = rowIn(1); text(x, r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), 20, 164, 15, "uiA", { w: 800, f: SANS }); x.globalAlpha = 1; }
+    if (hasBest && age > RES.head) {
+      // one row: BEST and its value at the ends, the gap (or NEW BEST) in the middle
+      // a first record shows only the stamp; a later one names the old best it beat
+      const first = r.newBest && r.best <= 0;
+      if (!first) {
+        text(x, S(r.newBest ? "rOldBest" : "rBest"), -136, 132, 15, "uiS", { a: "left", w: 700, f: SANS });
+        x.fillStyle = C("uiL"); for (let i = -136; i < 136; i += 5) x.fillRect(i, 146, 2, 1.5);
+      }
+      if (r.newBest) {
+        if (!first && rowIn > 0) { x.globalAlpha = rowIn; text(x, r.best, 136, 132, 17, "uiS", { a: "right", w: 800, f: SANS }); x.globalAlpha = 1; }
+        if (age > RES.best) stamp(x, first ? 0 : 30, 132, S("newBest"), age - RES.best, "gold", 15);
+      } else if (rowIn > 0) {
+        x.globalAlpha = rowIn;
+        text(x, r.best, 136, 132, 17, "uiT", { a: "right", w: 800, f: SANS });
+        text(x, r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), 6, 132, 15, "uiA", { w: 800, f: SANS, max: 150 });
+        x.globalAlpha = 1;
+      }
     }
     if (play && age > RES.goal && r.goal) {
       const gt = S(r.goal.k, r.goal.n), tw = Math.min(260, textW(x, gt, 16, { f: SANS, w: 800 }));
-      x.fillStyle = C("uiA"); x.beginPath(); x.moveTo(-tw / 2 - 6, 214); x.lineTo(-tw / 2 - 16, 207); x.lineTo(-tw / 2 - 16, 221); x.closePath(); x.fill();
-      text(x, gt, -tw / 2, 214, 16, "uiT", { a: "left", w: 800, f: SANS, max: 260 });
+      x.fillStyle = C("uiA"); x.beginPath(); x.moveTo(-tw / 2 - 6, 176); x.lineTo(-tw / 2 - 16, 169); x.lineTo(-tw / 2 - 16, 183); x.closePath(); x.fill();
+      text(x, gt, -tw / 2, 176, 16, "uiT", { a: "left", w: 800, f: SANS, max: 260 });
       if (r.livery >= 0 && age > RES.goal + 250) {
         const lt = S("newLivery", S("livery")[r.livery]), lw = textW(x, lt, 15, { f: SANS, w: 800 });
-        x.fillStyle = C(LIVERY[r.livery].c); x.fillRect(-lw / 2 - 22, 245, 14, 14); x.strokeStyle = C("ink"); x.lineWidth = 1; x.strokeRect(-lw / 2 - 22, 245, 14, 14);
-        text(x, lt, -lw / 2, 252, 15, LIVERY[r.livery].c, { a: "left", w: 800, f: SANS });
+        x.fillStyle = C(LIVERY[r.livery].c); x.fillRect(-lw / 2 - 22, 203, 14, 14); x.strokeStyle = C("ink"); x.lineWidth = 1; x.strokeRect(-lw / 2 - 22, 203, 14, 14);
+        text(x, lt, -lw / 2, 210, 15, LIVERY[r.livery].c, { a: "left", w: 800, f: SANS });
       }
     }
   });
-  if (play) { btn(x, UI.retry, S("retry"), 24, "main"); btn(x, UI.toTitle, S("toTitle"), 17, "plain"); if (retryReady()) pointAt(x, UI.retry, fx.vt); }
+  if (play) {
+    if (lv) x.globalAlpha = 1 - lv.k;
+    btn(x, UI.retry, S("retry"), 24, "main"); btn(x, UI.toTitle, S("toTitle"), 17, "plain");
+    if (!lv && retryReady()) pointAt(x, UI.retry, fx.vt);
+    x.globalAlpha = 1;
+  }
 }
 function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
   const u = L.u;
   at(x, 180, vBot() - 62 * u, u, 0, () => { put(x, plate(220, 48, "dark"), 0, 0); text(x, STRINGS.ja.title, 0, 16, 16, "uiT", { w: 800, f: SANS }); text(x, STRINGS.en.title, 0, 34, 14, "uiS", { w: 700, f: SANS }); });
 }
+// a plate that is leaving (start, retry, resume, back to the title) keeps drawing for 180 ms while it rises away;
+// play and input start at once underneath it (bar 1.8.1)
+let LEAVE = null;
+function leave(kind, r, play) { LEAVE = { kind, r, play, t: T(), k: 0 }; }
 function draw(now) {
   if (!run) return;
   const x = ctx;
@@ -2217,6 +2356,13 @@ function draw(now) {
   if (isTitle()) drawTitle(x, now);
   if (state === "paused") drawPause(x, now);
   if (isOver()) drawOver(x, now);
+  if (LEAVE) {
+    LEAVE.k = (now - LEAVE.t) / RES.leave;
+    if (LEAVE.k >= 1 || LEAVE.k < 0) LEAVE = null;
+    else if (LEAVE.kind === "title") { if (!isTitle()) drawTitle(x, now, LEAVE.k); }
+    else if (LEAVE.kind === "pause") { if (state !== "paused") drawPause(x, now, LEAVE.k); }
+    else if (!isOver()) drawOver(x, now, LEAVE);
+  }
   if (DEMO) drawDemoLabel(x); else drawPlaques(x);
   textEnd();
 }
@@ -2242,8 +2388,10 @@ function watchFrames(ms) { // mean frame interval over 1.5 s of live play; above
   // a phone held at 30 Hz (power saving) stays at 1.25; only a really slow one drops to 1
   if (mean > 22 && L.dpr > 1.25) { dprCap = L.dpr > 1.5 ? 1.5 : 1.25; fastN = 0; resize(); }
   else if (mean > 45 && L.dpr > 1) { dprCap = 1; fastN = 0; resize(); }
+  // still slow at 1 (a weak phone at 4x, or a big screen): a backing store of 0.75 of the CSS size, scaled up by CSS
+  else if (mean > 30 && L.dpr <= 1 && L.dpr > 0.75) { dprCap = 0.75; fastN = 0; resize(); }
   // after a slow spell (loading, another app), one step back up once 6 s hold 60 fps; only once, so it cannot flicker
-  else if (mean < 18 && dprCap < 2 && !upTried && ++fastN >= 4) { upTried = true; dprCap = dprCap < 1.25 ? 1.25 : dprCap < 1.5 ? 1.5 : 2; resize(); }
+  else if (mean < 18 && dprCap < 2 && !upTried && ++fastN >= 4) { upTried = true; dprCap = dprCap < 1 ? 1 : dprCap < 1.25 ? 1.25 : dprCap < 1.5 ? 1.5 : 2; resize(); }
 }
 function resize() {
   const w = wrap.clientWidth || innerWidth, h = wrap.clientHeight || innerHeight;
@@ -2275,8 +2423,14 @@ function startAI(mode, seed) {
   else newRun("attract", sd, { at: ATTRACT_AT[(sd >>> 4) % ATTRACT_AT.length] });
   btnPause.hidden = true;
 }
-function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+function leaving() { // the plate on screen now, before the state changes
+  if (state === "over" && run && run.result) leave("over", run.result, true);
+  else if (state === "paused") leave("pause");
+  else if (isTitle() && !DEMO) leave("title");
+}
+function toTitle() { if (!DEMO) leaving(); pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
 function startPlay(o) {
+  leaving();
   if (auInit()) auResume();
   sfx.start(); hideAll();
   state = "play"; runCount++;
@@ -2305,6 +2459,7 @@ function pauseGame() {
 function resumeGame() {
   if (state !== "paused") return;
   if (auInit()) auResume();
+  leave("pause");
   state = "play"; ovPause.hidden = true; btnPause.hidden = false;
   musicLevel("play"); musicSync();
   pfStart();
@@ -2320,30 +2475,37 @@ function retry() { if (state === "over" && retryReady()) startPlay(); }
 function press() { if (state === "play" && run && run.alive && !run.prof) doTap(); }
 auUnlock();
 const on = (el, f) => el.addEventListener("click", e => { e.stopPropagation(); f(); });
-cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") press(); });
+cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") press(); else if (state === "dying") lateTap(); });
 cv.addEventListener("pointercancel", e => e.preventDefault()); // nothing is held, so a cancelled touch commits nothing
-ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
+const uiDo = f => () => { sfx.ui(); f(); };   // every plate a player presses answers with the same small click (bar 1.3.6)
+ovPause.addEventListener("click", e => { if (e.target === ovPause) uiDo(resumeGame)(); });
 ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
 // inside the lockout a press only skips the result animation; after it, one press starts the next run (bar 1.5.4)
 ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (retryReady()) retry(); else skipResult(T()); });
 on($("btnLang"), () => { lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
 on(btnMute, () => { if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
-on(btnPause, () => { pauseGame(); btnPause.blur(); });
-on($("btnResume"), resumeGame);
+on(btnPause, uiDo(() => { pauseGame(); btnPause.blur(); }));
+on($("btnResume"), uiDo(resumeGame));
 on($("btnRestart"), () => { pfStop(); startPlay(); });
-on($("btnQuit"), toTitle);
+on($("btnQuit"), uiDo(toTitle));
 on($("btnRetry"), retry);
-on($("btnToTitle"), () => { if (retryReady()) toTitle(); });
+on($("btnToTitle"), () => { if (retryReady()) uiDo(toTitle)(); });
 document.addEventListener("keydown", e => {
   if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
   const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar", esc = k === "Escape" || k === "p" || k === "P";
+  const turn = ok || k === "ArrowUp" || k === "ArrowRight";   // the world turns right: no left or down key that turns it right
   if (ok || k.startsWith("Arrow")) e.preventDefault();
   if (e.repeat) return;
+  // a button reached with Tab: Enter or Space presses it (outside play, where Space is the turn)
+  const fb = document.activeElement;
+  let kb = false; try { kb = !!fb && fb.tagName === "BUTTON" && fb.matches(":focus-visible"); } catch (er) { kb = false; }
+  if (ok && kb && state !== "play" && fb.id !== "btnStart" && !fb.closest("[hidden]")) { fb.click(); return; }
   if (k === "m" || k === "M") { setMute(!AU.muted); return; }
-  if (isTitle()) { if (ok) startPlay(); }
-  else if (state === "play") { if (esc) pauseGame(); else if (ok || k === "ArrowUp" || k === "ArrowRight" || k === "ArrowDown" || k === "ArrowLeft") press(); }
-  else if (state === "paused") { if (ok || esc) resumeGame(); }
-  else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") toTitle(); }
+  if (isTitle()) { if (ok) startPlay(); else if ((k === "l" || k === "L") && !ovTitle.hidden) $("btnLang").click(); }
+  else if (state === "play") { if (esc) uiDo(pauseGame)(); else if (turn) press(); }
+  else if (state === "dying") { if (turn) lateTap(); }
+  else if (state === "paused") { if (ok || esc) uiDo(resumeGame)(); }
+  else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") uiDo(toTitle)(); }
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden) onHide(); else onShow(); });
 window.addEventListener("blur", () => { if (state === "play") pauseGame(); });
@@ -2354,14 +2516,17 @@ document.addEventListener("contextmenu", e => e.preventDefault());
 function update(now, dt) {
   if (!run) return;
   if ((state === "play" || state === "title" || state === "demo") && !run.hold) {
-    run.acc += dt;
+    // ?demo=1: the last 0.3 s before the scripted crash run at 0.35x (a slow motion into the impact, bar 1.9.2)
+    const fw = state === "demo" && run.failW, fd = fw ? fw.tc - run.t : 9;
+    run.slow = fd < 0.3 && fd > -0.2 && run.alive;
+    run.acc += run.slow ? dt * 0.35 : dt;
     while (run.acc >= SIM_DT - 1e-9 && run.alive) { run.acc -= SIM_DT; simStep(SIM_DT); }
   }
   if (isDying()) {
     const el = now - run.dead.at, wait = state === "dying" ? FREEZE : state === "demo-dying" ? 1150 : 700; // the demo lingers on the failure
     if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else startAI("attract"); }
   }
-  if (state === "demo-over" && now - run.result.at > 2600) startAI("demo"); // a short result hold, then the clip loops
+  if (state === "demo-over" && now - run.result.at > 1200) { leave("over", run.result, false); startAI("demo"); } // a short result hold, then the clip loops
   if (isOver()) resultStep(now);
   juiceStep(dt);
   if (state === "paused") return;
@@ -2415,7 +2580,7 @@ window.__game = {
   fail() { // prefer a row that blocks the current face, so the caption reads like a real failure
     if (state !== "play" || !run.alive) return;
     const R = run, w = R.rows.find(r => !r.done && r.s === R.curSec && (r.blocked & (1 << R.cur))) || R.rows.find(r => !r.done && r.s === R.curSec) || { blocked: 0, N: R.curN, tc: R.t, hw: 0, fam: "single" };
-    die(w);
+    die(w, true);
   },
   audioState() { return AU.ctx ? AU.ctx.state : "none"; },
   // K = device px per logical px; textMin = the smallest text drawn so far, in logical px as it shows on screen;
