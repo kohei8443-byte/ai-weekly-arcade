@@ -5,8 +5,8 @@
   "title_en": "Magnet Shaft",
   "tagline_ja": "タップのたびに左右のレールへバチンと飛びうつり、切れ目だらけの縦穴を登るワンボタンゲーム。",
   "tagline_en": "Snap from rail to rail with every tap and climb a shaft full of breaks. A one-button arcade climb.",
-  "how_to_play_ja": "タップかスペースキーで、反対側のレールへ飛びうつります。レールの切れ目とオレンジの放電をよけて登り、100% まで登りきるとオーバードライブです。ギリギリを 3 回きめると、1 回だけ守ってくれるシールドが付きます。",
-  "how_to_play_en": "Tap or press Space to jump to the other rail. Dodge the breaks and the orange discharge, and reach 100% to set off overdrive. Three close calls charge a shield that saves you once.",
+  "how_to_play_ja": "タップかスペースキーで、反対側のレールへ飛びうつります。レールの切れ目と、光るオレンジ（放電板とレーザー）をよけて登り、100% まで登りきるとオーバードライブです。ギリギリを 3 回きめると、1 回だけ守ってくれるシールドが付きます。",
+  "how_to_play_en": "Tap or press Space to jump to the other rail. Dodge the breaks and anything glowing orange (plates and beams), and reach 100% to set off overdrive. Three close calls charge a shield that saves you once.",
   "controls": [
     "tap/click",
     "space",

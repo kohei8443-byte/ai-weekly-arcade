@@ -37,8 +37,8 @@ body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;
     <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
     <button id="btnToTitle" type="button" data-qa="title" data-s="toTitle"></button>
   </section>
-  <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
-  <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
+  <button id="btnPause" type="button" data-qa="pause" hidden></button>
+  <button id="btnMute" type="button" data-qa="mute"></button>
 </div>
 </div>
 <script>
@@ -60,11 +60,12 @@ const PALS = {
     bg: "#05081a", cyan: "#5ce8ff", cyanL: "#bff6ff", orange: "#ff6a1a", orangeL: "#ffb07a",
     steel: "#d8e3f5", steelD: "#7888b4", steelK: "#28365e", ice: "#eef4ff", white: "#ffffff", podD: "#aebbd3", podK: "#0c1b4d",
     plateK: "#07080d", frame: "#081130", girder: "#0a1338", gold: "#ffd23f", goldL: "#ffe9a0", ui: "#e8eefc", uiD: "#93a0c4", panel: "#0a1030",
-    wall0: "#1636b8", tile0: "#1c44d0", lit0: "#284aaa", deep0: "#0a1644",
-    wall1: "#3a1fb8", tile1: "#482cd2", lit1: "#462eaa", deep1: "#160e48",
-    wall2: "#0b4f66", tile2: "#0f6280", lit2: "#186e82", deep2: "#05182a",
-    wall3: "#282eaa", tile3: "#343ec6", lit3: "#323caa", deep3: "#101344",
-    wall4: "#681a96", tile4: "#7e26b0", lit4: "#7828a0", deep4: "#1e0932"
+    // stage colours, 40 % toward grey from the first build: lit machinery, not electric blue (round 2 value pass)
+    wall0: "#243785", tile0: "#2d4599", lit0: "#354a83", deep0: "#0d1639",
+    wall1: "#362682", tile1: "#443397", lit1: "#42347e", deep1: "#150f3b",
+    wall2: "#214a58", tile2: "#2a5c6e", lit2: "#346773", deep2: "#091725",
+    wall3: "#2d317b", tile3: "#3b4193", lit3: "#383e80", deep3: "#111438",
+    wall4: "#53246f", tile4: "#663184", lit4: "#62327a", deep4: "#1b0b2a"
   }
 };
 const PAL = PALS.M;
@@ -259,13 +260,14 @@ function segAt(t) { let i = SPD.length - 1; while (i > 0 && SPD[i].t > t) i--; r
 function ALT(t) { if (t <= 0) return t * 480; const p = segAt(t); return p.a + (t - p.t) * p.v; }
 function SPEED(t) { return t <= 0 ? 480 : segAt(t).v; }
 function altInv(a) { if (a <= 0) return a / 480; let i = SPD.length - 1; while (i > 0 && SPD[i].a > a) i--; return SPD[i].t + (a - SPD[i].a) / SPD[i].v; }
-// Front-loaded ramp (data, bar 1.5.2): plates and a 2 degree sway 5.8 s, lasers 11.6 s, the first barrel spin and a
-// 4 degree sway 15.5 s, pulse rails 19.4 s, the second spin and the full sway 29 s, the long squeeze 38.7 s, goal
+// Front-loaded ramp (data, bar 1.5.2): plates and a 2 degree sway 5.8 s, the first barrel spin and a 4 degree sway
+// 9.7 s, lasers 11.6 s, pulse rails 19.4 s, the second spin and the full sway 29 s, the long squeeze 38.7 s, goal
 // 69.7 s, then overdrive (denser phrases, barrel spins every 5 bars). The shaft's own motion (sway and spin) comes
-// early on purpose: most first runs end near 25 s, and the spin is this game's signature move (bar 1.1.4).
-const T_PLATE = 3 * BAR, T_LASER = 6 * BAR, T_SWAY0 = 8 * BAR, T_PULSE = 10 * BAR, T_SWAYF = 15 * BAR, T_SWAY = 20 * BAR, T_GOAL = 36 * BAR;
+// early on purpose: the spin is this game's signature move, so every first run sees it inside 10 s (bar 1.1.4), and
+// its run-up sits in the plate stage, which leaves the whole laser stage to the lasers.
+const T_PLATE = 3 * BAR, T_LASER = 6 * BAR, T_SWAY0 = 5 * BAR, T_PULSE = 10 * BAR, T_SWAYF = 15 * BAR, T_SWAY = 20 * BAR, T_GOAL = 36 * BAR;
 const A_GOAL = ALT(T_GOAL);
-const BARRELS = [8, 15, 25, 31, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86, 91, 96, 101, 106, 111, 116, 121].map(b => b * BAR);
+const BARRELS = [5, 15, 25, 31, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86, 91, 96, 101, 106, 111, 116, 121].map(b => b * BAR);
 const SPIN = 2 * BEAT;
 const GATES = [];
 SPD.forEach((p, i) => { if (i && p.v > SPD[i - 1].v + 1) GATES.push(p.t); });
@@ -355,12 +357,14 @@ function plateB(s, t0, t1, minW) {
   const v0 = SPEED(t0), v1 = SPEED(t1);
   if (!need(1 - s, t0 - T_P0 - HH / v0, t1 + HH / v1 + TFLY - T_P1 + 0.01, minW)) return false;
   const x0 = s === 0 ? -147 : 123;
-  LV.pl.push({ s, a0: ALT(t0), a1: ALT(t1), x0, x1: x0 + 24, sd: (LV.rnd() * 1e6) | 0 });
+  LV.pl.push({ s, a0: ALT(t0), a1: ALT(t1), x0, x1: x0 + 24, sd: (LV.rnd() * 1e6) | 0, fg: firstFg("d") });
   return true;
 }
+// In a player's first two runs the first plate, pillar and laser each forgive one touch (bar 1.7.2): 1 = armed
+const firstFg = k => LV.soft && !LV.seen["f" + k] ? (LV.seen["f" + k] = 1) : 0;
 // Lasers fire on their own beat grid: ghost (charging) 2 beats, live 1 beat, off 1 beat, over and over.
 function addLaser(s, tp, liveBeat) {
-  LV.lz.push({ s, a: ALT(tp), tp, ph: mod(liveBeat, 4), x0: s === 0 ? -147 : -59, x1: s === 0 ? 59 : 147, snd: -9, nm: 0 });
+  LV.lz.push({ s, a: ALT(tp), tp, ph: mod(liveBeat, 4), x0: s === 0 ? -147 : -59, x1: s === 0 ? 59 : 147, snd: -9, nm: 0, fg: firstFg("l") });
 }
 // a beam on the pod's rail that is live when the pod gets there: leave the rail before it
 function laserW(s, tp, minW) {
@@ -396,7 +400,7 @@ function laserX(s, cs, minW) {
 function centerB(c0, c1) {
   const v0 = SPEED(c0), v1 = SPEED(c1);
   LV.nf.push([c0 - HH / v0 - T_C1 - 0.02, c1 + HH / v1 - T_C0 + 0.02]);
-  LV.pl.push({ s: 2, a0: ALT(c0), a1: ALT(c1), x0: -35, x1: 35, sd: (LV.rnd() * 1e6) | 0 });
+  LV.pl.push({ s: 2, a0: ALT(c0), a1: ALT(c1), x0: -35, x1: 35, sd: (LV.rnd() * 1e6) | 0, fg: firstFg("c") });
 }
 // block kinds: g rail break, d discharge plate, l laser wall, p laser pass, x laser crossing
 function block(kind, s, t0, lg, minW) {
@@ -498,25 +502,30 @@ function phrase() {
     if (!gapB(1, cs + 3 * BEAT, cs + 3.6 * BEAT, 0.4)) return false;
     LV.cur = cs + 8 * BEAT; return true;
   }
-  const v = clamp((cs - T_GOAL) / 40, 0, 1), v2 = clamp((cs - T_GOAL - 40) / 40, 0, 1);   // overdrive tightens over 40 s, then again
+  // overdrive tightens over 40 s, again over the next 40 s, and then slowly on, so a strong player never finds a plateau
+  const v = clamp((cs - T_GOAL) / 40, 0, 1), v2 = clamp((cs - T_GOAL - 40) / 40, 0, 1), v3 = clamp((cs - T_GOAL - 80) / 60, 0, 1);
   if (room < 8) { // short run-up to a barrel: quick alternating blocks that end before the spin
     if (od) return gaps(cs, Math.max(1, fl((room + 0.25) / 0.75)), 0.75, 0.8 + 0.1 * v, "gd", 0.05);
-    const nf = Math.max(1, fl((room + 0.5) / 1.5));
-    return gaps(cs, nf, 1.5, 0.5, cs < T_PLATE ? "g" : "gd", cs < T_SWAY ? 0.3 : 0.24);
+    // the first plate of a run comes alone, so its look and its saw teeth are seen before plates come in runs
+    if (!LV.seen.d && cs >= T_PLATE && room >= 3) { LV.seen.d = 1; return gaps(cs, 1, 2, 0.8, "d", 0.42); }
+    const P = LV.quick ? 1 : 1.5, nf = Math.max(1, fl((room + 0.5) / P));
+    return gaps(cs, nf, P, 0.5, cs < T_PLATE ? "g" : "gd", cs < T_SWAY ? (LV.quick ? 0.28 : 0.3) : 0.24);
   }
   // 0-5.8 s: breaks only (a returning player gets a bar of three at once, so the opening is not dead time)
   if (cs < T_PLATE) return LV.quick ? gaps(cs, 3, 1, 0.5, "g", 0.32) : gaps(cs, 2, LV.soft ? 2 : 1.5, 0.4 + r() * 0.2, "g", 0.45);
-  if (cs < T_LASER) {            // 5.8-11.6 s: discharge plates
+  // 5.8-11.6 s: discharge plates (most of this stage is the run-up to the first barrel spin at 9.7 s); a returning
+  // player gets a block a beat
+  if (cs < T_LASER - 1.5 * BEAT) {
     if (!LV.seen.d) { LV.seen.d = 1; return gaps(cs, 1, 2, 0.8, "d", 0.42); }
     if (x < 0.2 && cs > T_PLATE + BAR) return centerP(cs, 2, 0.32);
-    return gaps(cs, 3, 1.5, 0.5, x < 0.65 ? "gd" : "g", 0.34);
+    return gaps(cs, LV.quick ? 4 : 3, LV.quick ? 1 : 1.5, 0.5, x < 0.65 ? "gd" : "g", LV.quick ? 0.28 : 0.34);
   }
-  if (cs < T_PULSE) {            // 11.6-19.4 s: lasers on their beat grid, quick doubles
+  if (cs < T_PULSE) {            // 11.6-19.4 s: lasers on their beat grid (the first fires with the music's laser layer)
     if (!LV.seen.l) { LV.seen.l = 1; return gaps(ib, 1, 2, 0, "l", 0.4); }
     if (x < 0.22) { LV.last = "double"; return gaps(cs, 2, 1, 0.3, "g", 0.3); }
     if (x < 0.36) return centerP(cs, 1.5, 0.28);
     if (x < 0.52) return gaps(ib, 3, 1.5, 0, cs > 15 ? "lx" : "l", 0.26);
-    return gaps(ib, 4, x < 0.85 ? 1.5 : 1, 0.4, "gdl", 0.24);
+    return gaps(ib, 4, x < 0.85 && !LV.quick ? 1.5 : 1, 0.4, "gdl", 0.24);
   }
   if (cs < T_SWAY) {             // 19.4-38.7 s: pulse rails (first one taught), first barrel spin at 29 s
     if (!LV.seen.p) { LV.seen.p = 1; return stone(ib, 0.26, true); }
@@ -530,21 +539,23 @@ function phrase() {
     const u = clamp((cs - T_SWAY) / (T_GOAL - T_SWAY), 0, 1);
     if (x < 0.1) return stone(ib, 0.2 - 0.03 * u);
     if (x < 0.25) return pladder(ib, 5 + fl(u * 1.99), 0.19 - 0.03 * u);
-    // dotted-eighth runs: they grow from 4 to 7 blocks, their breaks lengthen and their safe window tightens from
-    // 0.14 to 0.035 s by about 61.7 s, then hold there to the goal (overdrive then opens with two calmer bars).
-    // The squeeze reaches full strength earlier than before because the shield (three closes) is worth a life
-    const w = Math.min(1, u * 1.35);
-    if (x < 0.5 + 0.22 * u) return gaps(cs, 4 + fl(w * 3.99), 0.75, 0.6 + 0.33 * w, "gd", 0.14 - 0.105 * w);
+    // dotted-eighth runs: they grow from 5 to 7 blocks, their breaks lengthen and their safe window tightens from
+    // about 0.11 to 0.04 s at about 62.9 s, then hold there to the goal; overdrive opens with two calm bars and then
+    // runs at this same strength for 10 s, so the hardest part comes after 100 %, not just before it (round 2: the
+    // squeeze starts a step in and climbs evenly instead of reaching its floor 8 s early)
+    const w = clamp(0.3 + 0.9 * u, 0, 1);
+    if (x < 0.5 + 0.22 * u) return gaps(cs, 4 + fl(w * 3.99), 0.75, 0.7 + 0.23 * w, "gd", 0.14 - 0.1 * w);
     if (x < 0.58 + 0.14 * u) return centerP(cs, 1, 0.2);
     return gaps(ib, 4 + fl(u * 1.99), 1, 0.8 + 0.15 * u, "gdlpx", 0.12 - 0.04 * u);
   }
   // overdrive after 100 %: eighth-note ladders and breaks that overlap across both rails (the pod has to be in the
   // air as it passes them), tighter for 40 s; skilled runs are meant to end here. It ramps in: two bars of one block
-  // a beat, then 10 s of dotted-eighth runs, before the eighth-note runs start
+  // a beat (the 100 % moment), then 10 s of dotted-eighth runs as tight as the last ones before the goal, before the
+  // eighth-note runs start
   if (cs < T_GOAL + 2 * BAR) return gaps(ib, 4, 1, 0.6, "gd", 0.2);
-  if (cs < T_GOAL + 10) return x < 0.12 ? pladder(ib, 6, 0.16) : gaps(cs, 6, 0.75, 0.8, "gd", 0.08);
+  if (cs < T_GOAL + 10) return x < 0.12 ? pladder(ib, 6, 0.15) : gaps(cs, 7, 0.75, 0.9, "gd", 0.04);
   if (x < 0.06) return pladder(ib, 6 + fl(r() * 3), 0.15 - 0.03 * v2);
-  if (x < 0.45 + 0.15 * v2) return gaps(ib, 8, 0.5, 0.55 + 0.1 * v + 0.1 * v2, "gdg", 0.05 - 0.015 * v2);
+  if (x < 0.45 + 0.15 * v2 + 0.2 * v3) return gaps(ib, 8, 0.5, 0.55 + 0.1 * v + 0.1 * v2 + 0.08 * v3, "gdg", 0.05 - 0.015 * v2);
   if (x < 0.5) return stone(ib, 0.16);
   if (x < 0.56) return centerP(cs, 0.75, 0.16);
   if (x < 0.82) return gaps(cs, 6, 0.75, 0.8 + 0.1 * v, "gd", 0.05);
@@ -606,8 +617,8 @@ function railAt(s, a, t) { // "" when the rail holds at altitude a and time t, e
 }
 const holdOK = (s, a, t) => !railAt(s, a, t);
 function hit(x, a, t) {
-  for (let i = 0; i < WP.length; i++) { const p = WP[i]; if (x + HW > p.x0 && x - HW < p.x1 && a + HH > p.a0 && a - HH < p.a1) return p; }
-  for (let i = 0; i < WL.length; i++) { const z = WL[i]; if (x + HW > z.x0 && x - HW < z.x1 && a + HH > z.a - 3 && a - HH < z.a + 3 && laserLive(z, t)) return z; }
+  for (let i = 0; i < WP.length; i++) { const p = WP[i]; if (!p.off && x + HW > p.x0 && x - HW < p.x1 && a + HH > p.a0 && a - HH < p.a1) return p; }
+  for (let i = 0; i < WL.length; i++) { const z = WL[i]; if (!z.off && x + HW > z.x0 && x - HW < z.x1 && a + HH > z.a - 3 && a - HH < z.a + 3 && laserLive(z, t)) return z; }
   return null;
 }
 // ride attached on side s from t0 to t1; returns the death time or -1
@@ -705,6 +716,23 @@ function latestSafe(s, from, hi) {
   for (let t = hi + HB; t < hi + AIG + 1e-9; t += HB) { if (ride(s, from, t) >= 0 || fly(s, t) >= 0 || ride(1 - s, t + TFLY, t + TFLY + 0.25) >= 0) break; best = t; }
   return best;
 }
+// the demo's scripted near miss: leave the rail 20 to 60 ms before what is coming on it would hit, when that flight and
+// its landing are clean (it then counts as a close call); otherwise the latest safe flip in the window
+function closeFlip(hi) {
+  const s = R.side, sd = stayDeath(s, R.t, 1.2);
+  // on the physics grid, so the flip happens exactly when planned
+  if (sd) for (let f = R.t + Math.floor((sd.t - 0.02 - R.t) / HB + 1e-6) * HB; f > Math.max(R.t, sd.t - 0.06); f -= HB) {
+    if (ride(s, R.t, f) < 0 && fly(s, f) < 0 && survives(1 - s, f + TFLY, 1)) return f;
+  }
+  return latestSafe(s, R.t, hi);
+}
+// can a pod that lands on side s at tl live 0.3 s more, with at most d more flips?
+function survives(s, tl, d) {
+  if (ride(s, tl, tl + 0.3) < 0) return true;
+  if (!d) return false;
+  for (let g = tl; g < tl + 0.3; g += 2 * HB) if (ride(s, tl, g) < 0 && fly(s, g) < 0 && survives(1 - s, g + TFLY, d - 1)) return true;
+  return false;
+}
 // rt: reaction (s) from when the window's end came into view; sd: timing spread (s); f: where in the window;
 // slip: chance per decision of a clear mistake (too late), so the AI fails now and then like a person
 const AIP = {
@@ -715,13 +743,13 @@ const AIP = {
 const VIS = 600;   // px ahead of the pod a person can read the shaft (about the visible height above it)
 function aiThink() {
   const p = R.aiP;
-  // the scripted crash: stay into a plate or beam that is coming, or plan a flip into one within the next second, so it
-  // reads as a crash (not a fall) and lands at a steady time on every seed
+  // the scripted crash: the pod flies into a plate or beam within the next 1.5 s (a mid-air slam reads big on video);
+  // with none in reach it stays into one that is coming, and after 1.5 s a fall will do. It lands at a steady time
   if (R.act === "fail") {
-    const sd = stayDeath(R.side, R.t, 1.1);
-    if (sd && (R.t - R.failT > 1.2 || (sd.kind !== "void" && sd.kind !== "pulse"))) { R.wantAt = -1; R.plan = null; return; }   // after 1.2 s a fall will do
-    const lim = sd ? sd.t - 0.02 : R.t + 1;
+    const sd = stayDeath(R.side, R.t, 1.5);
+    const lim = sd ? sd.t - 0.02 : R.t + 1.5;
     for (let f = R.t; f < lim; f += 1 / 60) if (flyHit(R.side, f)) { R.wantAt = f; R.plan = null; return; }
+    if (sd && (R.t - R.failT > 1.5 || (sd.kind !== "void" && sd.kind !== "pulse"))) { R.wantAt = -1; R.plan = null; return; }
   }
   const w = aiDecide(R);
   if (w < 0) { R.plan = null; R.wantAt = R.aiLo < 0 && R.aiHi < 0 && w >= 0 ? w : -1; return; }
@@ -730,7 +758,7 @@ function aiThink() {
   if (!pl || Math.abs(pl.hi - R.aiHi) > 0.07) {
     const r = R.rAI, lo = R.aiLo, hi = R.aiHi;
     let at;
-    if (R.act === "close") { at = latestSafe(R.side, R.t, hi); R.act = "closeArmed"; R.closeTry = R.t; R.closeN = R.closes; }
+    if (R.act === "close") { at = closeFlip(hi); R.act = "closeArmed"; R.closeTry = R.t; R.closeN = R.closes; }
     else {
       at = lo + (p.f[0] + r() * (p.f[1] - p.f[0])) * (hi - lo) + gauss(r, 0, p.sd);
       const seen = altInv(ALT(hi) - VIS), rt = p.rt[0] + r() * (p.rt[1] - p.rt[0]);
@@ -746,26 +774,28 @@ function aiThink() {
 // ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
 const STRINGS = {
   ja: {
-    title: "マグネ・シャフト", titleEn: "Magnet Shaft", how1: "タップで左右のレールに飛びうつる。", how2: "切れ目とオレンジの放電をよけて登ろう。",
+    title: "マグネ・シャフト", titleEn: "Magnet Shaft", how1: "タップで左右のレールに飛びうつる。", how2: "切れ目と、光るオレンジをよけて登ろう。",
     start: "タップでスタート", space: "スペースキーでも", lang: "EN", paused: "一時停止", resume: "つづける", restart: "さいしょから", toTitle: "タイトル",
     retry: "タップでもう一回", best: "ベスト", newBest: "ベスト更新!", toBest: "あと {n}%", tieBest: "ベストとおなじ",
-    od: "オーバードライブ", odRow: "100% のあと +{n} 階", close: "ギリギリ!", pulseOk: "パルス!", spinOk: "回転!", pulseWarn: "光ったときだけ乗れる",
+    od: "オーバードライブ", odRow: "100% のあと +{n} 階", close: "ギリギリ!", pulseOk: "パルス!", spinOk: "回転!", pulseWarn: "パルスは光ったときだけ乗れる", tPlate: "オレンジの板はさわるとアウト", tLaser: "レーザーは太く光るときだけ危ない", tPillar: "まん中の柱もさわるとアウト",
     shield: "シールド!", saved: "セーフ!", shieldHint: "ギリギリ 3 回でシールド", g_shield: "ギリギリ 3 回でシールドをためる",
     cVoid: "レールの切れ目から落ちた", cPulse: "消えたパルスレールに乗った", cPlate: "放電板にふれた", cPillar: "放電柱にふれた", cLaser: "レーザーに当たった", cGiveUp: "おしまい",
     sClose: "ギリギリ", sPulse: "パルス", sSpin: "回転", next: "つぎ:",
     g_pct: "{n}% まで登る", g_floor: "{n} 階まで登る", g_pulse: "パルスレールを {n} 回わたる", g_spin: "回転を {n} 回のりきる", g_close: "1 回のプレイでギリギリ {n} 回",
-    lamps: "記録ランプ", height: "高さ", floor: "{n} 階", credit: "Made with Claude"
+    lamps: "記録ランプ", height: "高さ", floor: "{n} 階", credit: "Made with Claude",
+    aPause: "一時停止", aSoundOn: "音を消す（いまは音あり）", aSoundOff: "音を出す（いまは音なし）"
   },
   en: {
-    title: "Magnet Shaft", titleEn: "Magnet Shaft", how1: "Tap to jump to the other rail.", how2: "Avoid the breaks and anything orange.",
+    title: "Magnet Shaft", titleEn: "Magnet Shaft", how1: "Tap to jump to the other rail.", how2: "Avoid the breaks and anything glowing orange.",
     start: "Tap to start", space: "or press Space", lang: "日本語", paused: "Paused", resume: "Resume", restart: "Restart", toTitle: "Title",
     retry: "Tap to go again", best: "Best", newBest: "New best!", toBest: "{n}% to go", tieBest: "Same as your best",
-    od: "OVERDRIVE", odRow: "+{n} floors past 100%", close: "CLOSE!", pulseOk: "PULSE!", spinOk: "SPIN!", pulseWarn: "Only when lit",
+    od: "OVERDRIVE", odRow: "+{n} floors past 100%", close: "CLOSE!", pulseOk: "PULSE!", spinOk: "SPIN!", pulseWarn: "Ride pulse rails only when lit", tPlate: "Orange plates are deadly", tLaser: "Beams hurt only when thick and bright", tPillar: "The middle pillar is deadly too",
     shield: "SHIELD!", saved: "SAVED!", shieldHint: "3 close calls make a shield", g_shield: "Charge a shield (3 close calls)",
     cVoid: "Fell through a break in the rail", cPulse: "Rode a pulse rail while it was dark", cPlate: "Touched a discharge plate", cPillar: "Touched a discharge pillar", cLaser: "Hit by a laser", cGiveUp: "Run over",
     sClose: "Close", sPulse: "Pulse", sSpin: "Spin", next: "Next:",
     g_pct: "Climb to {n}%", g_floor: "Reach floor {n}", g_pulse: "Cross {n} pulse rails", g_spin: "Ride out {n} spins", g_close: "{n} close calls in one run",
-    lamps: "Record lamps", height: "Height", floor: "Floor {n}", credit: "Made with Claude"
+    lamps: "Record lamps", height: "Height", floor: "Floor {n}", credit: "Made with Claude",
+    aPause: "Pause", aSoundOn: "Mute (sound is on)", aSoundOff: "Unmute (sound is off)"
   }
 };
 let lang = store.get("lang", null);
@@ -835,7 +865,7 @@ function newRun(mode, seed, t0, o) {
     spinI: 0, charge: 0, shield: false, ghost: -9, saves: 0, chain: 0, chainT: -9, cring: 0, shT: -9, pctT: -9, pctLast: -1, closeTry: 0, closeN: 0 };
   while (R.gate < GATES.length && GATES[R.gate] <= t0) R.gate++;
   for (const b of BARRELS) if (b + SPIN <= t0) R.spinsSeen = (R.spinsSeen || 0) + 1;
-  cam.a = R.alt; cam.v = SPEED(t0); cam.tilt = -4 * DEG * RM; cam.kick = 0; cam.zoomEnv = 0; cam.punch = 0; cam.od = odAim(t0); cam.tr = trAim(); trN = 0;
+  cam.a = R.alt; cam.v = SPEED(t0); cam.tilt = -2.5 * DEG * RM; cam.kick = 0; cam.zoomEnv = 0; cam.punch = 0; cam.od = odAim(t0); cam.tr = trAim(); trN = 0;
   for (const p of parts) p.on = false;
   Juice.trauma = 0; Juice.stop = 0;
   if (o.trail) prefillTrail();
@@ -867,7 +897,13 @@ function onLand() {
   R.attached = true; R.sq = 1; R.sqv = 0; R.landT = R.t;
   const m = spinM(R.t), scr = (R.side === 1) !== (m < 0);
   cam.kick = (scr ? 1.5 : -1.5) * RM;   // a small nudge the way the pod hit (reduced with the rest of the motion)
-  if (loud()) { sfx.land(scr ? 1 : 0, ROOT[mod(fl(R.t / BAR), 4)]); humOn(); }
+  if (loud()) {
+    const root = ROOT[mod(fl(R.t / BAR), 4)];
+    if (!(R.goal && R.t - R.goalT < 0.3)) sfx.land(scr ? 1 : 0, root);   // the 100 % chord has the moment to itself
+    // the landing note again, quietly, on the next sixteenth of the music, so a run of flips plays in time (bar 1.3.6)
+    if (audioOn() && !AU.offline) { const q16 = BEAT / 4, w = musAt((fl(R.t / q16) + 1) * q16); if (w > AU.ctx.currentTime) SFX.ghost(w, root * (scr ? 12 : 8)); }
+    humOn();
+  }
   emit(R.x + (R.side ? 7 : -7), R.alt, 10, 0, 520, 1.6, R.side ? Math.PI : 0, 0.28);
   if (R.mode === "play" && !R.firstLand) { R.firstLand = true; hint.success(); }
   // landing on a pulse rail: a clean ride counts when the pod leaves it alive
@@ -878,7 +914,9 @@ function onLand() {
 }
 // the reward chain: close calls, clean pulse rides and spins within 4 s of each other climb a scale (bar 1.3.6)
 function chainUp() { if (R.t - R.chainT > 4) R.chain = 0; R.chainT = R.t; return R.chain++; }
-function pulseDone() { R.pulses++; const n = chainUp(); setLabel("pulseOk", R.x, "cyan"); if (loud()) sfx.pulseOk(n); }
+// Each tier has its own body (bar 1.2.3): PULSE a small round puff of cyan sparks, SPIN two sideways jets, CLOSE (the
+// top tier) a white burst, a ring, a pop of the pod, a flash and the only shake of the three.
+function pulseDone() { R.pulses++; const n = chainUp(); setLabel("pulseOk", R.x, "cyan"); emit(R.x, R.alt, 10, 0, 440, TAU, 0, 0.26); if (loud()) sfx.pulseOk(n); }
 // A near miss is provisional: it is armed here and paid at `due` only if the pod is still alive then.
 function nearMiss(x, a, kind, due) { if (!R.pend) R.pend = { x, a, kind, t: due }; }
 function payClose() {
@@ -886,7 +924,7 @@ function payClose() {
   R.closes++; const n = chainUp(); setLabel("close", R.x, "white");
   emit(p.x, p.a, 10, 2, 520, 1.4, -Math.PI / 2, 0.34);   // at the edge it cleared
   emit(R.x, R.alt, 14, 2, 620, TAU, 0, 0.3);               // and around the pod, where the eye is (bar 1.2.3)
-  addTrauma(0.4); hitstop(p.kind === 2 ? 0.07 : 0.05); R.flash = 0.12; R.cring = 1;
+  addTrauma(0.6); R.pop = 1; R.flash = 0.12; R.cring = 1;
   if (DEMO) cam.punch = 1;                                  // the scripted close reads on video: a short zoom punch
   if (loud()) sfx.close(n);
   if (R.mode === "play") chargeUp();
@@ -900,7 +938,16 @@ function chargeUp() {
   if (R.charge === 1 && !store.get("shieldSeen", false)) R.note = { key: "shieldHint", col: "cyanL", t: perfT, dur: 2.4 };
   if (R.charge >= 3) { R.charge = 0; R.shield = true; R.shT = perfT; store.set("shieldSeen", true); setLabel("shield", R.x, "cyanL"); if (loud()) sfx.shieldOn(); }
 }
-function fatal(kind, x, a, obj) { // true when the pod dies; a shield takes the hit instead
+function fatal(kind, x, a, obj) { // true when the pod dies; a forgiving first hazard or a shield takes the hit instead
+  // the first plate, pillar and laser of a player's first two runs: the hazard shorts out (drawn dim from then on) and a
+  // note beside the pod says what it does, so the first touch teaches instead of ending the run (bar 1.7.2)
+  if (obj && obj.fg === 1 && R.mode === "play") {
+    obj.fg = 2; obj.off = true; R.pend = null;
+    teach(kind === "laser" ? "tLaser" : kind === "pillar" ? "tPillar" : "tPlate");
+    emit(x, a, 14, 1, 460, TAU, 0, 0.32); addTrauma(0.3);
+    if (loud()) sfx.warn();
+    return false;
+  }
   if (R.shield && R.mode === "play" && kind !== "give") {
     R.shield = false; R.saves++; R.ghost = R.t + 0.6; R.pend = null;
     setLabel("saved", R.x, "white");
@@ -911,8 +958,10 @@ function fatal(kind, x, a, obj) { // true when the pod dies; a shield takes the 
   }
   die(kind, x, a, obj); return true;
 }
-// one judgement slot that rides beside the pod (never stacked): CLOSE, PULSE, SPIN, SHIELD
-function setLabel(key, x, colr) { R.label = { key, x, col: colr, t: perfT }; }
+// one judgement slot that rides beside the pod (never stacked): CLOSE, PULSE, SPIN, SHIELD. A teaching note (a forgiven
+// first touch) holds the slot for 2 s, so praise cannot wipe the lesson.
+function setLabel(key, x, colr) { const l = R.label; if (l && l.teach && perfT - l.t < l.dur) return; R.label = { key, x, col: colr, t: perfT }; }
+function teach(key) { R.label = { key, x: R.x, col: "orangeL", t: perfT, dur: 2, teach: true }; }
 const aiOn = () => R && (R.mode !== "play" || autopilot);
 const kindOf = o => o.ph != null ? "laser" : o.s === 2 ? "pillar" : "plate";
 function stepOnce() {
@@ -928,8 +977,9 @@ function stepOnce() {
       const o = hit(x, R.alt, t); if (o && fatal(kindOf(o), x, R.alt, o)) return;
     }
     const po = R.pulseOn;
-    // the first pulse rail of a soft run forgives one dark contact: it flashes orange and the HUD says when it holds
-    if (po && po.forgive === 1 && !litOK(t, po.par)) { po.forgive = 2; po.ridden = 2; po.warnT = perfT; R.note = { key: "pulseWarn", col: "orangeL", t: perfT, dur: 2.2 }; addTrauma(0.3); if (loud()) sfx.warn(); }
+    // the first pulse rail of a soft run forgives one dark contact: it flashes orange and a note beside the pod says
+    // when it holds
+    if (po && po.forgive === 1 && !litOK(t, po.par)) { po.forgive = 2; po.ridden = 2; po.warnT = perfT; teach("pulseWarn"); addTrauma(0.3); if (loud()) sfx.warn(); }
     if (po && R.alt > po.a1 + 5) { if (po.ridden !== 2) { po.ridden = 2; pulseDone(); } R.pulseOn = null; }
   } else {
     const tau = t - R.ft0;
@@ -945,7 +995,11 @@ function stepOnce() {
   }
   // barrel spins ridden out, counted on the substep they end (the same at any frame rate)
   while (R.spinI < BARRELS.length && BARRELS[R.spinI] + SPIN <= t) {
-    if (BARRELS[R.spinI] >= R.t0) { R.spins++; const n = chainUp(); setLabel("spinOk", R.x, "cyanL"); if (loud()) sfx.spinOk(n); }
+    if (BARRELS[R.spinI] >= R.t0) {
+      R.spins++; const n = chainUp(); setLabel("spinOk", R.x, "cyanL");
+      emit(R.x, R.alt, 7, 0, 680, 0.45, 0, 0.3); emit(R.x, R.alt, 7, 0, 680, 0.45, Math.PI, 0.3);
+      if (loud()) sfx.spinOk(n);
+    }
     R.spinI++;
   }
   if (!ghost) nearStep();
@@ -972,7 +1026,7 @@ function nearStep() {
 const CAUSE = { void: "cVoid", pulse: "cPulse", plate: "cPlate", pillar: "cPillar", laser: "cLaser", give: "cGiveUp" };
 function die(kind, x, a, obj) {
   R.pend = null; R.label = null;   // no praise on the failure frame
-  R.dead = true; R.freeze = R.mode === "demo" ? 0.45 : 0.32; R.dieP = perfT; R.dk = kind; R.dobj = obj; R.dclock = 0; R.palt = a; R.x = x; R.dieT = R.t;
+  R.dead = true; R.freeze = R.freezeDur = R.mode === "demo" ? 0.45 : 0.32; R.dieP = perfT; R.dieNow = T(); R.dk = kind; R.dobj = obj; R.dclock = 0; R.palt = a; R.x = x; R.dieT = R.t;
   R.pct = pctOf(R.alt); R.wantAt = -1;
   cam.v = SPEED(R.t); addTrauma(1);
   state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
@@ -985,6 +1039,7 @@ function burstNow() { // the freeze ends: the pod bursts at the contact point or
   const x = R.x, a = R.palt;
   const fall = R.dk === "void" || R.dk === "pulse";
   if (fall) emit(x, a, 22, 0, 520, TAU, 0, 0.45);
+  else if (DEMO) { emit(x, a, 90, 1, 1400, TAU, 0, 0.7); emit(x, a, 40, 2, 1000, TAU, 0, 0.55); }   // the recorded crash fills the frame
   else { emit(x, a, 54, 1, 950, TAU, 0, 0.65); emit(x, a, 34, 2, 720, TAU, 0, 0.5); }
   if (loud()) sfx.burst(fall ? 1 : 0);   // the burst has its own crack, on the same frame as its sparks (bar 1.2.6)
 }
@@ -999,8 +1054,8 @@ function simStep(dt) {
   if (R.dead) return;
   // demo script, by run time (bar 1.9.2)
   const e = R.t - R.t0;
-  while (R.script.length && e >= R.script[0].at) { const ev = R.script.shift(); R.act = ev.act; R.plan = null; R.failT = R.t; }
-  if (R.act === "closeArmed" && R.closes > R.closeN) R.act = "";
+  while (R.script.length && e >= R.script[0].at) { const ev = R.script.shift(); R.act = ev.act; R.plan = null; R.failT = R.t; R.closeN = R.closes; }
+  if ((R.act === "closeArmed" || R.act === "close") && R.closes > R.closeN) R.act = "";
   else if (R.act === "closeArmed" && R.t - R.closeTry > 1.2) R.act = "close";   // that flip was not close enough: try the next one
   // speed gates: a whoosh; the camera pulls back only at the four before 100 % (bar 1.2.7)
   while (R.gate < GATES.length && GATES[R.gate] <= R.t) { if (GATES[R.gate] < T_GOAL) cam.zoomEnv = 1; R.gate++; if (loud()) sfx.whoosh(); }
@@ -1017,7 +1072,7 @@ function simStep(dt) {
     if (bA > 0 && R.alt > bA) { R.passedBest = true; R.note = { key: "newBest", t: perfT }; emit(R.x, R.alt + 10, 20, 3, 640, TAU, 0, 0.5); if (loud()) sfx.best(); }
   }
   const flr = fl(R.alt / FLOOR);
-  if (flr > R.floorMax) { R.floorMax = flr; if (flr % 25 === 0 && flr > 0 && loud()) sfx.floor(); }
+  if (flr > R.floorMax) { R.floorMax = flr; if (flr % 25 === 0 && flr > 0 && loud()) sfx.floor(ROOT[mod(fl(R.t / BAR), 4)]); }
   // a parked pod: sparks run down the rail on each beat
   const bi = fl(R.t / BEAT);
   if (bi !== R.beatI) { R.beatI = bi; if (R.attached) emit(R.x + (R.side ? 9 : -9), R.alt - 10, 3, 0, 300, 0.5, -Math.PI / 2, 0.22); }
@@ -1037,54 +1092,62 @@ function prune(a) {
 // the reward chain climbs the A minor pentatonic from A5, two octaves at most (bar 1.3.6)
 const PENT = [0, 3, 5, 7, 10];
 const chainHz = n => 880 * Math.pow(2, Math.min(24, 12 * fl(n / 5) + PENT[n % 5]) / 12);
-// Levels: every gameplay sound peaks between about -14 and -8 dBFS alone through the bus (bar 1.3.4); pitched sounds
-// that must stay in tune vary their filter and level instead of their pitch.
+// Levels: every gameplay sound peaks within about 6 dB alone through the bus (bar 1.3.4), and the big moments (100 %,
+// CLOSE, the crash) carry tones in the 500 Hz to 3 kHz band, so on a phone they sound bigger than a routine landing.
+// Repeated hits vary their pitch by 30 to 40 cents; the chain chimes (close, pulse, spin) climb a scale instead, so they
+// stay within 8 cents of their note and vary their level and air.
 const SFX = {
   flip(w) { // a snap of air with a short rising chirp, so the tap reads on a phone speaker
     const q = vary(40, 0.1);
-    hiss("bandpass", 600 * q.f, 2, 0.08, 0.75 * q.g, w, null, 4200 * q.f); hiss("bandpass", 3000 * q.f, 1.2, 0.045, 0.6 * q.g, w);
-    tone("triangle", 1100 * q.f, 1750 * q.f, 0.055, 0.16 * q.g, w);
+    hiss("bandpass", 600 * q.f, 2, 0.08, 1.3 * q.g, w, null, 4200 * q.f); hiss("bandpass", 3000 * q.f, 1.2, 0.045, 1.0 * q.g, w);
+    tone("triangle", 1100 * q.f, 1750 * q.f, 0.055, 0.3 * q.g, w);
   },
   land(w, hi, root) { // a metal clank on the bar's chord: the root on the left rail, the fifth on the right (2 or 3 octaves up)
-    const q = vary(8, 0.1), f = (root || 55) * (hi ? 12 : 8) * q.f, lp = 3200 * (0.85 + Math.random() * 0.3);
-    tone("square", f, f, 0.09, 0.18 * q.g, w, null, 0.002, lp); tone("square", f * 1.013, f * 1.013, 0.09, 0.14 * q.g, w, null, 0.002, lp);
+    const q = vary(30, 0.1), f = (root || 55) * (hi ? 12 : 8) * q.f, lp = 3200 * (0.85 + Math.random() * 0.3);
+    tone("square", f, f, 0.07, 0.12 * q.g, w, null, 0.002, lp); tone("square", f * 1.013, f * 1.013, 0.07, 0.09 * q.g, w, null, 0.002, lp);
     tone("triangle", f * 2.76, f * 2.7, 0.05, 0.08 * q.g, w); hiss("highpass", 3000, 0.7, 0.025, 0.16 * q.g, w);
   },
-  tick(w, g) { const q = vary(40, 0.1); tone("sine", 2600 * q.f, 2600 * q.f, 0.035, 0.29 * (g || 1) * q.g, w); },
+  ghost(w, f) { tone("sine", f, f, 0.06, 0.04, w); },   // the landing note again on the next sixteenth: flips play in time
+  tick(w, g) { const q = vary(40, 0.1); tone("sine", 2600 * q.f, 2600 * q.f, 0.035, 0.5 * (g || 1) * q.g, w); },
   charge(w, dur) { tone("sine", 320, 1500, Math.max(0.06, dur), 0.2, w, null, 0.05); },
   fire(w) { // the beam: a falling zap above the kick and bass, so it reads on the beat
-    const q = vary(30, 0.1); tone("sawtooth", 1800 * q.f, 900 * q.f, 0.14, 0.26 * q.g, w, null, 0.003, 5000); tone("square", 220 * q.f, 208 * q.f, 0.3, 0.065 * q.g, w, null, 0.003, 1400); hiss("bandpass", 2400, 3, 0.05, 0.18, w);
+    const q = vary(30, 0.1); tone("sawtooth", 1800 * q.f, 900 * q.f, 0.14, 0.45 * q.g, w, null, 0.003, 5000); tone("square", 220 * q.f, 208 * q.f, 0.3, 0.065 * q.g, w, null, 0.003, 1400); hiss("bandpass", 2400, 3, 0.05, 0.25, w);
   },
-  warn(w) { tone("square", 196, 185, 0.16, 0.14, w, null, 0.003, 1800); tone("square", 208, 196, 0.16, 0.1, w, null, 0.003, 1800); hiss("bandpass", 1200, 2, 0.06, 0.28, w); },
+  warn(w) { tone("square", 196, 185, 0.16, 0.22, w, null, 0.003, 1800); tone("square", 208, 196, 0.16, 0.16, w, null, 0.003, 1800); hiss("bandpass", 1200, 2, 0.06, 0.4, w); },
   whoosh(w) { const q = vary(40, 0.1); hiss("lowpass", 400 * q.f, 1, 0.5, 1.4 * q.g, w, null, 5000 * q.f); },
-  close(w, n) { // a bright ping on the chain's note and a fifth above it, with a zing of air
+  close(w, n) { // the top tier: a bright ping on the chain's note, its fifth, a square an octave down and a zing of air
     const q = vary(8, 0.1), f = chainHz(n || 0) * q.f;
-    tone("sine", f, f, 0.09, 0.2 * q.g, w); tone("triangle", f * 1.5, f * 1.5, 0.1, 0.1 * q.g, w + 0.05); hiss("highpass", 5000 * q.f, 1, 0.06, 0.16 * q.g, w);
+    tone("sine", f, f, 0.09, 0.3 * q.g, w); tone("triangle", f * 1.5, f * 1.5, 0.1, 0.15 * q.g, w + 0.05);
+    tone("square", f / 2, f / 2, 0.12, 0.12 * q.g, w, null, 0.003, 2500); hiss("highpass", 5000 * q.f, 1, 0.06, 0.2 * q.g, w);
   },
-  pulseOk(w, n) { const q = vary(8, 0.1), k = n || 0; tone("sine", chainHz(k) * q.f, chainHz(k) * q.f, 0.07, 0.25 * q.g, w); tone("sine", chainHz(k + 2) * q.f, chainHz(k + 2) * q.f, 0.09, 0.22 * q.g, w + 0.06); },
-  spinOk(w, n) { const q = vary(8, 0.1), f = chainHz(n || 0) * q.f; tone("triangle", f * 0.75, f, 0.18, 0.18 * q.g, w); hiss("highpass", 4000 * q.f, 1, 0.2, 0.1 * q.g, w, null, 9000); },
-  floor(w) { const q = vary(30, 0.1); tone("sine", 990 * q.f, 990 * q.f, 0.12, 0.24 * q.g, w); tone("sine", 1485 * q.f, 1485 * q.f, 0.16, 0.2 * q.g, w + 0.08); },
-  goal(w) { // the 100 % chord: a rising A major and a bright air sweep
-    [440, 554.4, 659.3, 880, 1108.7].forEach((f, i) => tone("triangle", f, f, 0.7, 0.065, w + i * 0.06));
-    tone("sine", 110, 55, 0.5, 0.24, w); hiss("highpass", 3000, 0.7, 0.8, 0.16, w, null, 9000);
+  pulseOk(w, n) { const q = vary(8, 0.1), k = n || 0; tone("sine", chainHz(k) * q.f, chainHz(k) * q.f, 0.07, 0.36 * q.g, w); tone("sine", chainHz(k + 2) * q.f, chainHz(k + 2) * q.f, 0.09, 0.32 * q.g, w + 0.06); },
+  spinOk(w, n) { const q = vary(8, 0.1), f = chainHz(n || 0) * q.f; tone("triangle", f * 0.75, f, 0.18, 0.36 * q.g, w); hiss("highpass", 4000 * q.f, 1, 0.2, 0.16 * q.g, w, null, 9000); },
+  floor(w, root) { // every 25th floor: the bar's chord root and fifth, four and five octaves up
+    const q = vary(8, 0.1), r = (root || 55) * q.f; tone("sine", r * 16, r * 16, 0.12, 0.36 * q.g, w); tone("sine", r * 24, r * 24, 0.16, 0.3 * q.g, w + 0.08);
   },
-  death(w) { // electric crackle and a falling whine
+  goal(w) { // the 100 % chord: a rising A major, square stabs a phone can play, and a bright air sweep
+    [440, 554.4, 659.3, 880, 1108.7].forEach((f, i) => tone("triangle", f, f, 0.7, 0.12, w + i * 0.06));
+    tone("square", 880, 880, 0.3, 0.15, w, null, 0.004, 3000); tone("square", 1320, 1320, 0.3, 0.12, w + 0.12, null, 0.004, 3000);
+    tone("sine", 110, 55, 0.5, 0.14, w); hiss("highpass", 3000, 0.7, 0.8, 0.16, w, null, 9000);
+  },
+  death(w) { // electric crackle, a falling whine and a falling square, so the crash has weight on a phone
     for (let i = 0; i < 6; i++) hiss("bandpass", 1800 + Math.random() * 3000, 3, 0.03, 0.3, w + Math.random() * 0.25);
-    tone("sawtooth", 520, 50, 0.7, 0.16, w, null, 0.004, 1800); tone("sine", 90, 40, 0.4, 0.3, w); hiss("lowpass", 900, 1, 0.25, 0.3, w, null, 150);
+    tone("sawtooth", 520, 50, 0.7, 0.16, w, null, 0.004, 1800); tone("square", 330, 70, 0.35, 0.28, w, null, 0.004, 1500);
+    tone("sine", 90, 40, 0.4, 0.2, w); hiss("lowpass", 900, 1, 0.25, 0.25, w, null, 150);
   },
   burst(w, fall) { // the end of the freeze: a crack and a thump with the burst (a fall gets a softer drop)
-    if (fall) { hiss("lowpass", 2400, 1, 0.4, 0.4, w, null, 260); tone("sine", 300, 70, 0.35, 0.22, w); return; }
-    hiss("highpass", 2200, 0.7, 0.09, 0.55, w); hiss("bandpass", 900, 1.2, 0.14, 0.35, w); tone("sine", 130, 45, 0.3, 0.4, w);
+    if (fall) { hiss("lowpass", 2400, 1, 0.4, 0.34, w, null, 260); tone("sine", 300, 70, 0.35, 0.2, w); return; }
+    hiss("highpass", 2200, 0.7, 0.09, 0.45, w); hiss("bandpass", 900, 1.2, 0.14, 0.3, w); tone("sine", 130, 45, 0.3, 0.28, w);
   },
-  best(w) { [0, 4, 7, 12, 16].forEach((n, i) => tone("triangle", 523.25 * cents(n * 100), 523.25 * cents(n * 100), 0.3, 0.17, w + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.09, w + 0.35); },
+  best(w) { [0, 4, 7, 12, 16].forEach((n, i) => tone("triangle", 523.25 * cents(n * 100), 523.25 * cents(n * 100), 0.3, 0.26, w + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.09, w + 0.35); },
   count(w, i) { tone("sine", 900 + (i % 12) * 45, 900 + (i % 12) * 45, 0.03, 0.28, w); },
   stamp(w) { // a press stamp: a low thump and a metal clank a phone can play
     tone("sine", 140, 60, 0.15, 0.32, w); tone("square", 520, 500, 0.12, 0.14, w, null, 0.002, 3000); tone("triangle", 1560, 1500, 0.08, 0.12, w); hiss("lowpass", 1400, 1, 0.08, 0.25, w);
   },
-  shieldOn(w) { tone("square", 1318.5, 1318.5, 0.1, 0.12, w, null, 0.003, 3000); tone("square", 1760, 1760, 0.14, 0.12, w + 0.08, null, 0.003, 3000); hiss("highpass", 6000, 1, 0.15, 0.08, w + 0.08); },
+  shieldOn(w) { tone("square", 1318.5, 1318.5, 0.1, 0.2, w, null, 0.003, 3000); tone("square", 1760, 1760, 0.14, 0.2, w + 0.08, null, 0.003, 3000); hiss("highpass", 6000, 1, 0.15, 0.08, w + 0.08); },
   shieldBreak(w) { hiss("highpass", 3500, 0.8, 0.12, 0.26, w); tone("triangle", 1760, 700, 0.2, 0.12, w); tone("sine", 220, 110, 0.15, 0.18, w); },
   servo(w) { // a barrel spin: a two-beat motor whine, then a clunk as the shaft locks
-    tone("sawtooth", 180, 720, 2 * BEAT, 0.09, w, null, 0.05, 1800);
+    tone("sawtooth", 300, 1200, 2 * BEAT, 0.3, w, null, 0.05, 2400);
     tone("square", 196, 190, 0.07, 0.14, w + 2 * BEAT, null, 0.002, 1200); hiss("bandpass", 900, 1.5, 0.05, 0.3, w + 2 * BEAT);
   },
   ui(w) { tone("sine", 880, 1320, 0.08, 0.26, w); }
@@ -1144,14 +1207,14 @@ function playStep(i, at, lt) {
     if (s & 1) hiss("bandpass", 6500, 0.9, 0.02, lt >= T_GOAL ? 0.15 : 0.12, at, B);
     if ((s & 3) === 2) hiss("bandpass", 6000, 0.9, 0.08, 0.08, at, B);   // an open hat on the off-beat
   }
-  if (!bed && lt >= T_PLATE && (s === 4 || s === 12)) { for (let k = 0; k < 3; k++) hiss("bandpass", 1400, 1.2, k === 2 ? 0.14 : 0.01, 0.45, at + k * 0.011, B); }
-  if (BASSP[s] && !spin) { // the bass opens up a step at every speed gate
+  if (!bed && lt >= T_PLATE && (s === 4 || s === 12)) { for (let k = 0; k < 3; k++) hiss("bandpass", 1400, 1.2, k === 2 ? 0.14 : 0.01, 0.65, at + k * 0.011, B); }
+  if (BASSP[s] && !spin) { // the bass opens up a step at every speed gate; a mid stab two octaves up carries it on a phone
     const f = root * 2 * ((s === 7 || s === 14) ? 2 : 1), lpB = 1400 + 250 * gi;
     tone("sawtooth", f, f, 0.15, 0.17, at, B, 0.004, lpB); tone("square", f * 1.004, f * 1.004, 0.15, 0.1, at, B, 0.004, 500 + 100 * gi);
-    tone("triangle", f * 2, f * 2, 0.12, 0.06, at, B);
+    tone("triangle", f * 2, f * 2, 0.12, 0.06, at, B); tone("square", f * 4, f * 4, 0.1, 0.15, at, B, 0.004, 1300 + 200 * gi);
   }
-  if (!bed && lt >= T_PULSE) { const f = root * (lt >= T_GOAL ? 16 : 8) * Math.pow(2, ARP[s & 7] / 12); tone("triangle", f, f, 0.08, lt >= T_GOAL ? 0.11 : 0.1, at, B); }
-  if (!bed && lt >= T_SWAY && !(s & 1)) { const n = LEAD[mod(bar, 8) * 8 + (s >> 1)]; if (n != null) { const f = 440 * Math.pow(2, n / 12); tone("square", f, f, 0.16, 0.07, at, B, 0.006, lt >= T_GOAL ? 3000 : 2200); } }
+  if (!bed && lt >= T_PULSE) { const f = root * (lt >= T_GOAL ? 16 : 8) * Math.pow(2, ARP[s & 7] / 12); tone("triangle", f, f, 0.08, lt >= T_GOAL ? 0.18 : 0.16, at, B); }
+  if (!bed && lt >= T_SWAY && !(s & 1)) { const n = LEAD[mod(bar, 8) * 8 + (s >> 1)]; if (n != null) { const f = 440 * Math.pow(2, n / 12); tone("square", f, f, 0.16, 0.12, at, B, 0.006, lt >= T_GOAL ? 3000 : 2200); } }
   if (!bed && lt >= T_GOAL && (s & 3) === 2) { const f = root * 4 * ((s & 8) ? 1.5 : 1); tone("square", f, f, 0.12, 0.14, at, B, 0.004, 2600); }
   // a sixteenth-note snare fill through the bar before each speed gate, rising to it
   if (!bed) for (const g of GATES) if (st >= g - BAR && st < g) { hiss("bandpass", 1800, 1, 0.03, 0.08 + 0.22 * (st - g + BAR) / BAR, at, B); break; }
@@ -1168,7 +1231,10 @@ const RISERS = [T_PLATE, T_LASER, T_PULSE, T_SWAY, T_GOAL].map(t => Math.round(t
 function musicStep() {
   if (!audioOn() || AU.offline) return;
   const c = AU.ctx;
-  if (!mus.bus || mus.bus.context !== c) { mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(AU.music); musicLevel(mus.level); musAnchor(R ? R.t : 0); }
+  if (!mus.bus || mus.bus.context !== c) { // music bus -> lowpass (it sweeps down and up through a barrel spin) -> music gain
+    mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.lp = c.createBiquadFilter(); mus.lp.type = "lowpass"; mus.lp.frequency.value = 16000; mus.lp.Q.value = 2;
+    mus.bus.connect(mus.lp); mus.lp.connect(AU.music); musicLevel(mus.level); musAnchor(R ? R.t : 0);
+  }
   if (mus.level === "off") { mus.step = Math.ceil((c.currentTime - mus.a0) / (BEAT / 4)); return; }
   const now = c.currentTime, q = BEAT / 4;
   if (mus.a0 + mus.step * q < now - 0.1) mus.step = Math.ceil((now - mus.a0) / q);
@@ -1189,7 +1255,17 @@ function schedSfx() {
     if (z.snd !== live && cStart - R.t < 0.15) { z.snd = live; nz++; const a1 = Math.max(now, musAt(cStart)), a2 = musAt(live * BEAT); if (a2 > now) { SFX.charge(a1, a2 - a1); SFX.fire(a2); } }
   }
   // a barrel spin about to start: the motor whine on the music clock
-  for (const b of BARRELS) { if (b > R.t + 0.15) break; if (b > R.t && R.spinSnd !== b) { R.spinSnd = b; const w = musAt(b); if (w > now) SFX.servo(w); } }
+  // and the music turns with the shaft: its lowpass sweeps down to 700 Hz at mid-turn and back up as it locks
+  for (const b of BARRELS) {
+    if (b > R.t + 0.15) break;
+    if (b > R.t && R.spinSnd !== b) {
+      R.spinSnd = b; const w = musAt(b);
+      if (w > now) {
+        SFX.servo(w);
+        if (mus.lp && mus.lp.context === AU.ctx) { const f = mus.lp.frequency; f.cancelScheduledValues(w); f.setValueAtTime(16000, w); f.exponentialRampToValueAtTime(700, w + BEAT); f.exponentialRampToValueAtTime(16000, w + 2 * BEAT); }
+      }
+    }
+  }
   const nb = fl(R.t / BEAT) + 1;
   if (nb !== lastTickBeat && nb * BEAT - R.t < 0.12) {
     lastTickBeat = nb;
@@ -1278,30 +1354,30 @@ function makeTile(st, K) {
   const w = Math.max(8, Math.round(TW * K)), h = Math.max(8, Math.round(TH * K)), cv2 = cnv(w, h), g = cv2.getContext("2d");
   g.scale(w / TW, h / TH);
   const W0 = colOf(st.wall), P0 = colOf(st.tile);
-  g.fillStyle = rgb(W0, 0.4); g.fillRect(0, 0, TW, TH);
+  g.fillStyle = rgb(W0, 0.34); g.fillRect(0, 0, TW, TH);
   const hr = seeded(9);
   function panel(x, y, pw, ph, kind) {
-    // flat bands, lit from above in the shaft: brighter head, darker foot
-    g.fillStyle = rgb(P0, 0.66); g.fillRect(x, y, pw, ph * 0.42);
-    g.fillStyle = rgb(P0, 0.6); g.fillRect(x, y + ph * 0.42, pw, ph * 0.36);
-    g.fillStyle = rgb(P0, 0.53); g.fillRect(x, y + ph * 0.78, pw, ph * 0.22);
-    g.fillStyle = rgb(P0, 0.9); g.fillRect(x, y, pw, 1);
+    // flat bands, lit from above in the shaft: brighter head, darker foot (kept under the rails and hazards in value)
+    g.fillStyle = rgb(P0, 0.5); g.fillRect(x, y, pw, ph * 0.42);
+    g.fillStyle = rgb(P0, 0.45); g.fillRect(x, y + ph * 0.42, pw, ph * 0.36);
+    g.fillStyle = rgb(P0, 0.4); g.fillRect(x, y + ph * 0.78, pw, ph * 0.22);
+    g.fillStyle = rgb(P0, 0.75); g.fillRect(x, y, pw, 1);
     g.fillStyle = rgb(W0, 0.3); g.fillRect(x, y + ph - 1, pw, 1); g.fillRect(x + pw - 1, y, 1, ph);
     const m = x + pw / 2;
-    if (kind === 0) { g.fillStyle = rgb(P0, 0.42); for (let i = 0; i < 6; i++) g.fillRect(x + 14, y + 16 + i * 8, pw - 28, 3); }
-    else if (kind === 1) { g.strokeStyle = rgb(P0, 0.46); g.lineWidth = 1; g.strokeRect(x + 16.5, y + 14.5, pw - 33, ph - 29); g.fillStyle = rgb(P0, 0.46); g.fillRect(x + 16, y + ph / 2, pw - 32, 1); }
+    if (kind === 0) { g.fillStyle = rgb(P0, 0.32); for (let i = 0; i < 6; i++) g.fillRect(x + 14, y + 16 + i * 8, pw - 28, 3); }
+    else if (kind === 1) { g.strokeStyle = rgb(P0, 0.34); g.lineWidth = 1; g.strokeRect(x + 16.5, y + 14.5, pw - 33, ph - 29); g.fillStyle = rgb(P0, 0.34); g.fillRect(x + 16, y + ph / 2, pw - 32, 1); }
     else if (kind === 2) {
-      g.fillStyle = rgb(P0, 1.3); g.fillRect(x + pw - 26, y + 12, 14, 4);
-      g.fillStyle = rgb(P0, 0.48); g.fillRect(x + 14, y + 14, Math.min(40, pw - 44), 1); g.fillRect(x + 14, y + 19, Math.min(26, pw - 44), 1); g.fillRect(x + 14, y + 44, pw - 28, 1); g.fillRect(x + 14, y + 50, pw - 28, 1);
-    } else if (kind === 3) { g.fillStyle = rgb(P0, 0.48); g.fillRect(m, y + 8, 1.5, ph - 16); }
-    else if (kind === 4) { g.fillStyle = rgb(W0, 0.3); g.fillRect(x + 8, y + 8, pw - 16, ph - 16); g.fillStyle = rgb(P0, 0.5); g.fillRect(x + 8, y + 8, pw - 16, 1); }   // a recess
-    else if (kind === 5) { g.fillStyle = rgb(P0, 0.44); for (let gx = x + 12; gx < x + pw - 12; gx += 9) g.fillRect(gx, y + 12, 4, ph - 24); }   // grille
+      g.fillStyle = rgb(P0, 1.1); g.fillRect(x + pw - 26, y + 12, 14, 4);
+      g.fillStyle = rgb(P0, 0.36); g.fillRect(x + 14, y + 14, Math.min(40, pw - 44), 1); g.fillRect(x + 14, y + 19, Math.min(26, pw - 44), 1); g.fillRect(x + 14, y + 44, pw - 28, 1); g.fillRect(x + 14, y + 50, pw - 28, 1);
+    } else if (kind === 3) { g.fillStyle = rgb(P0, 0.36); g.fillRect(m, y + 8, 1.5, ph - 16); }
+    else if (kind === 4) { g.fillStyle = rgb(W0, 0.26); g.fillRect(x + 8, y + 8, pw - 16, ph - 16); g.fillStyle = rgb(P0, 0.38); g.fillRect(x + 8, y + 8, pw - 16, 1); }   // a recess
+    else if (kind === 5) { g.fillStyle = rgb(P0, 0.33); for (let gx = x + 12; gx < x + pw - 12; gx += 9) g.fillRect(gx, y + 12, 4, ph - 24); }   // grille
     else { // two pipes along the panel with clamps
-      g.fillStyle = rgb(P0, 0.78); g.fillRect(x + 6, y + 22, pw - 12, 7); g.fillRect(x + 6, y + 40, pw - 12, 7);
-      g.fillStyle = rgb(P0, 0.45); g.fillRect(x + 6, y + 27, pw - 12, 2); g.fillRect(x + 6, y + 45, pw - 12, 2);
-      g.fillStyle = rgb(W0, 0.3); for (let cx = x + 22; cx < x + pw - 16; cx += 46) g.fillRect(cx, y + 19, 5, 31);
+      g.fillStyle = rgb(P0, 0.6); g.fillRect(x + 6, y + 22, pw - 12, 7); g.fillRect(x + 6, y + 40, pw - 12, 7);
+      g.fillStyle = rgb(P0, 0.34); g.fillRect(x + 6, y + 27, pw - 12, 2); g.fillRect(x + 6, y + 45, pw - 12, 2);
+      g.fillStyle = rgb(W0, 0.26); for (let cx = x + 22; cx < x + pw - 16; cx += 46) g.fillRect(cx, y + 19, 5, 31);
     }
-    g.fillStyle = rgb(P0, 0.86);
+    g.fillStyle = rgb(P0, 0.66);
     for (const q of [[6, 6], [pw - 8, 6], [6, ph - 8], [pw - 8, ph - 8]]) g.fillRect(x + q[0], y + q[1], 2, 2);
   }
   // rows of panels in mixed widths (half to two bays), each row with its own offset, so the wall does not read as a grid
@@ -1330,10 +1406,11 @@ function buildArt() {
   // the shaft's shadow on the wall (world units, 56 px wide) and, on wide screens, the side falloff (screen px)
   const vw = L.W / 2 - L.S * 215;
   VIG = null;
-  if (vw > 30) { // flat bands, cheaper than stretching a strip over the whole height (software raster at 1920x1080)
-    const e1 = clamp((L.S * 70) / vw, 0, 1), e2 = clamp((L.S * 230) / vw, 0, 1), stops = [[0, 0.74], [1 - e2, 0.6], [1 - e1, 0.4], [1, 0]];
+  if (vw > 30) { // flat bands over the outer 62 % of each side only: the darker wall needs less falloff, and every band
+    // is a blended fill (software raster at 1920x1080)
+    const stops = [[0, 0.6], [0.3, 0.32], [0.62, 0], [1, 0]];
     const al = f => { for (let i = 1; i < stops.length; i++) if (f <= stops[i][0]) { const p = stops[i - 1], q = stops[i]; return lerp(p[1], q[1], clamp((f - p[0]) / Math.max(1e-6, q[0] - p[0]), 0, 1)); } return 0; };
-    const n = 14, bands = [];
+    const n = 10, bands = [];
     for (let i = 0; i < n; i++) { const x0 = Math.round(vw * i / n), x1 = Math.round(vw * (i + 1) / n), a = al((i + 0.5) / n); if (a > 0.01) bands.push([x0, x1 - x0, rgba([3, 5, 18], a)]); }
     VIG = { w: vw, bands };
   }
@@ -1346,9 +1423,10 @@ function buildArt() {
 function placeCss(el, x, y, w, h) { el.style.left = x + "px"; el.style.top = y + "px"; el.style.width = w + "px"; el.style.height = h + "px"; }
 const shaftHalf = () => 158 * L.S;                    // half width of the shaft's frame on screen (CSS px)
 const sideCx = s => s < 0 ? (L.W / 2 - shaftHalf()) / 2 : L.W - (L.W / 2 - shaftHalf()) / 2;
-function resultBox() {
-  const u = L.u, r = R && R.result, w = Math.min(L.W - 20, 330 * u), h = (r ? r.h : 286) * u;
-  const y = state === "demo-over" ? Math.max(14 * u, L.H * 0.38 - h / 2) : L.wide ? Math.max(14 * u, (L.H - h - 64 * u) * 0.45) : Math.max(56 * u, L.H * 0.12);
+function resultBox(r, demoOver) {
+  r = r || (R && R.result); demoOver = demoOver != null ? demoOver : state === "demo-over";
+  const u = L.u, w = Math.min(L.W - 20, 330 * u), h = (r ? r.h : 286) * u;
+  const y = demoOver ? Math.max(14 * u, L.H * 0.38 - h / 2) : L.wide ? Math.max(14 * u, (L.H - h - 64 * u) * 0.45) : Math.max(56 * u, L.H * 0.12);
   return { x: (L.W - w) / 2, y, w, h };
 }
 function pauseBox() { const u = L.u, w = Math.min(L.W - 20, 300 * u), h = 230 * u; return { x: (L.W - w) / 2, y: Math.max(56 * u, (L.H - h) * 0.4), w, h }; }
@@ -1373,12 +1451,12 @@ function layoutUI() {
 }
 
 // ---------- GAME-SPECIFIC: drawing ----------
-// demo framing: the wide demo keeps the play camera (a closer one cost lookahead under 0.82 s) and draws the pod
-// larger instead (see drawPod); the hook stays so a recording can try a closer camera
-const demoZoom = () => 1;
+// demo framing: the wide recording moves in 15 % and rides the pod at 68 % of the height, so the shaft, the 100 % ring
+// and the crash sit in the frame (the video keeps at least 0.69 s of shaft visible ahead at 880 px/s)
+const demoZoom = () => (DEMO && L.wide ? 1.15 : 1);
 function camera(t) {
   const W = L.W, H = L.H, Sc = L.S, M = spinM(t), sh = Math.sqrt(Math.max(0, 1 - M * M));
-  // sway: 2 degrees from the plates, 4 from the first spin, the full sway from the second spin (each eased in over a bar)
+  // sway: 2 degrees from the plates, 4 from the first spin (9.7 s), the full sway from the second spin (each eased in over a bar)
   const swA = (t >= T_SWAYF ? lerp(SW0, AMAX, clamp((t - T_SWAYF) / BAR, 0, 1)) : t >= T_SWAY0 ? lerp(2, SW0, clamp((t - T_SWAY0) / BAR, 0, 1)) :
     t >= T_PLATE ? 2 * clamp((t - T_PLATE) / BAR, 0, 1) : 0) * RM;
   // at 100 % the roll eases to level and holds for a beat, so the goal moment reads
@@ -1397,7 +1475,7 @@ function camera(t) {
   const cr = Math.cos(rot), sr = Math.sin(rot), dz = demoZoom();
   const zf = clamp((W / 2 - EDGE) / (Sc * z * dz * (150 * cr + Math.abs(sr) * PIV)), ZMIN, 1);
   // the vertical demo rides the pod higher (64 % of the height), clear of the band a Shorts caption covers
-  const k = Sc * z * zf * dz, ay = (DEMO && !L.wide ? 0.64 : dz > 1 ? 0.8 : lerp(ANCH, 0.8, cam.od)) * H;
+  const k = Sc * z * zf * dz, ay = (DEMO ? (L.wide ? 0.68 : 0.64) : lerp(ANCH, 0.8, cam.od)) * H;
   const sk = shakeOffset(10);
   const ox = W / 2 + cam.kick * Sc + sk.x - k * sr * PIV - (push ? k * R.x * M * push / (1 + push) : 0), oy = ay + sk.y - k * PIV * (1 - cr);
   const reach = Math.hypot(Math.max(ox, W - ox, 1), Math.max(oy, H - oy, 1)) / k + 40;
@@ -1412,7 +1490,10 @@ function draw(now) {
   drawWall(c, t, pal, V);
   const k = V.k, cr = V.cr, sr = V.sr, camA = cam.a, reach = V.reach, aTop = camA + reach, aBot = camA - reach, M = V.M, sh = V.sh;
   c.setTransform(dpr * k * cr, dpr * k * sr, -dpr * k * sr, dpr * k * cr, dpr * V.ox, dpr * V.oy);
-  // shaft shadow on the wall and the interior (the interior keeps its full width through a barrel spin)
+  // the shaft itself: its shadow on the wall, the interior, its painted lines and numbers. A barrel spin turns all of it
+  // with the rails (it narrows to an edge at mid-turn and opens again), never mirrored, so the numbers stay readable
+  const ms = Math.max(0.1, Math.abs(M));
+  c.save(); c.scale(ms, 1);
   for (let j = 0; j < 7; j++) { // flat bands of shadow on the wall beside the shaft, darkest at the rail
     c.fillStyle = "rgba(3,6,24," + SHADE[j] + ")"; c.fillRect(150 + 8 * j, -reach, 8, 2 * reach); c.fillRect(-158 - 8 * j, -reach, 8, 2 * reach);
   }
@@ -1430,7 +1511,7 @@ function draw(now) {
   for (let f = Math.max(0, fl(aBot / FLOOR)); f * FLOOR < aTop + 60; f++) {
     const fy = camA - f * FLOOR, big = f % 25 === 0 && f > 0, on = big && R.floorMax >= f;
     c.fillStyle = on ? rgba("cyan", 0.55) : rgba([120, 165, 255], 0.38); c.fillRect(-147, fy - 1, 294, on ? 3 : 2);
-    text(c, (f < 10 ? "00" : f < 100 ? "0" : "") + f, 0, fy - 64, 84, on ? rgba("cyan", 0.2) : rgba([130, 175, 255], 0.085), { w: 800 });
+    text(c, (f < 10 ? "00" : f < 100 ? "0" : "") + f, 0, fy - 64, 84, on ? rgba("cyan", 0.2) : rgba([130, 175, 255], 0.085), { w: 800 });   // text: a baked image cost more raster on a phone
     c.fillStyle = rgba([150, 190, 255], 0.5); c.fillRect(-147, fy - 9, 10, 8); c.fillRect(137, fy - 9, 10, 8);
     c.fillStyle = rgba("cyan", 0.25 + 0.75 * cam.beat); c.fillRect(-145, fy - 7, 6, 4); c.fillRect(139, fy - 7, 6, 4);
   }
@@ -1440,12 +1521,11 @@ function draw(now) {
   const span = 2 * reach + 400, len = 20 + SPEED(t) * 0.17;
   for (const st of streaks) { const sy = mod(st.o + camA * 2.5 * st.k, span) - reach - 200; c.moveTo(st.x, sy); c.lineTo(st.x, sy + len * st.k); }
   c.strokeStyle = "rgba(150,220,255,0.24)"; c.lineWidth = 1.4; c.stroke();
-  // best line (the record of this save), speed gates and the gold goal line
-  const bA = bestAltOf();
-  if (!DEMO && R.mode === "play" && bA > 0 && bA > aBot && bA < aTop) {
+  // best line (the record of this save; its word is drawn after the hazards), speed gates and the gold goal line
+  const bA = bestAltOf(), showBest = !DEMO && R.mode === "play" && bA > 0 && bA > aBot && bA < aTop;
+  if (showBest) {
     const by = camA - bA; c.beginPath(); for (let bx = -147; bx < 147; bx += 14) c.rect(bx, by - 1, 8, 2);
     c.fillStyle = rgba("gold", 0.75); c.fill();
-    if (!R.passedBest) text(c, S("best"), -144, by - 12 * L.u / k, 14 * L.u / k, rgba("gold", 0.85), { a: "left", w: 700, ol: "bg", ow: 0.22 });
   }
   // speed gates: a quiet dashed line with chevrons (the only bright line across the shaft is a live laser)
   for (const g of GATES) {
@@ -1460,11 +1540,23 @@ function draw(now) {
     const gy = camA - A_GOAL;
     c.globalAlpha = 0.7; c.drawImage(GLOW.g, -175, gy - 24, 350, 48); c.globalAlpha = 1;
     c.fillStyle = C("gold"); c.fillRect(-147, gy - 2.5, 294, 5);
-    text(c, "100%", 0, gy - 26, 40, rgba("gold", 0.92), { w: 800 });
+    // on a phone its word fades while it passes under the top HUD, so "100%" never sits on the live % readout
+    const ty = toScreen(V, 0, A_GOAL).y - 26 * V.k, ga = L.wide ? 1 : clamp((ty - 60 * L.u) / (40 * L.u), 0, 1);
+    if (ga > 0) text(c, "100%", 0, gy - 26, 40, rgba("gold", 0.92 * ga), { w: 800 });
   }
   drawSpinMarks(c, t, aBot, aTop, camA, M);
+  c.restore();
   drawRails(c, t, aBot, aTop, camA, M, sh);
   drawHazards(c, t, aBot, aTop, camA, M);
+  // the best line's word sits on the rail side away from the pod, or the other side when a plate is there, so no
+  // hazard covers it (bar 1.4.5)
+  if (showBest && !R.passedBest) {
+    let sd = R.side ? -1 : 1;
+    const blocked = sg => LV.pl.some(p => p.s !== 2 && (p.s ? 1 : -1) === sg && p.a0 < bA + 40 && p.a1 > bA - 10);
+    if (blocked(sd) && !blocked(-sd)) sd = -sd;
+    const by = camA - bA, bxs = sd * 144 * (M < 0 ? -1 : 1);
+    text(c, S("best"), bxs, by - 12 * L.u / k, 14 * L.u / k, rgba("gold", 0.9), { a: bxs < 0 ? "left" : "right", w: 700, ol: "bg", ow: 0.22 });
+  }
   drawPod(c, t, camA, M, sh);
   drawParts(c, camA, M);
   // goal ring sweeps out from the pod
@@ -1490,7 +1582,13 @@ function draw(now) {
   else if (tOut >= 0 && tOut < 1 && !DEMO) drawTitle(c, now, tOut, k);
   if (state === "paused") drawPause(c, now);
   if (isOver()) drawOver(c, now);
-  if (DEMO) drawDemoLabel(c); else drawSys(c);
+  // a board that was just left lifts away and fades over 180 ms instead of cutting out (bar 1.8.1)
+  if (boardOut) {
+    const kq = (perfT - boardOut.t) / 0.18;
+    if (kq >= 1 || kq < 0) boardOut = null;
+    else { c.save(); c.globalAlpha = 1 - kq; c.translate(0, -50 * L.u * kq * kq); if (boardOut.kind === "pause") drawPause(c, now, true); else drawOver(c, now, boardOut); c.restore(); }
+  }
+  if (DEMO) drawDemoLabel(c, V); else drawSys(c);
   textEnd();
 }
 // The back wall in screen space: one tiled copy per frame (two during the 0.6 s crossfade), panel rows that light
@@ -1521,18 +1619,22 @@ function drawWall(c, t, pal, V) {
   // wide screens: a pipe bundle on the left wall and a caged service ladder on the right, each drawn once
   const big = rx > 700, lo7 = mod(ga7, 24), ho7 = mod(ga7, 96), co7 = mod(ga7, 170);
   c.fillStyle = C("girder"); c.fill();
-  if (big) { // steel pipes and a caged ladder, a step brighter than the wall so each side has one clear shape
+  if (big) { // steel pipes and a caged ladder, lit like the rails so each side has one clear shape (bar 1.9.4)
     c.beginPath();
     c.rect(-688, top, 12, bot - top); c.rect(-668, top, 18, bot - top); c.rect(-642, top, 10, bot - top);
     c.rect(636, top, 5, bot - top); c.rect(675, top, 5, bot - top);
-    c.fillStyle = C("steelK"); c.fill();
+    c.fillStyle = C("steelD"); c.fill();
     c.beginPath();
     for (let y = top - 170 + co7; y < bot; y += 170) c.rect(-694, y, 68, 10);
     for (let y = top - 96 + ho7; y < bot; y += 96) { c.rect(624, y, 68, 4); c.rect(624, y, 4, 22); c.rect(688, y, 4, 22); }
     c.rect(-686, top, 3, bot - top); c.rect(-664, top, 4, bot - top); c.rect(-641, top, 3, bot - top);
     for (let y = top - 24 + lo7; y < bot; y += 24) c.rect(641, y, 34, 3);   // ladder rungs
     c.rect(636, top, 2, bot - top); c.rect(675, top, 2, bot - top);
-    c.fillStyle = rgba("steelD", 0.5); c.fill();
+    c.fillStyle = rgba("ice", 0.55); c.fill();
+    // three status lamps on the pipe clamps blink on the beat (cyan: the machine is running)
+    c.beginPath();
+    for (let y = top - 170 + co7; y < bot; y += 170) c.rect(-662, y + 2, 8, 6);
+    c.fillStyle = rgba("cyanL", 0.35 + 0.6 * cam.beat); c.fill();
   }
   c.beginPath();
   for (let gy = fl((top - ga7) / gsp) * gsp; gy + ga7 < bot; gy += gsp) {
@@ -1585,7 +1687,7 @@ function railPieces(s, aBot, aTop) { // flat list of [a0, a1, par, pulse?, piece
   return out;
 }
 // Rails sit at x * M (barrel spin); widths stay constant, the near rail grows and the far one dims while edge-on.
-const RAILC = rgb(mix("steel", "steelD", 0.35));
+const RAILC = rgb(mix("steel", "steelD", 0.55));   // brushed steel: under the pod and the hazards in value
 function drawRails(c, t, aBot, aTop, camA, M, sh) {
   const pcs = [railPieces(0, aBot, aTop), railPieces(1, aBot, aTop)];
   const RW = [1 - 0.3 * sh, 1 + 0.5 * sh], RA = [1 - 0.55 * sh, 1], VR = Math.min(vs(), 1.2);
@@ -1693,7 +1795,7 @@ function drawHazards(c, t, aBot, aTop, camA, M) {
   const VR = vs(), hitObj = R.dead ? R.dobj : null, blink = R.dead && (fl(perfT * 6) & 1);
   // glow under plates
   for (const p of LV.pl) {
-    if (p.a1 < aBot || p.a0 > aTop) continue;
+    if (p.a1 < aBot || p.a0 > aTop || p.off) continue;
     const y0 = camA - p.a1, y1 = camA - p.a0, gx0 = Math.min(M * p.x0, M * p.x1);
     c.globalAlpha = 0.6 + 0.25 * cam.beat; c.drawImage(GLOW.o, gx0 - 34, y0 - 34, Math.abs(M * (p.x1 - p.x0)) + 68, y1 - y0 + 68);
   }
@@ -1706,25 +1808,31 @@ function drawHazards(c, t, aBot, aTop, camA, M) {
     let X0 = M * v0, X1 = M * v1; if (X0 > X1) { const sw = X0; X0 = X1; X1 = sw; }
     const tL = p.s === 2 || Math.abs(X0) < Math.abs(X1), tR = p.s === 2 || Math.abs(X1) < Math.abs(X0);
     platePath(c, X0, X1, y0, y1, tL, tR, 6 * VR);
+    if (p.off) { // a forgiven first plate has shorted out: a dim steel shape from then on
+      c.fillStyle = rgba("plateK", 0.6); c.fill(); c.lineJoin = "miter"; c.strokeStyle = rgba("steelD", 0.6); c.lineWidth = 1.5; c.stroke();
+      continue;
+    }
+    // a hazard-striped body: lit orange with dark diagonal stripes, a step brighter than the rails' steel in grey
     c.fillStyle = p === hitObj && blink ? C("orangeL") : C("plateK"); c.fill();
-    c.fillStyle = rgba("orange", 0.22 + 0.2 * cam.beat); c.fill();
+    c.fillStyle = rgba("orange", 0.56 + 0.14 * cam.beat); c.fill();
     const hw = X1 - X0 - 6, dy = hw * 0.6;
     c.beginPath();
-    for (let vy = y0 + 3; vy + dy < y1 - 3; vy += 10) { c.moveTo(X0 + 3, vy + dy); c.lineTo(X1 - 3, vy); }
-    c.strokeStyle = "rgba(255,120,40,0.8)"; c.lineWidth = 1.6; c.stroke();
+    for (let vy = y0 + 2; vy + dy < y1 - 2; vy += 11) { c.moveTo(X0 + 2, vy + dy); c.lineTo(X1 - 2, vy); }
+    c.strokeStyle = rgba("plateK", 0.85); c.lineWidth = 4; c.stroke();
     platePath(c, X0, X1, y0, y1, tL, tR, 6 * VR);
     c.lineJoin = "miter"; c.strokeStyle = C("orange"); c.lineWidth = 3 * VR; c.stroke();
     c.strokeStyle = C("orangeL"); c.lineWidth = 2.4 * VR; c.stroke();
     c.beginPath(); crackle(c, X0, X1, y0, y1, p.sd, 3 + ((y1 - y0) / 60 | 0));
     c.strokeStyle = "rgba(255,214,170,0.95)"; c.lineWidth = 1.5; c.stroke();
   }
-  // lasers on their beat grid: off (a thin dim guide), ghost (a charge bar growing from the emitter over 2 beats,
-  // a bright edge 0.12 s before), live (a thick beam for 1 beat, fading over its last 0.1 s)
+  // lasers on their beat grid. Only what can kill is orange (bar 1.7.2): off is a thin steel guide; charging is a
+  // white-steel bar growing from the emitter over 2 beats, then orange dashes 0.12 s before it fires; live is a thick
+  // orange beam for 1 beat, fading over its last 0.1 s
   for (const z of LV.lz) {
     if (z.a < aBot - 20 || z.a > aTop + 20) continue;
     const y = camA - z.a, ex = M * (z.s ? 147 : -147), tipX = M * (z.s ? z.x0 : z.x1), dir = tipX > ex ? 1 : -1;
     const bx0 = Math.min(ex, tipX), bw = Math.abs(tipX - ex);
-    const b = fl(t / BEAT), kk = mod(b - z.ph, 4), inb = t - b * BEAT;
+    const b = fl(t / BEAT), kk = z.off ? 1 : mod(b - z.ph, 4), inb = t - b * BEAT;
     if (kk === 0) {
       const fade = inb > BEAT - 0.1 ? (BEAT - inb) / 0.1 : 1;
       c.globalAlpha = 0.8 * fade; c.drawImage(GLOW.o, bx0 - 14, y - 22 * VR, bw + 28, 44 * VR);
@@ -1733,28 +1841,27 @@ function drawHazards(c, t, aBot, aTop, camA, M) {
       c.globalAlpha = 0.9 * fade; c.drawImage(GLOW.ol, tipX - 16, y - 16, 32, 32);
     } else if (kk >= 2) {
       const qq = ((kk - 2) * BEAT + inb) / (2 * BEAT), cl = bw * qq, left = 2 * BEAT - ((kk - 2) * BEAT + inb);
-      c.fillStyle = rgba("orange", 0.5); c.fillRect(bx0, y - VR, bw, 2 * VR);
-      c.globalAlpha = 0.5; c.drawImage(GLOW.o, (dir > 0 ? ex : ex - cl) - 8, y - 12, cl + 16, 24);
-      c.globalAlpha = 1; c.fillStyle = rgba("orangeL", 0.92); c.fillRect(dir > 0 ? ex : ex - cl, y - 1.5 * VR, cl, 3 * VR);
-      if (left < 0.12) { c.beginPath(); for (let dx = 0; dx < bw; dx += 10) c.rect(bx0 + dx, y - 0.5, Math.min(5, bw - dx), 1); c.fillStyle = rgba("orangeL", 0.6); c.fill(); }   // about to fire: a thin dashed line, never the live beam's look
-      c.fillStyle = rgba("orange", 0.9); c.fillRect(tipX - 1, y - 7 * VR, 2, 14 * VR);
+      c.fillStyle = rgba("steelD", 0.6); c.fillRect(bx0, y - VR, bw, 2 * VR);
+      c.fillStyle = rgba("ice", 0.85); c.fillRect(dir > 0 ? ex : ex - cl, y - 1.5 * VR, cl, 3 * VR);
+      if (left < 0.12) { c.beginPath(); for (let dx = 0; dx < bw; dx += 10) c.rect(bx0 + dx, y - 1, Math.min(5, bw - dx), 2); c.fillStyle = rgba("orangeL", 0.8); c.fill(); }   // about to fire: thin orange dashes, never the live beam's look
+      c.fillStyle = rgba("ice", 0.8); c.fillRect(tipX - 1, y - 7 * VR, 2, 14 * VR);
     } else {
-      c.fillStyle = rgba("orange", 0.4); c.fillRect(bx0, y - 0.75 * VR, bw, 1.5 * VR);
+      c.fillStyle = rgba("steelD", z.off ? 0.3 : 0.5); c.fillRect(bx0, y - 0.75 * VR, bw, 1.5 * VR);
       c.fillRect(tipX - 1, y - 5 * VR, 2, 10 * VR);
     }
     c.globalAlpha = 1;
-    // emitter housing; its lamp blinks on the beat while charging
+    // emitter housing (steel); its orange lamp blinks on the beat while charging and burns while live
     const hx = dir > 0 ? ex : ex - 14;
     c.fillStyle = C("plateK"); c.fillRect(hx, y - 8 * VR, 14, 16 * VR);
-    c.strokeStyle = C("orange"); c.lineWidth = 2; c.strokeRect(hx, y - 8 * VR, 14, 16 * VR);
-    const lampA = kk >= 2 ? 0.35 + 0.65 * cam.beat : kk === 0 ? 1 : 0.5;
+    c.strokeStyle = C("steelD"); c.lineWidth = 2; c.strokeRect(hx, y - 8 * VR, 14, 16 * VR);
+    const lampA = z.off ? 0.12 : kk >= 2 ? 0.35 + 0.65 * cam.beat : kk === 0 ? 1 : 0.3;
     c.fillStyle = rgba("orangeL", lampA); c.fillRect(ex + dir * 9 - 2.5, y - 3.5 * VR, 5, 7 * VR);
   }
 }
 const TPX = new Float64Array(TRN), TPY = new Float64Array(TRN);
 const TRAIL = [[0.32, rgba("cyan", 0.07)], [0.21, rgba("cyan", 0.14)], [0.11, rgba("cyan", 0.22)], [0.18, "rgba(220,250,255,0.7)"]];
 function drawPod(c, t, camA, M, sh) {
-  const sg = M < 0 ? -1 : 1, P = vs() * (DEMO && L.wide ? 1.9 : 1);   // the recorded wide demo keeps the pod over 3 % of the frame width
+  const sg = M < 0 ? -1 : 1, P = vs() * (DEMO && L.wide ? 1.65 : 1);   // the recorded wide demo keeps the pod over 3 % of the frame width
   // trail: the last 0.32 s of the path in three fading lengths, so it tapers; every flip leaves a corner
   if (trN > 2) {
     const tNow = R.t;
@@ -1801,9 +1908,9 @@ function drawPod(c, t, camA, M, sh) {
   }
   if (R.dead && R.freeze <= 0 && R.dk !== "void" && R.dk !== "pulse") {
     // shock ring where the pod burst, so the cause stays readable
-    const kk = clamp(R.dclock / 0.5, 0, 1), hy = camA - R.palt, hx = R.x * M;
-    c.globalAlpha = 1 - kk; c.drawImage(GLOW.o, hx - 40 - 30 * kk, hy - 40 - 30 * kk, 80 + 60 * kk, 80 + 60 * kk);
-    c.strokeStyle = C("orangeL"); c.lineWidth = 3 * (1 - kk) + 1; c.beginPath(); c.arc(hx, hy, 16 + 70 * Math.sqrt(kk), 0, TAU); c.stroke();
+    const kk = clamp(R.dclock / (DEMO ? 0.35 : 0.5), 0, 1), hy = camA - R.palt, hx = R.x * M, big = DEMO ? 2.2 : 1;
+    c.globalAlpha = 1 - kk; c.drawImage(GLOW.o, hx - (40 + 30 * kk) * big, hy - (40 + 30 * kk) * big, (80 + 60 * kk) * big, (80 + 60 * kk) * big);
+    c.strokeStyle = C("orangeL"); c.lineWidth = (3 * (1 - kk) + 1) * big; c.beginPath(); c.arc(hx, hy, (16 + 70 * Math.sqrt(kk)) * big, 0, TAU); c.stroke();
     c.globalAlpha = 1;
     return;
   }
@@ -1832,8 +1939,8 @@ function drawPod(c, t, camA, M, sh) {
     }
   }
   c.globalAlpha = R.t < R.ghost && (fl(perfT * 14) & 1) ? 0.35 : 1;   // a shield just broke: the pod blinks while it passes through
-  const lean = R.dead ? R.rot : clamp(vx / 2400, -1, 1) * 0.5;
-  c.rotate(lean); c.scale(1.15 * P * dsc, 1.15 * P * dsc);
+  const lean = R.dead ? R.rot : clamp(vx / 2400, -1, 1) * 0.5, pop = 1 + 0.3 * Math.sin(Math.PI * Math.min(1, (1 - (R.pop || 0)) * 1.4)) * (R.pop > 0 ? 1 : 0);   // a close call pops the pod
+  c.rotate(lean); c.scale(1.15 * P * dsc * pop, 1.15 * P * dsc * pop);
   // flight stretches along the travel (x); a landing compresses along the impact (x) and bulges along the rail (y)
   const st = 1 + Math.abs(vx) / 2400 * 0.18;
   c.scale(st * (1 - 0.22 * R.sq), (1 / st) * (1 + 0.14 * R.sq));
@@ -1873,14 +1980,19 @@ function drawParts(c, camA, M) {
 // measured width to the screen and kept below the HUD (and below the demo's title) (bar 1.4.5, 1.4.7).
 function drawLabel(c, V) {
   const lb = R.label; if (!lb || isTitle()) return;   // the title keeps only its own words; attract praise stays quiet
-  const age = perfT - lb.t; if (age > 0.8) { R.label = null; return; }
-  const u = L.u, sz = (DEMO ? 24 : 19) * u, str = S(lb.key), tw = textW(c, str, sz, { w: 800 }) * 1.12;
+  const age = perfT - lb.t, life = lb.dur || 0.8; if (age > life) { R.label = null; return; }
+  // the room for a label: the screen, or on a wide screen the span between the left readout and the right gauge
+  const u = L.u, sz = (DEMO ? 24 : lb.teach ? 17 : 19) * u, str = S(lb.key), o = { w: 800 };
+  const lo = L.wide && !DEMO ? sideCx(-1) + 70 * u : 8 * u, hi = L.wide && !DEMO ? sideCx(1) - 32 * u : L.W - 8 * u, maxW = hi - lo;
+  // a note wider than the screen (a long English lesson on a narrow phone) breaks into two lines instead of running off
+  const lines = textW(c, str, sz, o) * 1.12 > maxW ? fitLines(c, str, sz, o, maxW / 1.2) : [str];
+  const tw = Math.max(...lines.map(l => textW(c, l, sz, o))) * 1.12;
   const p = toScreen(V, lb.x, R.palt), dir = p.x < L.W / 2 ? 1 : -1, sc = age < 0.16 ? lerp(0.8, 1, easeBack(age / 0.16)) : 1;
-  c.globalAlpha = age > 0.6 ? 1 - (age - 0.6) / 0.2 : 1;
-  const X = clamp(p.x + dir * (26 * u + tw / 2), tw / 2 + 8 * u, L.W - tw / 2 - 8 * u);
-  const Y = clamp(p.y - (DEMO ? 64 : 36) * u - age * 24 * u, (DEMO && !L.wide ? 136 : 80) * u, L.H - 90 * u);
+  c.globalAlpha = age > life - 0.2 ? (life - age) / 0.2 : 1;
+  const X = tw > maxW ? (lo + hi) / 2 : clamp(p.x + dir * (26 * u + tw / 2), lo + tw / 2, hi - tw / 2);
+  const Y = clamp(p.y - (DEMO ? 64 : 36) * u - Math.min(age, 0.8) * 24 * u, (DEMO && !L.wide ? 136 : 80) * u, L.H - 90 * u);
   c.save(); c.translate(X, Y); c.scale(sc, sc);
-  text(c, str, 0, 0, sz, lb.col, { w: 800, ol: "bg", ow: 0.26 });
+  lines.forEach((l, i) => text(c, l, 0, (i - (lines.length - 1) / 2) * sz * 1.2, sz, lb.col, { w: 800, ol: "bg", ow: 0.26 }));
   c.restore(); c.globalAlpha = 1;
 }
 // ---- UI (screen space, CSS px): plain, quiet, no glow ----
@@ -1920,7 +2032,7 @@ function drawHud(c, now) {
     // left wall: the readout (height, best, the one-line notice); right wall: the altitude gauge, a steel column with
     // a lit fill, whose 25 / 50 / 75 / 100 marks are the record lamps from the second run on (bar 1.6.2)
     const cx = sideCx(-1);
-    pctText(cx, H * 0.42, 50 * u, gold ? "gold" : rgba("white", 0.92), { w: 800 });
+    pctText(cx, H * 0.42, 44 * u, gold ? "gold" : rgba("white", 0.8), { w: 800 });
     text(c, S("height"), cx, H * 0.42 - 40 * u, 15 * u, "uiD", { w: 700 });
     if (nt) text(c, ntS, cx, H * 0.42 + 44 * u, 18 * u, ntC, { w: 800, max: W / 2 - shaftHalf() - 30 * u });
     else if (play && best > 0 && pct <= best && !DEMO) text(c, S("best") + " " + best + "%", cx, H * 0.42 + 42 * u, 16 * u, rgba("gold", 0.9), { w: 700 });
@@ -1948,12 +2060,29 @@ function drawHud(c, now) {
   else if (play && best > 0 && pct <= best && !DEMO) text(c, S("best") + " " + best + "%", W / 2, 53 * u, 14 * u, rgba("ui", 0.75), { w: 700, ol: "bg", ow: 0.2 });
 }
 // A UI line that must stay readable: it shrinks at most to 0.92 of its size (never under 14 units), and otherwise
-// breaks at the space nearest its middle onto two lines (bar 1.4.4). Returns the lines to draw.
+// breaks onto two lines near its middle (bar 1.4.4): at a space in English; in Japanese, which has no spaces, after a
+// particle or a comma (で の を に と は が 、), never before 。 or 、. Returns the lines to draw.
 function fitLines(c, str, size, o, maxW) {
   if (textW(c, str, size, o) * 0.92 <= maxW) return [str];
+  const mid = str.length / 2, near = (i, b) => b < 0 || Math.abs(i - mid) < Math.abs(b - mid);
   let best = -1;
-  for (let i = 0; i < str.length; i++) if (str[i] === " " && (best < 0 || Math.abs(i - str.length / 2) < Math.abs(best - str.length / 2))) best = i;
-  return best < 0 ? [str] : [str.slice(0, best), str.slice(best + 1)];
+  for (let i = 0; i < str.length; i++) if (str[i] === " " && near(i, best)) best = i;
+  if (best >= 0) {
+    const two = [str.slice(0, best), str.slice(best + 1)];
+    if (two.every(l => textW(c, l, size, o) * 0.92 <= maxW)) return two;
+    // still too wide (a long English line on a narrow plate): wrap word by word, so the text keeps its size
+    const out = []; let cur = "";
+    for (const w of str.split(" ")) { const t = cur ? cur + " " + w : w; if (cur && textW(c, t, size, o) * 0.92 > maxW) { out.push(cur); cur = w; } else cur = t; }
+    return cur ? out.concat(cur) : out;
+  }
+  let cut = -1, any = -1;
+  for (let i = 2; i < str.length - 1; i++) {
+    if ("。、".includes(str[i])) continue;
+    if ("でのをにとはが、".includes(str[i - 1]) && near(i, cut)) cut = i;
+    if (near(i, any)) any = i;
+  }
+  const at = cut >= 0 ? cut : any;
+  return at < 0 ? [str] : [str.slice(0, at), str.slice(at)];
 }
 // the title plate: on a phone it is clamped to both rails across the shaft and rolls with it; on a wide screen it
 // hangs from the girder on the left wall. Sizes are CSS px; (0, 0) is the plate's top centre.
@@ -2009,9 +2138,9 @@ function drawCount(c) { // the count-in after a pause
   const n = Math.max(1, Math.ceil(R.hold / BEAT - 1e-6)), f = R.hold / BEAT - (n - 1), u = L.u;
   text(c, n, L.W / 2, L.H * 0.42, (56 + 14 * f) * u, "white", { w: 900, ol: "bg", ow: 0.14 });
 }
-function drawPause(c, now) {
+function drawPause(c, now, leaving) {
   c.fillStyle = "rgba(2,4,14,0.5)"; c.fillRect(0, 0, L.W, L.H);
-  const b = pauseBox(), u = L.u, dy = -40 * u * (1 - easeOut((T() - pauseT) / 200));
+  const b = pauseBox(), u = L.u, dy = leaving ? 0 : -40 * u * (1 - easeOut((T() - pauseT) / 200));
   c.save(); c.translate(0, dy);
   hangRods(c, b, -dy);
   steelPlate(c, b.x, b.y, b.w, b.h, 1);
@@ -2029,8 +2158,8 @@ function hangRods(c, b, top) {
     c.lineWidth = 1.5; c.strokeStyle = C("steelD"); c.strokeRect(x - 6 * u + 0.75, b.y - 7 * u + 0.75, 12 * u - 1.5, 10 * u - 1.5);
   }
 }
-function drawOver(c, now) {
-  const r = R.result, play = state === "over", age = resAge(r, now), u = L.u, b = resultBox(), Y = r.rows;
+function drawOver(c, now, ob) { // ob: a board that is leaving (drawn whole, as it was)
+  const r = ob ? ob.r : R.result, play = ob ? ob.play : state === "over", age = ob ? 1e6 : resAge(r, now), u = L.u, b = resultBox(r, ob ? ob.demo : null), Y = r.rows;
   const dy = -(b.y + b.h + 70 * u) * (1 - easeOut(age / RES.drop));
   c.save(); c.translate(0, dy);
   hangRods(c, b, -dy);
@@ -2074,15 +2203,20 @@ function drawOver(c, now) {
   if (Y.goal && age > RES.goal) text(c, S("next") + " " + S(r.goal.k, r.goal.n), cx, b.y + Y.goal * u, 15 * u, "cyanL", { w: 700, max: b.w - 30 * u });
   // the buttons hang under the board and ride in with it (they come after the board, never before it)
   if (play) {
-    const ready = retryReady();
+    const ready = ob || retryReady();
     btnBox(c, UI.retry, S("retry"), ready, 17); btnBox(c, UI.toTitle, S("toTitle"), false, 15);
   }
   c.restore();
 }
-function drawDemoLabel(c) { // ?demo=1: a small bilingual title instead of any tool, BEST or button, under the top HUD
+function drawDemoLabel(c, V) { // ?demo=1: a small bilingual title instead of any tool, BEST or button, under the top HUD
   const u = L.u, x = L.wide ? sideCx(-1) : L.W / 2, y = L.wide ? L.H * 0.16 : 92 * u;
+  // the gold 100 % line passes behind it on a phone: the title steps aside (fades) while they would overlap (bar 1.4.5)
+  let al = 1;
+  if (!L.wide) { const gy = toScreen(V, 0, A_GOAL).y - 26 * V.k, d = Math.abs(gy - (y + 10 * u)); al = clamp((d - 34 * u) / (40 * u), 0, 1); }
+  c.globalAlpha = al;
   text(c, STRINGS.ja.title, x, y, 16 * u, "white", { w: 800, ol: "bg", ow: 0.24 });
   text(c, STRINGS.en.title, x, y + 21 * u, 14 * u, "uiD", { w: 700, ol: "bg", ow: 0.24 });
+  c.globalAlpha = 1;
 }
 function drawSys(c) { // mute, pause and language: small plain glyphs in the top corners
   const u = L.u, gl = (e, kind) => {
@@ -2106,14 +2240,15 @@ function drawSys(c) { // mute, pause and language: small plain glyphs in the top
 function visualStep(dt) { // the camera and particles (the rules never read them)
   if (!R) return;
   const m = spinM(R.t), scrSide = (R.side === 1) !== (m < 0);
-  const tgt = R.dead ? cam.tilt : (scrSide ? 1 : -1) * 4 * DEG * RM;
-  cam.tilt += (tgt - cam.tilt) * (1 - Math.exp(-dt / 0.045));
+  // the roll toward the rail the pod sits on: 2.5 degrees, eased over about 0.2 s, so dense flips do not jerk the view
+  const tgt = R.dead ? cam.tilt : (scrSide ? 1 : -1) * 2.5 * DEG * RM;
+  cam.tilt += (tgt - cam.tilt) * (1 - Math.exp(-dt / 0.09));
   cam.kick *= Math.exp(-dt / 0.06);
   cam.zoomEnv = Math.max(0, cam.zoomEnv - dt * 1.1); cam.punch = Math.max(0, cam.punch - dt / 0.35);
   cam.od += (odAim(R.t) - cam.od) * (1 - Math.exp(-dt / 0.7));
   cam.tr += (trAim() - cam.tr) * (1 - Math.exp(-dt / 0.4));
   const bt = R.t / BEAT; cam.beat = Math.exp(-(bt - fl(bt)) * BEAT / 0.12);
-  R.ring = Math.max(0, R.ring - dt * 4); R.flash = Math.max(0, R.flash - dt); R.cring = Math.max(0, R.cring - dt / 0.4);
+  R.ring = Math.max(0, R.ring - dt * 4); R.flash = Math.max(0, R.flash - dt); R.cring = Math.max(0, R.cring - dt / 0.4); R.pop = Math.max(0, (R.pop || 0) - dt / 0.22);
   // landing squash: a damped spring (about 1.05 overshoot at 100 ms, settled by 300 ms), stepped at most 1/120 s
   for (let h = dt; h > 1e-6;) { const e = Math.min(h, 1 / 120); R.sqv += (-1225 * R.sq - 31 * R.sqv) * e; R.sq += R.sqv * e; h -= e; }
   for (const p of parts) {
@@ -2135,9 +2270,13 @@ function applyLang() {
   document.title = STRINGS[lang].title + (lang === "ja" ? " / " + STRINGS.en.title : " / " + STRINGS.ja.title);
   document.querySelectorAll("[data-s]").forEach(el => { el.textContent = S(el.getAttribute("data-s")); });
   $("btnLang").textContent = S("lang");
+  // the drawn glyph buttons get their accessible names from the same table (bar 1.8.4)
+  btnPause.textContent = S("aPause"); btnPause.setAttribute("aria-label", S("aPause"));
+  setMuteLabel();
   layoutUI();
 }
-function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
+function setMuteLabel() { const t = S(AU.muted ? "aSoundOff" : "aSoundOn"); btnMute.textContent = t; btnMute.setAttribute("aria-label", t); }
+function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); setMuteLabel(); }
 
 // ---------- KEEP: flow ----------
 function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
@@ -2147,8 +2286,8 @@ const newSeed = () => ((Math.random() * 4294967296) >>> 0) || 1;
 // overdrive crash into a plate or beam from 25 s. Run B starts at 16.4 s (lasers, the first pulse rail, a close call
 // at about 8 s, a barrel spin at 12.6 s, a crash from 21 s). Each run's flips come from the same AI as the attract play.
 const DEMO_RUNS = [
-  { t0: 46, script: [{ at: 5, act: "close" }, { at: 25, act: "fail" }] },
-  { t0: 16.45, script: [{ at: 7.6, act: "close" }, { at: 21.0, act: "fail" }] }
+  { t0: 46, script: [{ at: 1.7, act: "close" }, { at: 5, act: "close" }, { at: 18.5, act: "close" }, { at: 25, act: "fail" }] },
+  { t0: 16.45, script: [{ at: 0.2, act: "close" }, { at: 7.6, act: "close" }, { at: 21.0, act: "fail" }] }
 ];
 function startAI(mode, seed) {
   state = mode === "demo" ? "demo" : "title";
@@ -2158,8 +2297,15 @@ function startAI(mode, seed) {
     newRun("demo", ((seed == null ? demoSeed : seed) + demoN * 7919) >>> 0, d.t0, { lead: 1, script: d.script, trail: true });
   } else newRun("attract", seed == null ? newSeed() : seed, [8, 14, 20, 26][fl(Math.random() * 4)], { lead: 1 });
 }
-function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+// remember the board on screen when the player leaves it, so draw() can lift it away
+let boardOut = null;
+function boardLeave() {
+  if (state === "paused") boardOut = { kind: "pause", t: perfT };
+  else if (isOver() && R && R.result) boardOut = { kind: "over", r: R.result, play: state === "over", demo: state === "demo-over", t: perfT };
+}
+function toTitle() { boardLeave(); pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
 function startPlay() {
+  boardLeave();
   if (auInit()) auResume();
   sfx.ui(); hideAll();
   const g = R && R.mode === "play" && R.result ? R.result.goal : null;
@@ -2187,6 +2333,7 @@ function pauseGame() {
 }
 function resumeGame() {
   if (state !== "paused") return;
+  boardLeave();
   if (auInit()) auResume();
   state = "play"; ovPause.hidden = true; btnPause.hidden = false;
   R.hold = 3 * BEAT; R.holdN = -1;
@@ -2197,13 +2344,13 @@ function resumeGame() {
 let held = false;
 function onHide() { if (state === "play") pauseGame(); else held = true; }
 function onShow() { held = false; lastNow = performance.now(); }
-const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
+const retryReady = () => T() - overShownAt > 320; // a short lockout so a late gameplay tap does not restart by accident
 function retry() { if (state === "over" && retryReady()) startPlay(); }
 
 // ---------- KEEP: input. Gameplay on pointerdown / keydown; the response is drawn on the next frame ----------
 function press() { // the core input: flip now if attached; in the air the tap is kept for 120 ms
   if (!R || R.dead || state !== "play" || autopilot || R.hold > 0) return;
-  if (R.t - R.lastTap < 0.09) return;            // a nervous double tap counts once
+  if (R.t - R.lastTap < 0.05) return;            // a touch bounce (under 50 ms) counts once; a real second tap is kept
   R.lastTap = R.t;
   if (R.attached) flipNow(); else R.buf = R.t;
 }
@@ -2243,7 +2390,9 @@ document.addEventListener("gesturestart", e => e.preventDefault());
 document.addEventListener("contextmenu", e => e.preventDefault());
 
 // ---------- KEEP: update and loop ----------
-const DIE_MS = { dying: 560, "demo-dying": 1500, "title-dying": 1100 };
+// from the hit to the result board, on the real clock (a slow device must not stretch it), so death to playable is
+// about 0.85 s even at a quarter of the frame rate (bar 1.5.4)
+const DIE_MS = { dying: 500, "demo-dying": 1500, "title-dying": 1100 };
 function update(now, dt) {
   if (!R) return;
   perfT += dt; juiceStep(dt);
@@ -2255,14 +2404,15 @@ function update(now, dt) {
   } else if ((state === "play" || state === "title" || state === "demo") && !held) simStep(dt);
   if (isDying()) {
     // the failure: 0.32 s with every pose held and the cause blinking, then the burst or the fall, then the result
-    if (R.freeze > 0) { R.freeze -= dt; if (R.freeze <= 0) burstNow(); }
+    const since = now - R.dieNow;
+    if (R.freeze > 0) { R.freeze = R.freezeDur - since / 1000; if (R.freeze <= 0) burstNow(); }
     else {
       const sl = state === "demo-dying" ? 0.45 : 1, d = dt * sl;   // the demo lingers in slow motion on its crash
       R.dclock += d;
-      cam.v *= Math.exp(-d * 6); cam.a += cam.v * d;
+      cam.v *= Math.exp(-d * (state === "demo-dying" ? 14 : 6)); cam.a += cam.v * d;   // the recorded crash stays near mid-frame
       if (R.dk === "void" || R.dk === "pulse") { R.x += R.dvx * d; R.dvx *= Math.exp(-d * 1.2); R.dva -= 2400 * d; R.palt += R.dva * d; R.rot += d * 14 * (R.dvx < 0 ? -1 : 1); }
     }
-    R.dying = (R.dying || 0) + dt * 1000;
+    R.dying = since;
     if (R.dying > DIE_MS[state]) {
       if (state === "dying") showOver(now);
       else if (state === "demo-dying") { state = "demo-over"; R.result = makeResult(now); musicLevel("bed"); }
@@ -2272,7 +2422,7 @@ function update(now, dt) {
     R.dclock += dt; cam.v *= Math.exp(-dt * 6); cam.a += cam.v * dt;
     if (R.dk === "void" || R.dk === "pulse") { R.x += R.dvx * dt; R.dva -= 2400 * dt; R.palt += R.dva * dt; R.rot += dt * 14; }
   }
-  if (state === "demo-over" && now - R.result.at > 1400) { demoN++; startAI("demo"); }   // a short board: no dead air in a clip
+  if (state === "demo-over" && now - R.result.at > 1400) { boardLeave(); demoN++; startAI("demo"); }   // a short board: no dead air in a clip
   if (isOver()) resultStep(now);
   const frozen = isDying() && R.freeze > 0;
   if (!frozen) visualStep(Juice.stop > 0 ? dt * 0.25 : dt);
@@ -2311,7 +2461,8 @@ window.__game = {
   view() { return { K: L.K, dpr: L.dpr, w: L.lw, h: L.lh, top: L.y0, left: L.x0, cw: SWL, reduce: Juice.reduce, textMin: TXT.min, wide: L.wide }; },
   texts() { return TXT.last.slice(); },
   target() { const b = cv.getBoundingClientRect(); return { x: b.left + L.W / 2, y: b.top + L.H * 0.6 }; }, // a fixed point on the play field
-  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); },
+  // the voices fire at 0.5 s of the offline render: the compressor needs a moment to settle, and at 0 it would hide the peak
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => SFX[k](0.5, 1)), 2.5); },
   // ---- extra hooks for the balance bots and the generator check (C/bots in the build notes) ----
   sim: {
     get R() { return R; }, get LV() { return LV; },
