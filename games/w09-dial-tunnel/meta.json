@@ -1,0 +1,31 @@
+{
+  "slug": "dial-tunnel",
+  "week": 9,
+  "title_ja": "ダイヤルトンネル",
+  "title_en": "Dial Tunnel",
+  "tagline_ja": "タップ1回で、トンネルごと世界が回る。赤いブロックをよけて、光る機械のトンネルを突っ走るワンボタンゲーム。",
+  "tagline_en": "One tap turns the whole tunnel. Dodge the red blocks and race down a lit machine tunnel with one button.",
+  "how_to_play_ja": "タップ（またはスペース）1回で、トンネルが1面ぶん右に回り、右の面が床になります。赤いブロックや穴のない面へ乗りうつって進みます。四角、三角、六角とトンネルの形が変わるたびに速くなり、ゴールドを取ると点が増えます。",
+  "how_to_play_en": "Each tap (or Space) turns the tunnel one face to the right, so the face on your right becomes the floor. Ride onto faces with no red block or pit. The tunnel changes from square to triangle to hexagon and speeds up each time; gold adds to your score.",
+  "controls": [
+    "tap/click",
+    "space",
+    "enter",
+    "arrow keys",
+    "esc/p to pause",
+    "m to mute"
+  ],
+  "genre": "one-button rhythm runner",
+  "tags": [
+    "one-button",
+    "arcade",
+    "rhythm",
+    "endless",
+    "futuristic",
+    "mobile-friendly",
+    "high-score"
+  ],
+  "session_length_sec": 60,
+  "video_hook_ja": "タップ1回で、トンネルごと世界が回る。",
+  "quality_bar": 1
+}

@@ -1,0 +1,2459 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ダイヤルトンネル / Dial Tunnel</title>
+<style>
+/* AI Weekly Arcade w09 Dial Tunnel, built on the template (STYLE.md; the tunnel look follows kouhei, NOTES.md). Everything is drawn on one canvas; the DOM holds
+   only transparent hit areas over the drawn controls, so tools/qa.mjs can find them by data-qa. */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#06080f}
+body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
+#wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:absolute;inset:0;pointer-events:none}
+.ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+#ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+#ui button:focus{outline:none}
+#ui button:focus-visible{outline:2px dashed #22d3ee;outline-offset:1px}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="cv"></canvas>
+<div id="ui">
+  <section id="ovTitle" class="ov">
+    <button id="btnStart" type="button" data-qa="start" data-s="start"></button>
+    <button id="btnLang" type="button" data-qa="lang"></button>
+  </section>
+  <section id="ovPause" class="ov" hidden>
+    <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
+    <button id="btnRestart" type="button" data-qa="restart" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-qa="quit" data-s="toTitle"></button>
+  </section>
+  <section id="ovOver" class="ov" hidden>
+    <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
+    <button id="btnToTitle" type="button" data-qa="title" data-s="toTitle"></button>
+  </section>
+  <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
+  <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
+</div>
+</div>
+<script>
+(function () {
+"use strict";
+
+// Portal SDK adapter: a portal build can replace this object before the game script runs.
+window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
+
+// ==== ART KIT START ====
+// The house style 「墨と和紙」 (STYLE.md) as code. It knows nothing about the game: copy it unchanged (a week may retune
+// palette values, or add a name to both B and A, 40 names at most). Style A 「つやつや細工」: useStyle("A").
+// tools/qa.mjs relies on TXT, place(), auPeak().
+
+// ---------- palettes: one table per style, same names (the only hex colours in the script) ----------
+const PALS = {
+  B: { // 「墨と和紙」 (default): a bright evening printed on washi
+    ink: "#1c1a24", paper: "#f4ead3", paperD: "#dbc9a6", grey: "#b3aa9c", greyD: "#6f6862",
+    tag: "#dfbb80", tagL: "#f1dcac", tagD: "#ae8752", tagG: "#c8a068", plank: "#5b4233", plankL: "#7c5c47", plankD: "#35271f",
+    pane: "#f2e7cd", paneL: "#d9c6a0", paneT: "#1c1a24", paneS: "#9a3328",
+    red: "#d24a32", redD: "#94302a", redL: "#ec8a6c", gold: "#e2b24e", goldD: "#a37a34", goldL: "#f6dc98", orange: "#ef8f3a", indigo: "#2f4a86",
+    sky0: "#34437a", sky1: "#43568f", sky2: "#566ca6", sky3: "#6d86bd", mist: "#8fa3d1", far: "#3d4c82", mid: "#2f3a68",
+    ground: "#3e4673", groundL: "#545e8e", poolA: "#6a6488", poolB: "#a08a88", lit: "#f3b86c", warm: "#ffd08a", shadeK: "#1b1530", hlK: "#fff6df"
+  },
+  A: { // 「つやつや細工」: a dusk in real materials (lacquer, brass, glaze) under one light
+    ink: "#21161d", paper: "#f7ecd4", paperD: "#d8c49e", grey: "#bdb4aa", greyD: "#6c6470",
+    tag: "#dcb47a", tagL: "#f4dcab", tagD: "#a77a46", tagG: "#c39a62", plank: "#4b3027", plankL: "#704c3b", plankD: "#2b1b1a",
+    pane: "#1c1418", paneL: "#35262c", paneT: "#f7ecd4", paneS: "#fde3a0",
+    red: "#d03a2c", redD: "#8b1e1d", redL: "#f08466", gold: "#e4ae3e", goldD: "#a0691c", goldL: "#fde3a0", orange: "#f28b2e", indigo: "#2b3b7a",
+    sky0: "#1d1c40", sky1: "#3a2c62", sky2: "#7a4470", sky3: "#e08a5a", mist: "#b4607a", far: "#4f3768", mid: "#2f2549",
+    ground: "#4a3030", groundL: "#6a4639", poolA: "#6e4a3a", poolB: "#98694a", lit: "#e8a65a", warm: "#ffb45e", shadeK: "#231a3c", hlK: "#fff8e8"
+  },
+  TUN: { // w09 「ダイヤルトンネル」: a lit machine tunnel (kouhei 2026-10-08 and 10-09: light inside the game world; the UI stays plain)
+    base: "#06080f", vig: "#03040a", panel: "#111832", seam: "#2b3f73", steel: "#6f86b8",
+    cyan: "#22d3ee", cyanL: "#bff6ff", violet: "#c9a7ff", violetL: "#e8deff", amber: "#ffb45c", amberL: "#ffe4be",
+    danger: "#ff2e63", dangerTop: "#8e1238", dangerEdge: "#ff7fa0", dangerHi: "#ffc4d3", dangerSlot: "#5a001e",
+    hole: "#000000", gold: "#ffd23f", goldL: "#fff1b8", goldRim: "#462200", white: "#ffffff",
+    ship: "#f2feff", shipB: "#9db4d6", cockpit: "#123247", ink: "#05060e",
+    mint: "#5ef2b6", lilac: "#b49cff", ember: "#ff9f5a", plat: "#e6f0ff",
+    ui: "#0c1226", uiL: "#1b2649", uiD: "#070a16", uiE: "#4d6399", uiT: "#eef3ff", uiS: "#a9badf", uiA: "#22d3ee"
+  }
+};
+
+// ---------- small helpers ----------
+const TAU = Math.PI * 2, fl = Math.floor;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
+const easeBack = x => { x = clamp(x, 0, 1) - 1; return 1 + 2.7 * x * x * x + 1.7 * x * x; };   // overshoots about 10 %
+const wob = (k, f, d) => k < 0 || k > 1 ? 0 : Math.exp(-k * d) * Math.cos(k * f);           // damped wobble 1 -> 0
+const cnv = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
+// seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
+function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+// ---------- storage: one JSON record under "<prefix>save"; never throws, works in memory when blocked ----------
+function makeStore(prefix) {
+  const KEY = prefix + "save"; let data = {};
+  try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
+  return {
+    get(k, d) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : d; },
+    set(k, v) { data[k] = v; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } }
+  };
+}
+
+// ---------- styles: how ink, fills, shade and light look; ST and PAL are the active style ----------
+const SANS = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,"Noto Sans JP","Noto Sans CJK JP",system-ui,sans-serif';
+const SERIF = '"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP","Noto Serif CJK JP",IPAPMincho,serif';
+let PAL = PALS.B, ST = null, MONO = false;
+// palette name -> colour. Under MONO (bake(..., mono)) colours print as the inactive greys and the ink stays ink:
+// a locked or spent thing keeps its full outline and opacity, it never fades.
+function C(c) {
+  const v = PAL[c] || c; if (!MONO || v === PAL.ink) return v;
+  const n = parseInt(v.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255;
+  return l > 0.72 ? PAL.paperD : l > 0.55 ? PAL.grey : PAL.greyD;
+}
+function rgba(c, a) { const n = parseInt(C(c).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
+const shade = (x, p, c, ox, oy) => celShade(x, p, C(c), ox, oy);
+const STYLES = {
+  B: { id: "B", lit: false, grain: true, lw: 1.8, ui: SERIF, title: SERIF, shade, light() {},
+    // flat colour laid a little off the key block, like a hand-registered woodblock (u: units per logical px)
+    fill(x, p, c, rule, u) { u = u || 1; x.save(); x.translate(0.6 * u, 0.45 * u); x.fillStyle = C(c); x.fill(p, rule || "nonzero"); x.restore(); },
+    // brush ink: a thin stroke, then a heavier one pressed toward the lower right
+    edge(x, p, w) { w = w || this.lw; x.save(); x.lineJoin = x.lineCap = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w * 0.58; x.stroke(p); x.translate(w * 0.3, w * 0.4); x.lineWidth = w * 0.7; x.stroke(p); x.restore(); },
+    line(x, p, w, c) { x.save(); x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w * 0.75; x.stroke(p); x.translate(w * 0.18, w * 0.24); x.lineWidth = w * 0.6; x.stroke(p); x.restore(); } },
+  A: { id: "A", lit: true, grain: false, lw: 1.3, ui: SANS, title: SERIF, shade, // one fixed light (upper left), one crisp highlight
+    fill(x, p, c, rule) { x.fillStyle = C(c); x.fill(p, rule || "nonzero"); },
+    edge(x, p, w) { x.lineJoin = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w || this.lw; x.stroke(p); },
+    line(x, p, w, c) { x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w; x.stroke(p); },
+    light(x, p, c, ox, oy, w, mx, my, mr) { glint(x, p, C(c), ox, oy, w, mx, my, mr); } }
+};
+function useStyle(id) { ST = STYLES[id] || STYLES.B; PAL = PALS[ST.id]; SPR.clear(); }   // call before the first resize
+
+// ---------- screen layout: a cw x ch logical scene drawn at device resolution ----------
+// K = device px per logical px (one uniform scale, devicePixelRatio capped at 2). Space around the scene shows more
+// world, never bars; (L.x0, L.y0) is the scene's (0, 0). L.wide: the side areas can take the HUD while the play area
+// keeps the full height. L.u scales UI and text up on small landscape screens (TEXT_MIN, bar 1.4.4).
+const TEXT_MIN = 14;
+const L = { K: 1, dpr: 1, kc: 1, W: 360, H: 640, x0: 0, y0: 0, u: 1, wide: false };
+function artResize(cv, cssW, cssH, cw, ch, sideMin) {
+  const dpr = L.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dw = Math.max(2, Math.round(cssW * dpr)), dh = Math.max(2, Math.round(cssH * dpr)), K = Math.min(dw / cw, dh / ch);
+  if (K !== L.K) SPR.clear();
+  cv.width = dw; cv.height = dh;
+  Object.assign(L, { K, kc: K / dpr, W: dw / K, H: dh / K });
+  L.x0 = (L.W - cw) / 2; L.y0 = (L.H - ch) * 0.6;   // extra height goes mostly to the sky
+  L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1);
+  L.wide = L.x0 >= (sideMin || 200) * L.u;
+}
+// scene coords -> device px, with a shake (sx, sy in logical px) and a camera zoom z = { x, y, s } around a scene point
+function view(x, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  x.setTransform(K * s, 0, 0, K * s, K * (fx * (1 - s) + s * (L.x0 + (sx || 0))), K * (fy * (1 - s) + s * (L.y0 + (sy || 0))));
+}
+// a cached layer: the whole screen plus a margin m for the shake; fn(x, X0, Y0, W, H) fills that rect in scene coords
+function layer(m, fn) {
+  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = c.getContext("2d");
+  x.setTransform(K, 0, 0, K, K * (m + L.x0), K * (m + L.y0));
+  c.txt = baking(() => fn(x, -L.x0 - m, -L.y0 - m, L.W + 2 * m, L.H + 2 * m));
+  c.m = m; return c;
+}
+function putLayer(x, c, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  let ox = K * (fx * (1 - s) + s * ((sx || 0) - c.m)), oy = K * (fy * (1 - s) + s * ((sy || 0) - c.m));
+  if (s === 1) { ox = Math.round(ox); oy = Math.round(oy); }   // whole device px: a plain copy without filtering
+  x.setTransform(s, 0, 0, s, ox, oy); x.drawImage(c, 0, 0); carry(x, c.txt, s);
+}
+// a transparent DOM hit area over something drawn at scene rect (x, y, w, h)
+function place(el, x, y, w, h) { const k = L.kc; el.style.left = (x + L.x0) * k + "px"; el.style.top = (y + L.y0) * k + "px"; el.style.width = w * k + "px"; el.style.height = h * k + "px"; }
+// draw fn in a frame moved to (X, Y), scaled by s and turned by a
+function at(x, X, Y, s, a, fn) { x.save(); x.translate(X, Y); if (s !== 1) x.scale(s, s); if (a) x.rotate(a); fn(); x.restore(); }
+
+// ---------- paths: shapes drawn by hand with curves, never compass-made clip art ----------
+const P2 = () => new Path2D();
+const mtx = (dx, dy) => new DOMMatrix([1, 0, 0, 1, dx, dy]);
+function pEll(cx, cy, rx, ry, rot) { const p = P2(); p.ellipse(cx, cy, rx, ry, rot || 0, 0, TAU); return p; }
+function pRR(x, y, w, h, r) {
+  const p = P2(); r = Math.min(r, w / 2, h / 2);
+  p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r); p.closePath();
+  return p;
+}
+function pPoly(pts, open) { const p = P2(); p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]); if (!open) p.closePath(); return p; }
+const pLine = (x0, y0, x1, y1) => pPoly([[x0, y0], [x1, y1]], true);
+const pCut = (x, y, w, h, c) => pPoly([[x + c, y], [x + w - c, y], [x + w, y + c], [x + w, y + h - c], [x + w - c, y + h], [x + c, y + h], [x, y + h - c], [x, y + c]]);
+// a smooth curve through the midpoints of the points: reads as drawn by hand
+function pSmooth(pts, open) {
+  const p = P2(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (open) { p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n - 1; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[i + 1])); p.lineTo(pts[n - 1][0], pts[n - 1][1]); return p; }
+  p.moveTo(...mid(pts[n - 1], pts[0]));
+  for (let i = 0; i < n; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[(i + 1) % n]));
+  p.closePath(); return p;
+}
+function pPolar(cx, cy, rx, ry, fn, n) { const pts = []; for (let i = 0; i < n; i++) { const t = i / n * TAU, f = fn(t); pts.push([cx + Math.cos(t) * rx * f, cy + Math.sin(t) * ry * f]); } return pSmooth(pts); }
+// a disc whose edge wanders a little, like something cut or turned by hand
+function pBlob(cx, cy, rx, ry, amp, seed) { const r = seeded(seed), k1 = r() * TAU, k2 = r() * TAU, k3 = r() * TAU; return pPolar(cx, cy, rx, ry, t => 1 + amp * (Math.sin(2 * t + k1) * 0.5 + Math.sin(3 * t + k2) * 0.3 + Math.sin(5 * t + k3) * 0.2), 40); }
+function pStar(cx, cy, ro, ri, n, rot) { const pts = []; for (let i = 0; i < 2 * n; i++) { const a = (rot || 0) + i * Math.PI / n, r = i % 2 ? ri : ro; pts.push([cx + Math.sin(a) * r, cy - Math.cos(a) * r]); } return pPoly(pts); }
+// crescent: half a circle back along a narrower half ellipse (k: 0 thin .. 1 half moon), turned by rot
+function pMoon(cx, cy, r, k, rot) { const p = P2(); p.ellipse(cx, cy, r, r, rot, -Math.PI / 2, Math.PI / 2); p.ellipse(cx, cy, r * k, r, rot, Math.PI / 2, -Math.PI / 2, true); p.closePath(); return p; }
+function chaikin(pts, k) {
+  for (let j = 0; j < k; j++) {
+    const o = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+    o.push(pts[pts.length - 1]); pts = o;
+  }
+  return pts;
+}
+
+// ---------- drawing helpers ----------
+// one inked shape: flat colour, an optional shade tone sc (the shape moved ox, oy away from the light), the light
+// lt = [colour, ox, oy, w, mx, my, mr] (style A only, see glint), brush ink of width w
+function shape(x, p, c, w, sc, ox, oy, lt) { ST.fill(x, p, c); if (sc) ST.shade(x, p, sc, ox, oy); if (lt) ST.light(x, p, ...lt); ST.edge(x, p, w); return p; }
+// one flat shade tone: the part of a shape not covered by itself moved toward the light
+function celShade(x, path, col, ox, oy) {
+  x.save(); x.clip(path);
+  const p = P2(); p.rect(-4e3, -4e3, 8e3, 8e3); p.addPath(path, mtx(-ox, -oy));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// one crisp highlight (style A): a band just inside the lit edge, kept near the lit corner by a mask circle
+function glint(x, path, col, ox, oy, w, mx, my, mr) {
+  x.save(); x.clip(path); x.beginPath(); x.arc(mx, my, mr, 0, TAU); x.clip();
+  const p = P2(); p.addPath(path, mtx(ox, oy)); p.addPath(path, mtx(ox + w, oy + w * 1.2));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+// material sheen (style A only): the one gradient in the kit, only while baking a sprite (metal, lacquer, glaze)
+function sheen(x, p, kind, x0, y0, x1, y1) {
+  if (!ST.lit) return;
+  const s = kind === "metal" ? [0, rgba("hlK", 0.42), 0.3, rgba("hlK", 0), 0.5, rgba("goldD", 0.22), 0.6, rgba("goldL", 0.24), 0.74, rgba("goldD", 0), 1, rgba("plankD", 0.3)]
+    : kind === "lacquer" ? [0, rgba("hlK", 0.16), 0.36, rgba("hlK", 0), 0.7, rgba("shadeK", 0.16), 1, rgba("shadeK", 0.26)]
+    : [0, rgba("hlK", 0.2), 0.45, rgba("hlK", 0), 1, rgba("shadeK", 0.16)];
+  const g = x.createLinearGradient(x0, y0, x1, y1);
+  for (let i = 0; i < s.length; i += 2) g.addColorStop(s[i], s[i + 1]);
+  x.save(); if (p) x.clip(p); x.fillStyle = g; x.fillRect(Math.min(x0, x1) - 99, Math.min(y0, y1) - 99, Math.abs(x1 - x0) + 198, Math.abs(y1 - y0) + 198); x.restore();
+}
+// tapered brush stroke along points: thin at both ends, full in the middle
+function brush(x, pts, w, col) {
+  const s = chaikin(pts, 3), n = s.length, A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = s[Math.max(0, i - 1)], b = s[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const k = w * 0.5 * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * i / (n - 1))), 0.6) / d, dx = (b[0] - a[0]) * k, dy = (b[1] - a[1]) * k;
+    A.push([s[i][0] - dy, s[i][1] + dx]); B.push([s[i][0] + dy, s[i][1] - dx]);
+  }
+  x.fillStyle = C(col || "ink"); x.fill(pPoly(A.concat(B.reverse())));
+}
+// inked cord: a dark line with a coloured core (cords, stems, rope ends)
+function cordLine(x, path, w, col, iw) {
+  x.lineCap = x.lineJoin = "round";
+  x.strokeStyle = C("ink"); x.lineWidth = w + 2 * (iw == null ? 0.5 : iw); x.stroke(path);
+  x.strokeStyle = C(col); x.lineWidth = w; x.stroke(path);
+}
+// cords from points straight up to a beam at y = top: how boards, tags and lanterns hang in the world
+function cords(x, pts, top, col) { for (const [px, py] of pts) cordLine(x, pLine(px, top, px, py), 1.5, col || "red"); }
+// twisted rope along a polyline: base strand, ink edge, slanted strands of the second colour
+function rope(x, pts, w, c1, c2, iw) {
+  cordLine(x, pSmooth(pts, true), w, c1, iw);
+  const s = chaikin(pts, 3), h = w * 0.42; let acc = 0;
+  x.strokeStyle = C(c2); x.lineWidth = h; x.lineCap = "butt";
+  for (let i = 1; i < s.length; i++) {
+    const a = s[i - 1], b = s[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]); acc += d;
+    if (acc < w * 1.15 || !d) continue;
+    acc = 0; const dx = (b[0] - a[0]) / d * h, dy = (b[1] - a[1]) / d * h;
+    x.beginPath(); x.moveTo(b[0] - dy - dx * 0.7, b[1] + dx - dy * 0.7); x.lineTo(b[0] + dy + dx * 0.7, b[1] - dx + dy * 0.7); x.stroke();
+  }
+}
+// flat light pool: hard-edged ellipses stepping from the ground colour to warm lit ground, all opaque palette
+// colours (an alpha wash over the ground mixes to an off-palette grey that reads as a puddle, never as light)
+function pool(x, cx, cy, rx, ry, cols) {
+  cols = cols || ["ground", "poolA", "poolB"];
+  cols.forEach((c, i) => { x.fillStyle = C(c); x.fill(pEll(cx, cy, rx * (1 - i * 0.27), ry * (1 - i * 0.27))); });
+}
+// grain lines of wood inside a clip path (vert: along a post instead of along a board)
+function grain(x, clip, X, Y, w, h, gap, col, seed, vert) {
+  const r = seeded(seed); x.save(); x.clip(clip); x.strokeStyle = C(col); x.lineWidth = 0.6;
+  if (vert) { x.translate(X + w, Y); x.rotate(Math.PI / 2); [w, h] = [h, w]; X = Y = 0; }
+  for (let i = 0; i < h / gap; i++) {
+    const y = Y + 2 + i * gap + r() * 1.4, k = r() * 6;
+    x.beginPath(); x.moveTo(X, y); x.bezierCurveTo(X + w * 0.3, y + Math.sin(k) * 1.6, X + w * 0.6, y - Math.cos(k) * 1.6, X + w, y + Math.sin(k * 2) * 1.2); x.stroke();
+  }
+  x.restore();
+}
+// wooden tag: a plank with cut corners, grain, cord holes, one shade tone (A: a lit edge) and the style's ink
+function woodTag(x, X, Y, w, h, o) {
+  o = o || {};
+  const d = o.dark, c = o.cut || 5, p = pPoly([[X + c, Y], [X + w - c * 0.7, Y + 0.5], [X + w, Y + c * 0.9], [X + w - 0.6, Y + h], [X + 1.5, Y + h - 0.6], [X, Y + c]]);
+  ST.fill(x, p, d ? "plank" : "tag"); grain(x, p, X, Y, w, h, 3.2, d ? "plankL" : "tagG", o.seed || 5);
+  ST.shade(x, p, d ? "plankD" : "tagD", 2.2, 2.6); ST.light(x, p, d ? "plankL" : "tagL", 0.9, 0.9, 1.1, X, Y, Math.max(w, h) * 0.7); ST.edge(x, p);
+  x.fillStyle = C("ink"); for (const hx of o.holes || []) x.fill(pEll(hx, Y + 5, 1.6, 1.6));
+  return p;
+}
+// bamboo pole between two points: base, flat shade side, (A) a light stripe, nodes, ink
+function bamboo(x, x0, y0, x1, y1, w, node) {
+  const len = Math.hypot(x1 - x0, y1 - y0), p = pRR(0, -w / 2, len, w, w * 0.42), bar = (c, X, Y, W, H) => { x.fillStyle = C(c); x.fillRect(X, Y, W, H); };
+  x.save(); x.translate(x0, y0); x.rotate(Math.atan2(y1 - y0, x1 - x0));
+  ST.fill(x, p, "tag"); x.save(); x.clip(p);
+  bar("tagD", 0, w * 0.16, len, w * 0.34); if (ST.lit) bar("tagL", 0, -w * 0.32, len, w * 0.14);
+  for (let s = node * 0.6; s < len - 4; s += node) { bar("tagD", s, -w / 2, 1.1, w); bar("tagL", s + 1.1, -w / 2, 0.8, w); }
+  x.restore(); ST.edge(x, p); x.restore();
+}
+// rim light on a baked canvas: the band of its silhouette facing (dx, dy) device px, in one flat colour
+function rimLight(c, col, dx, dy, a) {
+  const t = cnv(c.width, c.height), tx = t.getContext("2d"), x = c.getContext("2d");
+  tx.drawImage(c, 0, 0); tx.globalCompositeOperation = "destination-out"; tx.drawImage(c, -dx, -dy);
+  tx.globalCompositeOperation = "source-in"; tx.fillStyle = C(col); tx.fillRect(0, 0, t.width, t.height);
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = a; x.globalCompositeOperation = "source-atop"; x.drawImage(t, 0, 0); x.restore();
+}
+// washi grain (style B): laid lines, fibres and specks, laid over the finished frame in screen space (grainOver last
+// in every frame), so it stays put while things roll or shake, like the paper a picture is printed on
+function washiTex(w, h, S, seed) {
+  const c = cnv(w * S, h * S), x = c.getContext("2d"), r = seeded(seed);
+  x.scale(S, S);
+  // laid lines with uneven spacing and strength, broken into short runs, so they never read as a screen pattern
+  for (let i = r() * 3; i < w; i += 2.4 + r() * 3) { x.fillStyle = rgba("paper", 0.01 + r() * 0.025); for (let y = -r() * 30; y < h; y += 12 + r() * 36) x.fillRect(i, y, 0.6, 6 + r() * 28); }
+  x.lineCap = "round";
+  for (let i = 0; i < w * h / 260; i++) {
+    const fx = r() * w, fy = r() * h, a = r() * TAU, l = 4 + r() * 16;
+    x.strokeStyle = r() < 0.7 ? rgba("paper", 0.1) : rgba("ink", 0.09); x.lineWidth = 0.3 + r() * 0.5;
+    x.beginPath(); x.moveTo(fx, fy); x.quadraticCurveTo(fx + Math.cos(a) * l * 0.5 + (r() - 0.5) * 5, fy + Math.sin(a) * l * 0.5 + (r() - 0.5) * 5, fx + Math.cos(a) * l, fy + Math.sin(a) * l); x.stroke();
+  }
+  for (let i = 0; i < w * h / 80; i++) { const s = 0.3 + r() * 0.8; x.fillStyle = r() < 0.5 ? rgba("paper", 0.1) : rgba("ink", 0.12); x.fillRect(r() * w, r() * h, s, s); }
+  return c;
+}
+const GRAIN = {};
+function grainOver(x) {
+  if (!ST.grain) return;
+  const k = L.K.toFixed(3);
+  if (!GRAIN[k]) GRAIN[k] = x.createPattern(washiTex(256, 256, L.K, 3), "repeat");   // 256: never lines up with the 360 scene
+  x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = GRAIN[k]; x.fillRect(0, 0, x.canvas.width, x.canvas.height);
+}
+
+// ---------- sprite cache: a drawing is made once per size at device resolution, then drawn turned and scaled ----------
+const SPR = new Map();
+// Text drawn while baking (bake, lit, layer) is kept with the picture and recorded again, at its on-screen size,
+// each time the picture is drawn (carry), so QA measures a baked sign the way the player sees it.
+let BAKED = null;
+function baking(fn) { const keep = BAKED, t = BAKED = []; try { fn(); } finally { BAKED = keep; } return t.length ? t : null; }
+function carry(x, txt, k) { if (!txt) return; k = k || Math.hypot(x.getTransform().c, x.getTransform().d) / L.K; for (const t of txt) noteText(t.str, t.px * k); }
+// bake: fn draws in logical px with (0, 0) at (ox, oy) in a w x h box; mono prints it locked (greys, full ink)
+function bake(key, w, h, ox, oy, fn, mono) {
+  let b = SPR.get(key);
+  if (!b) {
+    const K = L.K, c = cnv(w * K + 2, h * K + 2), x = c.getContext("2d");
+    x.setTransform(K, 0, 0, K, 1 + ox * K, 1 + oy * K);
+    const txt = baking(() => { MONO = !!mono; try { fn(x); } finally { MONO = false; } });
+    b = { c, w: c.width / K, h: c.height / K, ox: ox + 1 / K, oy: oy + 1 / K, txt }; SPR.set(key, b);
+  }
+  return b;
+}
+function put(x, b, X, Y, a, sx, sy) {
+  if (!a && !sx) { x.drawImage(b.c, X - b.ox, Y - b.oy, b.w, b.h); carry(x, b.txt); return; }
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); if (a) x.rotate(a); x.drawImage(b.c, -b.ox, -b.oy, b.w, b.h); carry(x, b.txt); x.restore();
+}
+// Lit sprites: round things that turn while the light stays put (upper left). art(x, u) draws in a unit circle
+// (u = units per logical px). Each rotation step gets its own frame: the flat shade tone, then B a heavier ink rim
+// lower right, A the sheen, a crisp highlight and a warm bounce. MAT: [shade share, highlight share, sheen kind].
+const LIT_STEPS = 32, MAT = { wood: [0.34, 0.4, 0], paper: [0.2, 0.3, 0], lacquer: [0.4, 0.75, "lacquer"], metal: [0.42, 0.9, "metal"], glaze: [0.3, 0.75, "glaze"] };
+function lit(key, r, mat, art, mono) {
+  let s = SPR.get(key);
+  if (!s) {
+    const k = r * L.K, N = Math.ceil(2.3 * k) + 4, c = cnv(N, N), x = c.getContext("2d");
+    x.translate(N / 2, N / 2); x.scale(k, k);
+    const txt = baking(() => { MONO = !!mono; try { art(x, 1 / r); } finally { MONO = false; } });
+    s = { c, N, k, m: MAT[mat] || mat, f: [], txt }; SPR.set(key, s);
+  }
+  return s;
+}
+let TMP = null;
+function litFrame(s, ang) {
+  const N = s.N, k = s.k, m = s.m, c = cnv(N, N), x = c.getContext("2d"), H = N / 2;
+  x.translate(H, H); x.rotate(ang); x.drawImage(s.c, -H, -H); x.setTransform(1, 0, 0, 1, 0, 0);
+  if (!TMP || TMP.width < N) TMP = cnv(Math.max(N, 256), Math.max(N, 256));
+  const t = TMP.getContext("2d"), op = o => { t.globalCompositeOperation = o; };
+  const band = (ax, ay, bx, by) => { op("copy"); t.drawImage(c, ax, ay); op("destination-out"); t.drawImage(c, bx, by); op("destination-in"); t.drawImage(c, 0, 0); };
+  const paint = (col, a) => { op("source-in"); t.fillStyle = C(col); t.fillRect(0, 0, N, N); x.globalAlpha = a; x.drawImage(TMP, 0, 0, N, N, 0, 0, N, N); };
+  op("copy"); t.drawImage(c, 0, 0); op("destination-out"); t.fill(pEll(H - 0.3 * k, H - 0.36 * k, 1.06 * k, 1.06 * k));
+  x.globalCompositeOperation = "source-atop"; paint("shadeK", m[0]);
+  if (ST.lit) {
+    x.globalAlpha = 1; if (m[2]) sheen(x, null, m[2], 0, 0, N, N);
+    band(0.07 * k, 0.085 * k, 0.15 * k, 0.18 * k); op("destination-in"); t.fill(pEll(H - 0.42 * k, H - 0.5 * k, 0.64 * k, 0.64 * k)); paint("hlK", m[1]);
+    band(0, 0, -0.07 * k, -0.02 * k); op("destination-in"); t.fillRect(H + 0.1 * k, 0, N, N); paint("warm", 0.42);
+  } else { band(0, 0, -0.045 * k, -0.06 * k); paint("ink", 1); }
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over"; op("source-over"); t.clearRect(0, 0, TMP.width, TMP.height);
+  return c;
+}
+// draw a lit sprite at (X, Y) turned by a; sx, sy squash it in screen space (the light does not turn)
+function drawLit(x, s, X, Y, a, sx, sy) {
+  const st = TAU / LIT_STEPS, i0 = Math.round(a / st), i = ((i0 % LIT_STEPS) + LIT_STEPS) % LIT_STEPS, img = s.f[i] || (s.f[i] = litFrame(s, i * st)), D = s.N / L.K;
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); x.rotate(a - i0 * st); x.drawImage(img, -D / 2, -D / 2, D, D); carry(x, s.txt); x.restore();
+}
+
+// ---------- text: system fonts, an optional ink outline; TXT records each string and the smallest size (logical px) ----------
+const TXT = { min: Infinity, seen: [], last: [] };
+function textEnd() { TXT.last = TXT.seen; TXT.seen = []; }   // call once at the end of every drawn frame
+function noteText(str, px) { if (BAKED) BAKED.push({ str, px }); else { if (px < TXT.min) TXT.min = px; if (TXT.seen.length < 300) TXT.seen.push(str); } }
+// o: { a align, f font, w weight, ol outline colour, ow its share of size, deep: a second print down right, max: fit width }
+function text(x, str, X, Y, size, col, o) {
+  o = o || {}; str = String(str);
+  const font = s => (o.w || 800) + " " + s + "px " + (o.f || ST.ui);
+  x.font = font(size);
+  if (o.max) { const w = x.measureText(str).width; if (w > o.max) x.font = font(size *= o.max / w); }
+  const m = x.getTransform(), px = size * Math.hypot(m.c, m.d) / L.K;
+  noteText(str, px);
+  x.textAlign = o.a || "center"; x.textBaseline = "middle";
+  if (o.deep) { x.fillStyle = C(o.deep); x.fillText(str, X + size * 0.035, Y + size * 0.06); }
+  if (o.ol) { x.lineJoin = "round"; x.miterLimit = 2; x.lineWidth = size * (o.ow || 0.2); x.strokeStyle = C(o.ol); x.strokeText(str, X, Y); }
+  x.fillStyle = C(col); x.fillText(str, X, Y);
+}
+function textW(x, str, size, o) { x.font = ((o && o.w) || 800) + " " + size + "px " + ((o && o.f) || ST.ui); return x.measureText(String(str)).width; }
+
+// ---------- in-world UI (cx, y = top centre): wooden tag buttons, boards, plaques, a seal, a pointing hand ----------
+function tagBtn(x, cx, y, w, h, label, size, dark) {
+  put(x, bake("tag" + w + "x" + h + (dark ? "d" : ""), w + 4, h + 16, w / 2 + 2, 13, q => {
+    for (const hx of [-w * 0.3, w * 0.3]) cordLine(q, pLine(hx, -12, hx, 5), 1.4, "red");
+    woodTag(q, -w / 2, 0, w, h, { holes: [-w * 0.3, w * 0.3], dark, seed: w + h });
+  }), cx, y);
+  text(x, label, cx, y + h / 2 + 2, size || 20, dark ? "paper" : "ink", { deep: dark ? "plankD" : "tagD" });
+}
+// board: a dark wood frame round the style's pane (B washi, A lacquer); text on it uses paneT and paneS
+function board(x, cx, y, w, h) {
+  put(x, bake("board" + w + "x" + h, w + 6, h + 6, w / 2 + 3, 3, q => {
+    const pn = pCut(-w / 2 + 9, 9, w - 18, h - 18, 5);
+    woodTag(q, -w / 2, 0, w, h, { dark: 1, cut: 8, seed: 21 });
+    ST.fill(q, pn, "pane"); sheen(q, pn, "lacquer", -w / 2, 0, w / 2, h);
+    if (!ST.lit) ST.line(q, pCut(-w / 2 + 15, 15, w - 30, h - 30, 3), 0.9, "paneL");
+    ST.shade(q, pn, "paneL", -2, -2.4); ST.edge(q, pn, 1.1); ST.edge(q, pCut(-w / 2, 0, w, h, 8), 1.5);
+    for (const [ax, ay, sx, sy] of [[-w / 2 + 9, 9, 1, 1], [w / 2 - 9, 9, -1, 1], [-w / 2 + 9, h - 9, 1, -1], [w / 2 - 9, h - 9, -1, -1]]) {
+      const f = pPoly([[ax, ay], [ax + 22 * sx, ay], [ax + 22 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 6 * sy], [ax + 6 * sx, ay + 22 * sy], [ax, ay + 22 * sy]]);
+      ST.fill(q, f, "gold"); sheen(q, f, "metal", ax, ay, ax + 22 * sx, ay + 22 * sy); ST.shade(q, f, "goldD", 1.2, 1.4); ST.edge(q, f, 0.9);
+    }
+  }), cx, y);
+}
+// plaque: a small dark wood board for a system control (pause, sound, mute) or a short label
+function plaque(x, cx, y, w, kind, label) {
+  put(x, bake("pq" + kind + w, w + 4, 50, w / 2 + 2, 2, q => {
+    cordLine(q, pLine(0, 0, 0, 9), 1.3, "red", 0.45);
+    woodTag(q, -w / 2, 6, w, 34, { dark: 1, cut: 6, holes: [0], seed: 3 });
+    q.fillStyle = q.strokeStyle = C("tagL"); q.lineCap = "round"; q.lineWidth = 1.8;
+    if (kind === "pause") { q.fill(pRR(-6, 15, 4.4, 16, 1)); q.fill(pRR(1.6, 15, 4.4, 16, 1)); }
+    if (kind === "sound" || kind === "mute") q.fill(pPoly([[-10, 20], [-6, 20], [-1, 15], [-1, 31], [-6, 26], [-10, 26]]));
+    if (kind === "sound") for (const r of [5, 9]) { q.beginPath(); q.arc(-1, 23, r, -0.8, 0.8); q.stroke(); }
+    if (kind === "mute") { q.stroke(pLine(3, 19, 10, 27)); q.stroke(pLine(10, 19, 3, 27)); }
+  }), cx, y);
+  if (label) text(x, label, cx, y + 25, 16, "tagL", {});
+}
+// a red seal; it lands from 1.5x with a thump (age = ms since it was pressed)
+function seal(x, X, Y, label, age, size) {
+  size = size || 17;
+  const s = 1 + 0.5 * (1 - easeOut(age / 140)), w = textW(x, label, size) + size * 1.2, h = size * 1.75;
+  at(x, X, Y, s, -0.08, () => {
+    shape(x, pCut(-w / 2, -h / 2, w, h, 4), "red", 1.2, "redD", 1.5, 2);
+    x.lineWidth = 1.2; x.strokeStyle = C("paper"); x.stroke(pCut(-w / 2 + 3.5, -h / 2 + 3.5, w - 7, h - 7, 3));
+    text(x, label, 0, 1, size, "paper", {});
+  });
+}
+// a pointing hand drawn like a print (fingertip at X, Y; a = 0 points up): a tapered index finger with a nail and a
+// knuckle crease, the other fingers folded as separate lobes, the thumb, and a kimono sleeve with a stitched hem
+function hand(x, X, Y, a, s) {
+  put(x, bake("hand", 46, 62, 23, 2, q => {
+    const skin = (p, ox, oy) => shape(q, p, "paper", 1.2, "paperD", ox, oy);
+    skin(pSmooth([[-10, 35], [-18.5, 28], [-17, 21.5], [-12.5, 22], [-7, 28]]), 1.5, 1.8);                    // thumb
+    skin(pSmooth([[-11, 21], [-4, 18.5], [7, 19.5], [13, 25], [12.5, 40], [5, 46], [-8, 45.5], [-12.5, 36]]), 2.4, 2.4);
+    for (const [y, w] of [[24, 5], [30.4, 5.6], [36.8, 4.6]]) skin(pSmooth([[2, y - 3.1], [5 + w, y - 3.4], [8.4 + w, y + 0.1], [5 + w, y + 3.4], [2, y + 3.1]]), 1.2, 1.4);
+    skin(pSmooth([[-3.6, 24], [-3.4, 9], [-2.6, 1.2], [0, -0.2], [2.6, 1], [3.6, 9], [4.4, 24]]), 1.6, 0);        // index finger
+    shape(q, pSmooth([[-1.7, 2.4], [0, 1.4], [1.8, 2.4], [1.5, 6.4], [-1.4, 6.4]]), "paperD", 0.6);           // nail
+    ST.line(q, pSmooth([[-2.6, 13.5], [0, 12.4], [2.8, 13.6]], true), 0.8);                                         // knuckle crease
+    const sleeve = pSmooth([[-17, 43.5], [-2, 41.5], [15, 42.5], [19.5, 58], [6, 60.5], [-8, 59], [-20.5, 59.5]]);
+    shape(q, sleeve, "indigo", 1.3, "ink", 2, 2);
+    q.setLineDash([2.2, 2]); ST.line(q, pSmooth([[-16, 46.5], [-2, 44.8], [14.5, 45.6]], true), 0.9, "paper"); q.setLineDash([]);
+  }), X, Y, a, s);
+}
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch ----------
+const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
+function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
+function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
+function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms }; }
+function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
+const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
+function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
+function shakeOffset(max) { // logical px
+  const a = Juice.trauma * Juice.trauma * max * (Juice.reduce ? 0.3 : 1);
+  return a < 0.05 ? { x: 0, y: 0 } : { x: vnoise(Juice.t * 24) * a, y: vnoise(Juice.t * 24 + 57.3) * a };
+}
+function zoomNow(now) {
+  const z = Juice.zoom; if (!z) return null;
+  const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
+  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
+}
+
+// ---------- particles: a capped pool of small turning shapes (dot, chip, spark, star) ----------
+const PARTS = [], PART_MAX = 300, rnd = () => Math.random(); // looked up on each call, so tools can seed it
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "paper", kind: "dot", s: 2, rot: 0, vr: 0 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.4 + rnd() * 0.8), life = 0.45 + rnd() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 600, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 14 }, o)); } }
+function partsStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i]; p.life -= dt;
+    if (p.life <= 0) { PARTS.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+}
+function partsDraw(x) {
+  const m = x.getTransform(); x.lineWidth = 0.6; x.strokeStyle = C("ink");
+  for (const p of PARTS) {
+    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind;
+    const q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
+      : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+    x.setTransform(m); x.translate(p.x, p.y); x.rotate(p.rot); x.fillStyle = C(p.col); x.fill(q);
+    if (k !== "dot" && s > 2) x.stroke(q);
+  }
+  x.setTransform(m);
+}
+
+// ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
+const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
+function auBuild(ctx) {
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; }, comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
+  const master = g(AU.muted ? 0 : AU.vol), sfx = g(0.8), music = g(0.75);
+  master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
+  sfx.connect(master); music.connect(master);
+  // one shared echo, so dry voices sit in a small room: music fully, sfx through a lower send
+  const echo = ctx.createDelay(1), fb = g(0.3), wet = g(0.16), send = g(0.45);
+  echo.delayTime.value = 0.15; echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(send); send.connect(echo);
+  const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
+  Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
+}
+function auInit() {
+  if (AU.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  try { auBuild(new AC()); } catch (e) { AU.ctx = null; return false; }
+  try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) { /* not supported */ }
+  return true;
+}
+function auResume() { if (AU.ctx && AU.ctx.state !== "running" && AU.ctx.state !== "closed") AU.ctx.resume().catch(() => {}); }
+const audioOn = () => !!AU.ctx && (AU.ctx.state === "running" || AU.offline);
+// unlock on every kind of first gesture (iOS needs touchend/click), and again whenever the tab comes back
+function auUnlock() {
+  const f = () => { if (auInit()) auResume(); };
+  for (const t of ["pointerdown", "pointerup", "touchend", "click", "keydown", "mousedown"]) document.addEventListener(t, f, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
+}
+function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
+const cents = c => Math.pow(2, c / 1200);
+function vary(c, gv) { return { f: cents((rnd() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (rnd() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// envelope from silence to peak and back to silence (the default gain of 1 would leak a click)
+function env(gn, peak, when, att, dur) { gn.gain.value = 0; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + att); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur); }
+// one oscillator voice with stop() always scheduled; square and saw go through a lowpass
+function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
+  const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, when);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
+  env(gn, peak, when, att || 0.004, dur);
+  let head = o;
+  if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
+  head.connect(gn); gn.connect(dest || AU.sfx);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
+  const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when); f.Q.value = q;
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
+  env(gn, peak, when, 0.002, dur);
+  s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
+  s.start(when, rnd() * 0.5); s.stop(when + dur + 0.05);
+}
+// Fire voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak sample
+// (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+async function auPeak(fire, sec) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
+  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
+  auBuild(oc); AU.master.gain.value = AU.vol; AU.offline = true;
+  try { fire(); } finally { Object.assign(AU, keep); AU.offline = false; }
+  const d = (await oc.startRendering()).getChannelData(0); let p = 0;
+  for (let i = 0; i < d.length; i++) p = Math.max(p, Math.abs(d[i]));
+  return p;
+}
+
+// ---------- tap hint per player: shown until the first success, back after two quick deaths (< 5 s) ----------
+function makeHint(store, key) {
+  let quick = 0;
+  return {
+    active: false,
+    begin() { this.active = !store.get(key, false) || quick >= 2; },
+    success() { if (this.active) { this.active = false; quick = 0; store.set(key, true); } },
+    runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
+  };
+}
+function drawTapHint(x, X, Y, k) { // (X, Y) = where to press; k = 0 when a press would succeed now .. 1 far from it
+  if (k < 0.3) { const r = 10 + (0.3 - k) * 70; cordLine(x, pEll(X, Y, r, r * 0.4), 2, "paper", 0.7); }   // an inked paper ring
+  hand(x, X, Y + 10 + clamp(k, 0, 1) * 14, 0);
+}
+// ==== ART KIT END ====
+
+// ======================================================================================================
+// Below: w09 "Dial Tunnel". One tap turns the whole tunnel one face clockwise, so the face on the right becomes
+// the floor. GAME-SPECIFIC sections are this game; KEEP sections are the template's required systems
+// (QUALITY_BAR.md, CLAUDE.md 4) adapted to it. window.__game at the end is the test contract (tools/README.md).
+// The look follows kouhei's own words (NOTES.md): a lit, mechanical tunnel with light inside the game world;
+// the UI stays plain machined plates.
+// ======================================================================================================
+
+// ---------- GAME-SPECIFIC: identity, scene size, colours ----------
+const SLUG = "dial-tunnel", WEEK = 9;
+const CW = 360, CH = 640;          // the core 9:16 scene in logical px (STYLE.md 2)
+useStyle("A");                     // sans UI and no washi grain; the tunnel's own colours join the palette below
+PAL = Object.assign({}, PALS.A, PALS.TUN);
+const DEMO = /[?&]demo=1(&|$)/.test(location.search);
+const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
+const reduceMotion = mq("(prefers-reduced-motion: reduce)"), finePointer = mq("(hover: hover) and (pointer: fine)");
+Juice.reduce = reduceMotion;
+const store = makeStore(SLUG + "-");
+const HX = PALS.TUN;
+const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, n >> 8 & 255, n & 255]; };
+const TC = {}; for (const k in HX) TC[k] = hexRGB(HX[k]);
+const rgbA = (c, a) => "rgba(" + (c[0] | 0) + "," + (c[1] | 0) + "," + (c[2] | 0) + "," + (a < 0 ? 0 : a > 1 ? 1 : a).toFixed(3) + ")";
+const rgbM = (c, m) => "rgb(" + Math.min(255, c[0] * m | 0) + "," + Math.min(255, c[1] * m | 0) + "," + Math.min(255, c[2] * m | 0) + ")";
+function mixc(a, b, f, o) { o[0] = a[0] + (b[0] - a[0]) * f; o[1] = a[1] + (b[1] - a[1]) * f; o[2] = a[2] + (b[2] - a[2]) * f; return o; }
+const sstep = (a, b, x) => smooth((x - a) / (b - a));
+const popc = m => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
+const C1 = 1.28, C3 = C1 + 1;      // easeOutBack with about 6 % overshoot (the prototype's tap turn)
+const easeOutBack = x => { const y = x - 1; return 1 + C3 * y * y * y + C1 * y * y; };
+// section light: square cyan, triangle violet, hexagon amber
+const PAL3 = [{ acc: TC.cyan, light: TC.cyanL }, { acc: TC.violet, light: TC.violetL }, { acc: TC.amber, light: TC.amberL }];
+
+// ---------- GAME-SPECIFIC: timing and world (the prototype's numbers; kouhei compares the feel) ----------
+const BPM = 132, BEAT = 60 / BPM, EIGHTH = BEAT / 2, BAR = 4 * BEAT;
+const SEC_LEN = 32 * BEAT;         // 14.5 s per sector (8 bars): square, triangle, hexagon, then the next lap
+const HALF = SEC_LEN / 2;          // speed steps land half a sector after each shape change
+const SHAPES = [4, 3, 6];
+const VIS = 14;                    // rows visible before the fog at the start speed (grows with speed)
+const DEPTH = 0.55, ZMIN = 0.12, MORPH = 5;
+const HW = 0.2;                    // collision half-window in rows (about 67 % of the drawn block depth)
+const HWG = 0.3;                   // half-window the generator plans with (stricter than the real one)
+const BLK = 0.3;                   // drawn half-depth of a block in rows
+const SIM_DT = 1 / 240;            // fixed rule step: a run plays the same at any frame rate (bar 1.10.2)
+const GRACE = 0.035;               // s: a tap this late still saves you (bar 1.5.6); it counts as a close call
+const EARLY = 0.07;                // s: a turn pressed this soon before the row at the shuttle would kill waits for it to clear
+const NEAR_T = 0.16;               // s: leaving a face this soon before its row arrives is a close call (half the gap at most)
+const NEAR_T1 = 0.2;               // s: the same in the first lap on one-tap rows, so a new player meets a close call early
+const NEAR_CD = 1.2;               // s: close calls inside this still score, but quietly (no popup, no sound)
+const SHUT_LOCK = [0.95, 0.8, 0.7];// s before arrival a shutter locks: the first one in a run, lap 1, later laps
+const FREEZE = 520, SHATTER = 0.36;// ms the failure holds in play; s until the shuttle breaks apart
+const TAP_BURST = 0.11;            // s: a fourth press inside this window does nothing (no hand taps that fast)
+// Phase table as data (bar 1.5.2), per lap of three sectors. k: weights of 0..3 taps a row asks for;
+// hole: share of blocks drawn as pits; fam: row families. The gaps between rows are in gapsFor().
+const LAPS = [
+  { k: [0.05, 0.35, 0.4, 0.2], hole: 0.28, fam: [["single", 0.6], ["stair", 0.12], ["zig", 0.2], ["corridor", 0.04], ["greed", 0.04]] },
+  { k: [0, 0.2, 0.45, 0.35], hole: 0.32, fam: [["single", 0.5], ["stair", 0.14], ["zig", 0.3], ["corridor", 0.03], ["greed", 0.03]] },
+  { k: [0.03, 0.34, 0.36, 0.27], hole: 0.36, fam: [["single", 0.4], ["stair", 0.18], ["zig", 0.3], ["corridor", 0.05], ["greed", 0.07]] },
+  { k: [0.02, 0.3, 0.38, 0.3], hole: 0.4, fam: [["single", 0.38], ["stair", 0.2], ["zig", 0.32], ["corridor", 0.04], ["greed", 0.06]] }
+];
+const lapOf = s => Math.min(LAPS.length - 1, fl(s / 3));
+const K_FIRST = [[0.3, 0.6, 0.1, 0], [0, 0.3, 0.7, 0]]; // the first square and triangle ask for fewer turns
+// 8th notes between rows [gap, weight]; from the fourth lap the 1-8th share keeps climbing with every sector,
+// so there is no flat stretch a steady hand can hold for ever
+function gapsFor(s, local) {
+  if (s === 0) return [[3, 0.35], [4, 0.65]];
+  if (s === 1) return local < HALF ? [[2, 0.3], [3, 0.5], [4, 0.2]] : [[1, 0.12], [2, 0.58], [3, 0.3]];
+  if (s === 2) return local < HALF ? [[2, 0.5], [3, 0.5]] : [[1, 0.15], [2, 0.55], [3, 0.3]];
+  if (local < 2.4) return [[2, 0.5], [3, 0.5]];
+  if (s < 6) return [[1, 0.3], [2, 0.55], [3, 0.15]];
+  if (s < 9) return [[1, 0.5], [2, 0.42], [3, 0.08]];
+  const x = Math.min(1, (s - 9) / 9);  // to 85 % one-8th rows by sector 19: a turn on nearly every 8th note
+  return [[1, 0.55 + 0.3 * x], [2, 0.4 - 0.25 * x], [3, 0.05 - 0.05 * x]];
+}
+// roll of the whole view (world and shuttle together; the HUD never turns): amplitude by sector, period in bars
+const ROLL_AMP = [0.09, 0.17, 0.27, 0.33, 0.33, 0.33, 0.36];
+const RANKS = [1, 3, 4, 6, 7, 10];             // best sector reached -> rank
+const rankOf = sec => RANKS.reduce((a, t, i) => sec >= t ? i : a, 0);
+const LIVERY = [{ c: "cyan", at: 0 }, { c: "mint", at: 3 }, { c: "lilac", at: 4 }, { c: "ember", at: 6 }, { c: "plat", at: 8 }];
+const liveryOf = sec => LIVERY.reduce((a, l, i) => sec >= l.at ? i : a, 0);
+// ?demo=1: a loop of scripted runs (act times in s of run time, never by luck). A starts at once in the square
+// with a close call, another, then a crash by 21 s; B starts late in the triangle and runs through the hexagon.
+const DEMO_RUNS = [
+  { at: 0, script: [{ at: 4.2, act: "near" }, { at: 10.4, act: "near" }, { at: 19.6, act: "fail" }] },
+  { at: 26.6, script: [{ at: 4.6, act: "near" }, { at: 13.8, act: "near" }, { at: 22.5, act: "near" }, { at: 30.5, act: "fail" }] }
+];
+const ATTRACT_AT = [2, 16, 31, 45, 9, 24];
+// the AI that plays attract, ?demo=1 and __game.autoplay: a person who sees a row, reacts, taps at a human rate
+// look: s ahead a row is seen; react: s range; gap: s between taps; jit: timing sd; slip: wrong count on 2+ taps,
+// slip1: on 1 tap; greed: chance to take a gold lure; extra: chance of one extra tap
+const AIP = {
+  attract: { look: 1.05, react: [0.14, 0.24], gap: 0.15, jit: 0.02, slip: 0.05, slip1: 0.012, greed: 0.5, extra: 0, ahead: 1 },
+  demo: { look: 1.1, react: [0.1, 0.22], gap: 0.13, jit: 0.008, slip: 0, slip1: 0, greed: 0.75, extra: 0, ahead: 1 },
+  play: { look: 1.0, react: [0.15, 0.24], gap: 0.16, jit: 0.022, slip: 0.035, slip1: 0.01, greed: 0.3, extra: 0, ahead: 1 }
+};
+
+// ---------- KEEP: strings (every visible text, ja first, en is its translation) ----------
+const STRINGS = {
+  ja: {
+    title: "ダイヤルトンネル", titleEn: "DIAL TUNNEL", start: "スタート", how1: "タップで世界が右に回る。", how2: "赤いブロックのない面へ乗りうつろう。",
+    lang: "EN", paused: "一時停止", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
+    close: "ギリ!", triple: "トリプル!", goldN: "+10  {n}連続", sector: "セクター {n}", shapes: ["四角", "三角", "六角"],
+    causeShort: "あと {n} 回タップ", causeShort1: "あと 1 回タップ", causeOver: "1 回多かった", causeEarly: "回るのが早かった", causeLock: "ロックの面を外した", causeShut: "シャッターの面に当たった",
+    rReached: "到達", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!",
+    g_sector: "次はセクター {n} へ", g_gold: "1 回でゴールド {n} 個", g_hex: "六角を抜けよう", g_triple: "トリプルタップを決めよう", g_near: "ギリを {n} 回",
+    ranks: ["訓練生", "操縦士", "上級操縦士", "エース", "マスター", "伝説"], livery: ["標準", "ミント", "すみれ", "こはく", "白金"], newLivery: "新しい機体色 {n}",
+    best: "ベスト", rank: "ランク", space: "スペースキー", credit: "Made with Claude"
+  },
+  en: {
+    title: "DIAL TUNNEL", titleEn: "DIAL TUNNEL", start: "START", how1: "Tap to turn the world to the right.", how2: "Ride onto a face with no red block.",
+    lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
+    close: "CLOSE!", triple: "TRIPLE!", goldN: "+10  {n} IN A ROW", sector: "SECTOR {n}", shapes: ["SQUARE", "TRIANGLE", "HEXAGON"],
+    causeShort: "{n} MORE TAPS NEEDED", causeShort1: "ONE MORE TAP NEEDED", causeOver: "ONE TAP TOO MANY", causeEarly: "TURNED TOO EARLY", causeLock: "MISSED THE OPEN FACE", causeShut: "HIT THE SHUTTER",
+    rReached: "REACHED", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!",
+    g_sector: "NEXT: REACH SECTOR {n}", g_gold: "{n} GOLD IN ONE RUN", g_hex: "CLEAR A HEXAGON", g_triple: "LAND A TRIPLE TAP", g_near: "{n} CLOSE CALLS",
+    ranks: ["TRAINEE", "PILOT", "SENIOR PILOT", "ACE", "MASTER", "LEGEND"], livery: ["STANDARD", "MINT", "VIOLET", "AMBER", "PLATINUM"], newLivery: "NEW COLOUR: {n}",
+    best: "BEST", rank: "RANK", space: "SPACE", credit: "Made with Claude"
+  }
+};
+let lang = store.get("lang", null);
+if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
+const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; return n == null || typeof v !== "string" ? v : v.replace("{n}", n); };
+const sectorName = s => S("sector", s + 1) + "  " + S("shapes")[s % 3];
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const wrap = $("wrap"), cv = $("cv"), ctx = cv.getContext("2d", { alpha: false });
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
+
+// ---------- state ----------
+// title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
+let state = "title", run = null, fx = null, runCount = 0, manual = false, simT = 0, pfPlaying = false, overShownAt = 0, autopilot = false, demoIdx = 0;
+const T = () => manual ? simT : performance.now();
+const hint = makeHint(store, "hintDone");
+const isTitle = () => state === "title" || state === "title-dying";
+const isDying = () => state === "dying" || state === "demo-dying" || state === "title-dying";
+const isOver = () => state === "over" || state === "demo-over";
+function pfStart() { if (!pfPlaying) { pfPlaying = true; platform("gameplayStart"); } }
+function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop"); } }
+const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its one-shot sounds to itself
+const bestOf = () => Number(store.get("best", 0)) || 0, runsOf = () => Number(store.get("runs", 0)) || 0;
+const bestSecOf = () => Number(store.get("bestSec", 0)) || 0;
+let labsSeen = Number(store.get("labs", 0)) || 0;   // rows with a tap count a player has passed (the counts stop at 3)
+
+// ---------- GAME-SPECIFIC: sectors (shape) and speed segments (speed steps half a sector later) ----------
+const secShape = s => SHAPES[s % 3];
+const segOf = t => t < HALF ? 0 : fl((t - HALF) / SEC_LEN) + 1;
+const segT = g => g === 0 ? 0 : (g - 0.5) * SEC_LEN;
+// +8 % a step to 18 rows/s (about 109 s), then +0.5 a step to 23: the fog stays put, so the reading time keeps shrinking
+const segSpeed = g => g <= 8 ? Math.min(18, 10 * Math.pow(1.08, g)) : Math.min(23, 18 + 0.5 * (g - 8));
+const speedAt = t => segSpeed(segOf(t < 0 ? 0 : t));
+const segP = [0];
+function PS(g) { while (segP.length <= g) { const k = segP.length; segP.push(segP[k - 1] + (segT(k) - segT(k - 1)) * segSpeed(k - 1)); } return segP[g]; }
+function posAt(t) { if (t <= 0) return t * 10; const g = segOf(t); return PS(g) + (t - segT(g)) * segSpeed(g); }
+function tAtPos(p) { if (p <= 0) return p / 10; let g = 0; while (PS(g + 1) <= p) g++; return segT(g) + (p - PS(g)) / segSpeed(g); }
+const gateC = [];
+function gateRow(s) { while (gateC.length <= s) gateC.push(Math.round(posAt(gateC.length * SEC_LEN))); return gateC[s]; }
+function secOfRing(r) { let s = 0; while (gateRow(s + 1) <= r) s++; return s; }
+// face under the runner for a tunnel of N faces at world angle R (ties turn clockwise)
+function faceAt(R, N) { const st = TAU / N, thf = ((-R) % TAU + TAU) % TAU; const j = Math.round(thf / st - 1e-6); return ((j % N) + N) % N; }
+function rollAt(t) {
+  if (t <= 0) return 0;
+  const s = fl(t / SEC_LEN), local = t - s * SEC_LEN;
+  let amp = s === 0 ? ROLL_AMP[0] * sstep(HALF - 2, HALF - 0.4, t) : lerp(ROLL_AMP[Math.min(s - 1, 6)], ROLL_AMP[Math.min(s, 6)], smooth(local / 1.6));
+  return amp * Math.cos(Math.PI * t / (BAR * (s >= 2 ? 1 : 2))) * (Juice.reduce ? 0.3 : 1);
+}
+
+// ---------- GAME-SPECIFIC: cross-section geometry; 24 samples every 15 degrees fit all three shapes exactly ----------
+function polyR(N, phi) { const st = TAU / N, rel = phi - Math.round(phi / st) * st; return 1 / Math.cos(rel); }
+const ringCache = {};
+function ringPts(Na, Nb, k) {
+  const key = Na * 100 + Nb * 10 + k;
+  let c = ringCache[key];
+  if (c) return c;
+  c = new Float32Array(48);
+  const f = k / MORPH;
+  for (let i = 0; i < 24; i++) {
+    const phi = i * Math.PI / 12, r = polyR(Na, phi) * (1 - f) + polyR(Nb, phi) * f;
+    c[2 * i] = -Math.sin(phi) * r; c[2 * i + 1] = Math.cos(phi) * r;
+  }
+  return (ringCache[key] = c);
+}
+const VIDX = {}, FACE = {};
+for (const N of [3, 4, 6]) {
+  const v = [], fa = [], st = TAU / N, R = 1 / Math.cos(st / 2);
+  for (let i = 0; i < N; i++) v.push(Math.round((i + 0.5) * 24 / N) % 24);
+  VIDX[N] = v;
+  for (let j = 0; j < N; j++) {
+    const ph = j * st, a0 = ph - st / 2, a1 = ph + st / 2;
+    fa.push({ nx: -Math.sin(ph), ny: Math.cos(ph), tx: Math.cos(ph), ty: Math.sin(ph),
+      ax: -Math.sin(a0) * R, ay: Math.cos(a0) * R, bx: -Math.sin(a1) * R, by: Math.cos(a1) * R,
+      ia: Math.round((j - 0.5) * 24 / N + 24) % 24, ib: Math.round((j + 0.5) * 24 / N) % 24 });
+  }
+  FACE[N] = fa;
+}
+
+// ---------- GAME-SPECIFIC: the generator. Rows land on exact 8th notes and are always passable from every face
+// that survived the row before (verify() proves it over many seeds) ----------
+function maxTaps(dte, diff) { const g1 = lerp(0.2, 0.17, diff), gap = 0.2; return dte < g1 ? 0 : 1 + fl((dte - g1) / gap); }
+function passable(pb, b, maxT, N) {
+  for (let f = 0; f < N; f++) {
+    if (pb & (1 << f)) continue;
+    let ok = false;
+    for (let k = 0; k <= maxT && k < N; k++) if (!(b & (1 << ((f - k + N) % N)))) { ok = true; break; }
+    if (!ok) return false;
+  }
+  return true;
+}
+// taps needed from face f to reach a free face of row w
+function needFrom(w, f) { for (let k = 0; k < w.N; k++) if (!(w.blocked & (1 << ((f - k + w.N) % w.N)))) return k; return 0; }
+function pickW(r, table) {
+  let s = 0, i;
+  for (i = 0; i < table.length; i++) s += table[i][1];
+  let v = r() * s;
+  for (i = 0; i < table.length; i++) { v -= table[i][1]; if (v <= 0) return table[i][0]; }
+  return table[table.length - 1][0];
+}
+// one-face rows that block the face the player is on: one tap is always enough
+function entryRows(n, g0) { const a = [{ g: g0, k: 1, b: 1, track: true, fam: "entry" }]; for (let i = 1; i < n; i++) a.push({ g: 4, k: 1, b: 1, track: true, fam: "entry" }); return a; }
+// a fresh save's first run: gold one face to the right invites the first tap (it pays at once), doing nothing is
+// safe for 6 s, then floor-only blocks with the safe face lit white
+const TUT = [
+  { g: 4, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" }, { g: 2, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" },
+  { g: 2, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" }, { g: 2, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" },
+  { g: 5, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" }, { g: 2, k: 0, b: 0, gk: 1, track: true, inv: true, fam: "tut" },
+  { g: 8, k: 1, b: 1, track: true, hint: true, fam: "tut" }, { g: 4, k: 1, b: 1, track: true, hint: true, fam: "tut" },
+  { g: 4, k: 1, b: 1, track: true, hint: true, fam: "tut" }, { g: 4, k: 1, b: 1, track: true, fam: "tut" },
+  { g: 6, k: 2, b: 3, track: true, fam: "tut" }   // every face but one: the first ×2, at about 10 s
+];
+function makeGen(seed, tut) {
+  const G = { rnd: seeded(seed), lastM: 2, prevT: -5, prevBlocked: 0, path: 0, q: [], made: 0, tut: !!tut, lastSet: tut ? 4.5 : 3,
+    setI: seed & 1, shutN: 0, lockN: 0, id: 0 };
+  G.q = tut ? TUT.map(o => Object.assign({}, o)) : entryRows(3, 4); // retries skip the tutorial: three one-face rows, then real rows
+  return G;
+}
+function fillQueue(G, tt) {
+  const rnd = G.rnd, s = fl(tt / SEC_LEN), N = secShape(s), b = N - 1, local = tt - s * SEC_LEN, LP = LAPS[lapOf(s)];
+  const gaps = gapsFor(s, local), lvl = gateLv(s); // lvl: from the second lap the families tighten too
+  let fam, i;
+  if (tt - G.lastSet > lerp(5.5, 4, lvl) && local > 2.6 && local < SEC_LEN - 3) {
+    // a set piece every 5.5 s or more: the first shutter in the triangle, the first lock in the hexagon
+    if (s === 0) fam = (++G.setI & 1) ? "corridor" : "goldrun";
+    else if (!G.shutN) fam = "shutter";
+    else if (!G.lockN && s >= 2) fam = "lock";
+    else fam = ["corridor", "goldrun", "shutter", "lock"][G.setI++ % 4];
+  } else fam = s === 0 ? pickW(rnd, [["single", 0.6], ["stair", 0.2], ["greed", 0.2]]) : pickW(rnd, LP.fam);
+  if (fam === "corridor" || fam === "goldrun" || fam === "shutter" || fam === "lock") G.lastSet = tt;
+  if (fam === "single") G.q.push({ g: pickW(rnd, gaps), k: -1, b: -1, fam });
+  else if (fam === "stair" && s >= 3 && rnd() < 0.4) {
+    // from the second lap: a double stair, two faces round on each quarter note (a spiral)
+    G.q.push({ g: 3, k: 2, b, fam });
+    for (i = 1; i < 3; i++) G.q.push({ g: 2, k: 2, b, fam });
+  } else if (fam === "stair") {
+    const n = rnd() < 0.5 ? 3 : 4, g2 = s === 0 ? 3 : lvl > 0.05 ? 1 : 2;
+    G.q.push({ g: lvl > 0.35 ? 2 : 3, k: 1, b, fam });
+    for (i = 1; i < n; i++) G.q.push({ g: g2, k: 1, b, fam });
+  } else if (fam === "zig" && s >= 3) {
+    // from the second lap the zig leans on two-tap rows
+    const g0 = lvl > 0.25 ? 2 : 3;
+    G.q.push({ g: g0, k: 2, b, fam }, { g: 2, k: 1, b, fam }, { g: 2, k: 2, b, fam });
+  } else if (fam === "zig") {
+    const g1 = s >= 2 ? (lvl > 0.25 ? 1 : 2) : s === 1 && local >= HALF ? 2 : 3, g0 = lvl > 0.25 ? 2 : 3;
+    G.q.push({ g: g0, k: 1, b, fam }, { g: g0, k: 2, b, fam }, { g: g1, k: 1, b, fam });
+  } else if (fam === "corridor") {
+    // set piece: a one-lane corridor on four 8th notes; the rails flash on each
+    G.q.push({ g: 3, k: -1, b, cor: true, fam });
+    for (i = 0; i < 3; i++) G.q.push({ g: 1, k: 0, b, cor: true, fam });
+  } else if (fam === "goldrun") {
+    // set piece: a free streak of gold one face to the right, so one tap pays four times
+    G.q.push({ g: 3, k: -1, b: -1, fam });
+    G.q.push({ g: 2, k: 0, b: 0, gk: 1, fam });
+    for (i = 0; i < 3; i++) G.q.push({ g: 1, k: 0, b: 0, gk: 1, fam });
+  } else if (fam === "shutter") {
+    // set piece: a row whose blocks ratchet round one face per 8th note and lock before they arrive
+    G.q.push({ g: lapOf(s) ? 4 : 5, k: -1, b: -1, shut: true, fam });
+  } else if (fam === "lock") {
+    // set piece: a narrow row, then every face but one slams shut on the next bar line
+    const m1 = G.lastM + 3, m2 = Math.ceil((m1 + 4) / 8) * 8;
+    G.q.push({ g: 3, k: -1, b: Math.max(1, N - 2), fam }, { g: m2 - m1, k: -1, b: -1, lock: true, fam });
+  } else G.q.push({ g: lvl > 0.35 ? 3 : 4, k: 0, b: Math.max(1, N - 2), gold: true, fam });
+}
+function pickK(r, maxT, N, w) { const t = []; for (let k = 0; k <= Math.min(maxT, N - 1, 3); k++) t.push([k, w[k]]); return pickW(r, t); }
+function pickB(r, N, diff, s) {
+  if (N === 4) return r() < 0.4 + 0.45 * diff ? 3 : 2;
+  if (N === 3) return r() < Math.min(0.85, 0.65 + 0.6 * diff) ? 2 : 1;  // one open face more often as the triangle goes on
+  return pickW(r, [[3, 0.3 - 0.25 * diff], [4, 0.4], [5, 0.3 + 0.25 * diff]]);
+}
+// live: (sector) -> the face the player will most likely be on, or null for headless checks
+function makeRow(G, out, step, m, tt, s, live) {
+  const N = secShape(s), rnd = G.rnd, lap = lapOf(s), LP = LAPS[lap];
+  // diff: 0 at 8 s to 1 at 70 s, plus a step at the second lap so it is clearly harder than the first
+  const v = speedAt(tt), tc = tt, hwT = HW / v, hwG = HWG / v, diff = clamp((tt - 8) / 62 + (tt >= 3 * SEC_LEN ? 0.25 : 0), 0, 1);
+  // a shutter only shows its real faces when it locks; the taps it asks for must fit after that
+  const lockT = step.shut ? fl((tc - SHUT_LOCK[G.shutN ? Math.min(2, 1 + lap) : 0]) / EIGHTH) * EIGHTH : -1;
+  const from = step.shut ? Math.max(G.prevT + hwG, lockT) : G.prevT + hwG;
+  const raw = Math.min(N - 1, maxTaps(tc - hwG - from, diff));
+  const maxT = Math.min(3, raw);                          // never force more than 3 taps; 4 and 5 are only gold lures
+  let path = G.path, i;
+  if (step.track && live) { const lf = live(s); if (lf >= 0) path = lf; }
+  let k = step.k >= 0 ? Math.min(step.k, maxT) : pickK(rnd, maxT, N, s < 2 ? K_FIRST[s] : LP.k);
+  if (step.shut && maxT > 0) k = Math.max(1, k);
+  let b = step.b >= 0 ? step.b : pickB(rnd, N, diff, s);
+  if (step.shut) b = N === 3 || lap === 0 ? 1 : 2;
+  b = Math.min(b, N - 1);
+  let safe = (path - k + N) % N, blocked = 0, tries = 0, isLock = false;
+  if (step.lock && maxT > 0) {
+    // every face but one: the open face must be in reach from every face that survived the row before
+    for (let kk = 1; kk <= maxT && !isLock; kk++) {
+      const o = (path - kk + N) % N; let ok = true;
+      for (let f = 0; f < N; f++) if (!(G.prevBlocked & (1 << f)) && (f - o + N) % N > maxT) ok = false;
+      if (ok) { isLock = true; safe = o; k = kk; blocked = ((1 << N) - 1) & ~(1 << o); }
+    }
+  }
+  if (!isLock) {
+    // the faces between the path and the safe face are blocked, so a row asks for exactly the taps the table says
+    if (k > 0) { b = Math.max(b, k); for (let q = 0; q < k; q++) blocked |= 1 << ((path - q + N) % N); }
+    while (popc(blocked) < b && tries++ < 60) { const ff = (rnd() * N) | 0; if (ff !== safe) blocked |= 1 << ff; }
+    while (!passable(G.prevBlocked, blocked, maxT, N)) {
+      const cand = [];
+      for (i = 0; i < N; i++) if ((blocked & (1 << i)) && !(k > 0 && i === path)) cand.push(i);
+      if (!cand.length) { blocked = 0; break; }
+      blocked &= ~(1 << cand[(rnd() * cand.length) | 0]);
+    }
+  }
+  let holes = 0, gold = 0;
+  const holeP = tt < 12 || isLock || step.shut ? 0 : LP.hole;
+  for (i = 0; i < N; i++) if ((blocked & (1 << i)) && rnd() < holeP) holes |= 1 << i;
+  if (step.gk) gold = 1 << ((path - step.gk + N) % N);
+  else if (isLock) { if (rnd() < 0.5) gold = 1 << safe; }
+  else if (!step.track && !step.shut && (step.gold || rnd() < 0.3)) {
+    const gc = [];
+    for (i = 0; i < N; i++) {
+      if (blocked & (1 << i)) continue;
+      const kk = (path - i + N) % N;
+      if (kk > k && kk <= raw) gc.push(i);
+    }
+    if (gc.length) gold = 1 << gc[(rnd() * gc.length) | 0];
+  }
+  const fam = step.lock && !isLock ? "single" : step.fam || "single";
+  // c: the row's centre in rows; the shuttle passes it exactly on the 8th note
+  out.push({ id: ++G.id, c: posAt(tt), tc, hw: hwT, N, s, m, blocked, holes, gold, fam, lockT, pw: G.prevT, lock: isLock, slamT: isLock ? tc - BEAT : -1,
+    first: (step.shut && !G.shutN) || (isLock && !G.lockN), hint: !!step.hint, inv: !!step.inv, cor: !!step.cor, need: k,
+    greedy: rnd() < 0.55, done: false, taken: false, lab: false, closed: false, seenAt: -1, react: 0, needAt: -1, slammed: false, clamped: false, rStep: 0 });
+  if (step.shut) G.shutN++;
+  if (isLock) G.lockN++;
+  G.prevBlocked = blocked; G.prevT = tc; G.path = safe; G.lastM = m; G.made++;
+}
+function generate(G, out, posLimit, live) {
+  for (let guard = 0; guard < 64; guard++) {
+    if (!G.q.length) fillQueue(G, (G.lastM + 3) * EIGHTH);
+    const step = G.q[0], m = G.lastM + step.g, tt = m * EIGHTH;
+    if (posAt(tt) > posLimit) return;
+    const s = fl(tt / SEC_LEN), local = tt - s * SEC_LEN, lv = gateLv(s);
+    if (s >= 1 && local < lerp(0.8, 0.5, lv)) { skipGate(G, s); continue; }
+    if (local > SEC_LEN - lerp(1.1, 0.75, lv)) { skipGate(G, s + 1); continue; }
+    G.q.shift();
+    makeRow(G, out, step, m, tt, s, live);
+  }
+}
+// the quiet around a gate (s before and after, one-face rows after) shrinks lap by lap, so the rows per second keep rising
+const gateLv = s => clamp((s - 2) / 9, 0, 1);
+function skipGate(G, s) {
+  const lv = gateLv(s);
+  G.q = entryRows(s <= 2 ? 4 : lv >= 0.5 ? 2 : 3, 2); // feel the new turn angle on one-face rows before real rows
+  const snapT = tAtPos(gateRow(s) + MORPH / 2);        // the world snaps to the new shape here (0.16 s)
+  // the first row comes at least 0.6 s after the snap settles, at every speed
+  G.lastM = Math.max(Math.ceil((s * SEC_LEN + lerp(0.8, 0.5, lv)) / EIGHTH), Math.ceil((snapT + 0.76) / EIGHTH)) - 2;
+  G.prevBlocked = 0;                                   // after a gate the player may be on any face
+  G.prevT = snapT;
+  G.path = 0;
+}
+// passability proof over many seeds: from every face that survived the row before there is a free face within the
+// taps a quick hand fits in the window (shutters: the window starts when they lock); also a perfect player never
+// meets a dead end
+function verify(runs, secs) {
+  let viol = 0, total = 0, minWin = 9, dead = 0, worst = 0, shut = 0, lock = 0, gold = 0, minRead = 9;
+  for (let r = 0; r < runs; r++) {
+    const g = makeGen(7000 + r * 13, r % 2 === 0), out = [];
+    for (let it = 0; it < 5000; it++) { const n0 = out.length; generate(g, out, posAt(secs), null); if (out.length === n0) break; }
+    let prev = null, St = 0;
+    for (let i = 0; i < out.length; i++) {
+      const w = out[i], N = w.N, all = (1 << N) - 1;
+      let f, k;
+      total++; if (w.lockT > 0) shut++; if (w.lock) lock++; if (w.gold) gold++;
+      if (!prev || prev.s !== w.s) { prev = { blocked: 0, tc: w.s ? tAtPos(gateRow(w.s) + MORPH / 2) : -9, hw: 0 }; St = all; }
+      const open = Math.max(prev.tc + prev.hw, w.lockT), win = (w.tc - w.hw) - open;
+      if (w.lockT > 0) minRead = Math.min(minRead, w.tc - w.hw - w.lockT);
+      minWin = Math.min(minWin, win);
+      const kmax = win < 0.15 ? 0 : 1 + fl((win - 0.15) / 0.2);
+      for (f = 0; f < N; f++) {
+        if (prev.blocked & (1 << f)) continue;
+        k = needFrom(w, f);
+        if (k > worst) worst = k;
+        if (w.blocked === all || k > kmax) viol++;
+      }
+      let S2 = 0;
+      for (f = 0; f < N; f++) if (St & (1 << f)) for (k = 0; k <= Math.min(kmax, N - 1); k++) S2 |= 1 << ((f - k + N) % N);
+      St = S2 & ~w.blocked;
+      if (!St) { dead++; St = all & ~w.blocked; }
+      prev = w;
+    }
+  }
+  return { runs, secs, rows: total, rowsPerRun: +(total / runs).toFixed(1), violations: viol, deadEnds: dead, minWindow: +minWin.toFixed(3),
+    worstNeed: worst, shutters: shut, locks: lock, goldRows: gold, minShutterRead: +minRead.toFixed(3) };
+}
+
+// ---------- GAME-SPECIFIC: a run. The rules step at SIM_DT on the run clock; fx is the picture only ----------
+function newFx() {
+  return { vt: 0, Rd: 0, twFrom: 0, twT0: -1, twDur: 0.11, bank: 0, bankV: 0, railT: -9, zoomT: -9, beatT: -9, swayT: -9, swaySign: 1,
+    kicks: [], posVis: 0, deadVt: 0, shattered: false, call: null, scoreT: -1e9, disp: 0, pauseT: 0, label: null, tapT: -9, slamT: -9,
+    nearF: 0, nearN: 4, nearVt: -9, tripVt: -9 };
+}
+function newRun(mode, seed, o) {
+  o = o || {};
+  const tut = mode === "play" && !!o.tut;
+  run = {
+    mode, ai: mode !== "play", prof: o.prof || null, seed, tut, gen: makeGen(seed, tut), rows: [], rAI: seeded((seed ^ 0x5bd1e995) >>> 0),
+    t: 0, t0: 0, acc: 0, pos: 0, speedSeg: 0, visR: VIS, curSec: 0, curN: 4, cur: 0, Rt: 0, alive: true, dead: null, grace: null, hold: false,
+    bonus: 0, score: 0, golds: 0, gStreak: 0, gStreakMax: 0, goldT: -9, nears: 0, triples: 0, chain: 0, lastTapT: -9, tq: [], tapsFor: 0, taps: 0,
+    prevFace: 0, beatIdx: -1, held: 0, heldW: null, nearT: -9, labUsed: 0, labRow: null, labNeed: 0, best: mode === "play" ? bestOf() : 0, bestPassed: false, maxSec: 0, hexClear: false,
+    plan: [], planRow: 0, planAct: null, script: (o.script || []).map(e => Object.assign({}, e)), startAt: T(), result: null, saved: false
+  };
+  fx = newFx(); PN = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
+  if (o.at > 0) skipTo(o.at);
+  run.t0 = run.t;
+  if (mode === "play") hint.begin();
+  musicLevel(mode === "attract" ? "title" : "play");
+  musicSync();
+}
+// start part-way (attract, the demo's second run, bots, screenshots): the tunnel ahead fills from the next 8th note
+function skipTo(T0) {
+  const R = run, s = fl(T0 / SEC_LEN);
+  R.t = T0; R.pos = posAt(T0); R.curSec = s; R.curN = secShape(s); R.speedSeg = segOf(T0); R.maxSec = s;
+  R.visR = VIS + 6 * sstep(12, 18, speedAt(T0));
+  const G = R.gen; G.tut = false; G.q = []; G.lastM = Math.ceil(T0 / EIGHTH) + 2; G.prevT = T0; G.prevBlocked = 0; G.made = 9; G.lastSet = T0 - 3;
+  if (s >= 1) G.shutN = 1; if (s >= 2) G.lockN = 1;
+  fx.posVis = R.pos;
+}
+const clockNow = () => run ? run.t : 0;
+
+// the face the player will most likely stand on in sector s: now, plus the taps the rows still ahead need
+function liveFace(s) {
+  const R = run;
+  let Rr = R.Rt, f0 = R.cur, i, w, k;
+  if (R.curSec !== s) {
+    for (i = 0; i < R.rows.length; i++) { w = R.rows[i]; if (w.done || w.s !== R.curSec) continue; k = needFrom(w, f0); f0 = (f0 - k + R.curN) % R.curN; Rr += k * TAU / R.curN; }
+  }
+  const N = secShape(s);
+  let f = R.curSec === s ? R.cur : faceAt(Rr, N);
+  for (i = 0; i < R.rows.length; i++) { w = R.rows[i]; if (w.done || w.s !== s) continue; k = needFrom(w, f); f = (f - k + N) % N; }
+  return f;
+}
+
+// the core verb: the face on the right becomes the floor, at once (the picture follows in 110 ms). A turn pressed
+// a hair early, while the row at the shuttle would catch the face you turn onto, waits until that row has passed
+// (bar 1.5.6, the mirror of GRACE); it then lands at the first moment the row allows, so no row gets harder.
+function doTap() {
+  const R = run;
+  if (!R || !R.alive) return false;
+  if (R.held) { if (R.held < 3) R.held++; return true; }
+  const nf = (R.cur - 1 + R.curN) % R.curN, lead = EARLY * speedAt(R.t);
+  for (const w of R.rows) {
+    if (w.done || w.s !== R.curSec) continue;
+    if (w.c - HW - R.pos > lead) break;
+    if (!(w.blocked & (1 << R.cur)) && (w.blocked & (1 << nf))) { R.held = 1; R.heldW = w; return true; }
+    break;
+  }
+  return applyTap(false);
+}
+function applyTap(released) {
+  const R = run, t = R.t, q = R.tq;
+  if (!released && q.length >= 3 && t - q[q.length - 3] < TAP_BURST) return false;
+  q.push(t); if (q.length > 3) q.shift();
+  R.prevFace = R.cur; R.cur = (R.cur - 1 + R.curN) % R.curN;
+  R.Rt += TAU / R.curN;
+  if (R.Rt > TAU * 4) { R.Rt -= TAU * 4; fx.Rd -= TAU * 4; }
+  fx.twFrom = fx.Rd; fx.twT0 = fx.vt; fx.twDur = 0.11; fx.railT = fx.vt; fx.bankV += 8; fx.tapT = fx.vt;
+  R.chain = t - R.lastTapT < 0.34 ? Math.min(R.chain + 1, 3) : 0;
+  R.lastTapT = t; R.tapsFor++; R.taps++;
+  if (loud()) sfx.tap(R.chain);
+  return true;
+}
+function switchShape(s) {
+  const R = run, N = secShape(s), st = TAU / N;
+  const thf = ((-R.Rt) % TAU + TAU) % TAU, j = faceAt(R.Rt, N);
+  let delta = thf - j * st;
+  if (delta > Math.PI) delta -= TAU;
+  if ((R.curSec % 3) === 2) { R.hexClear = true; if (R.mode === "play") store.set("hexDone", true); }
+  R.curSec = s; R.curN = N; R.cur = j; R.maxSec = Math.max(R.maxSec, s);
+  R.Rt += delta; fx.twFrom = fx.Rd; fx.twT0 = fx.vt; fx.twDur = 0.16;
+  if (Math.abs(delta) > 0.01) fx.bankV += 4;
+  addTrauma(0.25);
+  zoomGate();
+  if (loud()) sfx.chunk();
+}
+function onBeat() {
+  const R = run;
+  fx.kicks.push({ r: fl(R.pos + R.visR) + 1, t0: fx.vt });
+  if (fx.kicks.length > 8) fx.kicks.shift();
+  fx.beatT = fx.vt; fx.swayT = fx.vt; fx.swaySign = -fx.swaySign;
+}
+function onSpeed() { fx.zoomT = fx.vt; addTrauma(0.2); if (loud()) sfx.whoosh(); }
+function zoomGate() { if (!Juice.reduce) fx.zoomT = fx.vt; }
+
+function simStep(dt) {
+  const R = run, p0 = R.pos;
+  R.t += dt;
+  const t = R.t, s = fl(t / SEC_LEN), sg = segOf(t), v = segSpeed(sg);
+  R.pos = posAt(t);
+  R.visR = VIS + 6 * sstep(12, 18, v);   // more rows ahead at high speed, so the lookahead stays above 0.86 s
+  if (sg > R.speedSeg) { R.speedSeg = sg; onSpeed(); }
+  if (R.curSec < s && R.pos >= gateRow(R.curSec + 1) + MORPH / 2) switchShape(R.curSec + 1);
+  generate(R.gen, R.rows, R.pos + R.visR + 3, liveFace);
+  const b = fl(t / BEAT);
+  if (b !== R.beatIdx) { R.beatIdx = b; onBeat(); }
+  if (R.ai || autopilot || R.prof) aiStep();
+  // the machines are heard as well as seen: a shutter ratchets each 8th note and clamps where it stops; a lock slams
+  for (let i = 0; i < R.rows.length; i++) {
+    const w = R.rows[i];
+    if (w.c - R.pos > R.visR) break;
+    if (w.done || w.s !== R.curSec) continue;
+    if (w.lock && !w.slammed && t >= w.slamT) { w.slammed = true; fx.slamT = fx.vt; addTrauma(0.1); if (loud()) sfx.slam(); }
+    if (w.lockT > 0) {
+      if (t < w.lockT) { const st = Math.ceil((w.lockT - t) / EIGHTH - 1e-6); if (st !== w.rStep) { if (w.rStep > 0 && loud()) sfx.ratchet(); w.rStep = st; } }
+      else if (!w.clamped) { w.clamped = true; addTrauma(0.06); if (loud()) sfx.clamp(); }
+    }
+  }
+  for (let i = 0; i < R.rows.length; i++) {
+    const w = R.rows[i];
+    if (w.done) continue;
+    const c = w.c;
+    if (c - HW > R.pos) break;
+    if (w.s !== R.curSec) { if (R.pos > c + HW) w.done = true; continue; }
+    if (c + HW >= p0 && c - HW <= R.pos && (w.blocked & (1 << R.cur)) && !R.grace) R.grace = { w, t0: t };
+    if (!w.taken && p0 < c && R.pos >= c && (w.gold & (1 << R.cur))) takeGold(w);
+    if (R.pos > c + HW && !(R.grace && R.grace.w === w)) passRow(w);
+  }
+  if (R.grace) { // touching a block: a tap in the next GRACE s onto a free face still saves the run
+    const g = R.grace, w = g.w;
+    if (!(w.blocked & (1 << R.cur))) { R.grace = null; w.closed = true; closeCall(w, true); }
+    else if (t - g.t0 >= GRACE || R.pos > w.c + HW) { die(w); return; }
+  }
+  if (R.held && (R.heldW.done || R.pos > R.heldW.c + HW + 0.5)) { // the early turn lands now that its row has passed
+    const n = R.held; R.held = 0; R.heldW = null;
+    for (let i = 0; i < n; i++) applyTap(true);
+  }
+  while (R.rows.length && R.rows[0].c + 1 < R.pos - 3) R.rows.shift();
+  const sc = fl(R.pos) + R.bonus;
+  if (sc !== R.score) { R.score = sc; }
+  if (R.mode === "play" && R.best > 0 && !R.bestPassed && R.score > R.best) bestPassed();
+  // tap counts on the face to reach: the first run's hint rows (×1), then the first three rows that need two or
+  // more, across runs until a player has met three of them (saved), so a short first run still learns ×2 and ×3
+  if (R.mode === "play" && (R.tut || labsSeen < 3)) {
+    R.labRow = null;
+    for (let i = 0; i < R.rows.length; i++) {
+      const lw = R.rows[i];
+      if (lw.done || lw.s !== R.curSec) continue;
+      if (lw.tc - t < 1.15) {
+        const nd = needFrom(lw, R.cur);
+        if (!lw.lab && (lw.hint || (nd >= 2 && R.labUsed < 3 && labsSeen < 3))) { lw.lab = true; if (!lw.hint) R.labUsed++; }
+        if (lw.lab && nd >= 1) { R.labRow = lw; R.labNeed = nd; }
+      }
+      break;
+    }
+  }
+}
+function nextRow(after) { // the first row of this sector still ahead (after a given row)
+  const R = run;
+  for (const w of R.rows) if (!w.done && w.s === R.curSec && w !== after && (!after || w.c > after.c)) return w;
+  return null;
+}
+function passRow(w) {
+  const R = run;
+  w.done = true;
+  if (w.cor) fx.railT = fx.vt;                  // corridor set piece: the rails flash on each 8th note
+  // a close call: you left this row's blocked face just before it arrived (within 0.8 of the gap before it, so dense
+  // rows do not make every turn a close call; the first lap's one-tap rows allow a little more)
+  const gapB = Math.max(0, w.tc - w.hw - (w.pw + w.hw)), nearW = lapOf(w.s) === 0 && w.need <= 1 ? NEAR_T1 : Math.min(NEAR_T, 0.8 * gapB);
+  if (!w.closed && (w.blocked & (1 << R.prevFace)) && R.prevFace !== R.cur && R.lastTapT >= w.tc - w.hw - nearW) { w.closed = true; closeCall(w, false); }
+  if (w.lab && !w.hint && R.mode === "play" && !R.prof && labsSeen < 3) { labsSeen++; store.set("labs", labsSeen); }
+  // a clean triple: the row needed three taps from where you stood and you made exactly three
+  if (w.needAt === 3 && R.tapsFor === 3) tripleTap(w);
+  if (R.mode === "play" && w.needAt >= 1 && R.tapsFor >= 1) hint.success();
+  R.tapsFor = 0;
+  const n = nextRow(w);
+  if (n && n.needAt < 0) n.needAt = needFrom(n, R.cur);
+}
+function takeGold(w) {
+  const R = run;
+  w.taken = true; R.bonus += 10; R.golds++;
+  R.gStreak = R.t - R.goldT < 3 ? R.gStreak + 1 : 0; R.goldT = R.t; R.gStreakMax = Math.max(R.gStreakMax, R.gStreak + 1);
+  if (loud()) sfx.gold(R.gStreak);
+  const p = shipXY(0.86);
+  for (let q = 0; q < 12; q++) { const an = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = 120 + Math.random() * 260; spawn(p[0], p[1], Math.cos(an) * sp, Math.sin(an) * sp, 0.35 + Math.random() * 0.25, 3, 2); }
+  if (R.mode !== "attract") call(R.gStreak >= 1 ? S("goldN", R.gStreak + 1) : "+10", "gold", p[0], p[1] - 40 * wsNow());
+  fx.scoreT = T();
+  if (R.mode === "play" && !w.inv) hint.success();   // the tutorial's lure does not end the hint: the first dodge does
+}
+function closeCall(w, late) {
+  const R = run, f = R.prevFace; void late;     // the face the block passes on (a late save left it too)
+  R.nears++; R.bonus += 5;
+  const quiet = R.t - R.nearT < NEAR_CD;          // a burst of close calls scores each one but celebrates the first
+  R.nearT = R.t;
+  w.nearVt = fx.vt; fx.nearF = (f - R.cur + R.curN) % R.curN; fx.nearVt = fx.vt; fx.nearN = R.curN;  // nearF: faces from the shuttle
+  if (quiet) return;
+  if (loud()) sfx.near();
+  addTrauma(0.12);
+  // at the spot: white chips where the block passes the face you left; the word sits between it and the shuttle
+  const p = faceScreen(f, 1.02), s = shipXY(0.7);
+  for (let z = 0; z < 14; z++) spawn(p[0] + (Math.random() - 0.5) * 40, p[1], (Math.random() - 0.5) * 320, -60 - Math.random() * 240, 0.25 + Math.random() * 0.25, 0, 2 + Math.random() * 2);
+  if (R.mode !== "attract") call(S("close") + " +5", "white", (p[0] + s[0]) / 2, (p[1] + s[1]) / 2 - 20 * wsNow());
+}
+function tripleTap(w) {
+  const R = run;
+  R.triples++; R.bonus += 10;
+  if (loud()) sfx.triple();
+  // the second-strongest moment after a crash: a zoom punch, a ring off the shuttle, a big word (rules never pause)
+  addTrauma(0.45); fx.tripVt = fx.vt;
+  const p = shipXY(0.8);
+  for (let q = 0; q < 16; q++) { const an = Math.random() * TAU, sp = 160 + Math.random() * 300; spawn(p[0], p[1], Math.cos(an) * sp, Math.sin(an) * sp - 100, 0.4 + Math.random() * 0.3, 1, 3); }
+  if (R.mode !== "attract") call(S("triple") + " +10", "uiA", p[0], p[1] - 48 * wsNow(), 1.3);
+}
+function bestPassed() {
+  const R = run;
+  R.bestPassed = true;
+  if (loud()) sfx.best();
+  addTrauma(0.15);
+  platform("happytime");
+  const p = shipXY(0.8);
+  for (let q = 0; q < 22; q++) { const a = Math.random() * TAU, sp = 160 + Math.random() * 380; spawn(p[0], p[1], Math.cos(a) * sp, Math.sin(a) * sp - 120, 0.5 + Math.random() * 0.3, 3, 2); }
+  call(S("newBest"), "gold", p[0], p[1] - 56 * wsNow());
+}
+// ---------- KEEP: one judgement slot at the spot (never stacked popups) ----------
+function call(str, col, x, y, k) { fx.call = { str, col, x, y, t: fx.vt, k: k || 1 }; }
+
+// ---------- KEEP: failure. Freeze with the cause on screen, then the result (bar 1.4.1) ----------
+function die(w) {
+  const R = run;
+  R.alive = false; R.grace = null;
+  const need = needFrom(w, R.cur);
+  let cause = "short";
+  const wasFree = R.prevFace !== R.cur && !(w.blocked & (1 << R.prevFace)) && R.lastTapT > w.tc - w.hw - 0.5;
+  if (wasFree) {
+    // a quick burst whose first tap this row needed: the second was one too many (not an early turn)
+    const q = R.tq, f0 = (R.cur + 2) % R.curN, burst = q.length >= 2 && q[q.length - 1] - q[q.length - 2] < 0.25, n = nextRow(w);
+    cause = burst && (w.blocked & (1 << f0)) ? "over" : n && needFrom(n, R.prevFace) > 0 ? "early" : "over";
+  }
+  else if (w.lock) cause = "lock";
+  else if (w.lockT > 0) cause = "shut";
+  // safe: the face that would have lived (the one you left, or the nearest free one), shown in the freeze
+  const safe = cause === "over" || cause === "early" ? R.prevFace : (R.cur - need + R.curN) % R.curN;
+  R.dead = { cause, need, fam: w.fam, sec: R.curSec, N: R.curN, face: R.cur, safe, w, at: T(), t: R.t };
+  kill();
+}
+function kill() {
+  const R = run;
+  state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
+  if (R.mode === "play" && !R.prof) { pfStop(); hint.runEnded(R.t - R.t0); }
+  if (loud()) sfx.crash();
+  musicLevel("duck");
+  addTrauma(0.75);
+  fx.deadVt = fx.vt; fx.shattered = false; fx.call = null;   // no stale popup next to the cause
+}
+function causeText(d) {
+  if (!d) return "";
+  if (d.cause === "over") return S("causeOver");
+  if (d.cause === "early") return S("causeEarly");
+  if (d.cause === "lock") return S("causeLock");
+  if (d.cause === "shut") return S("causeShut");
+  return d.need < 1 ? S("causeOver") : d.need === 1 ? S("causeShort1") : S("causeShort", d.need);
+}
+
+// ---------- KEEP: the AI for attract, ?demo=1 and __game.autoplay. It sees a row when it comes out of the fog,
+// reacts, waits for the row before to pass and taps at a human rate with timing noise; it uses the same doTap ----------
+function aiProf() { const R = run; return R.prof || (R.mode === "play" ? AIP.play : AIP[R.mode]); }
+function aiStep() {
+  const R = run, P = aiProf(), t = R.t;
+  while (R.plan.length && R.plan[0] <= t) { R.plan.shift(); doTap(); }
+  if (R.plan.length) return;                      // one row at a time
+  let prevEnd = -9, w = null;
+  for (const r of R.rows) {
+    if (r.done || r.s !== R.curSec) continue;
+    if (r.id <= R.planRow) { prevEnd = r.tc + r.hw; continue; }
+    w = r; break;
+  }
+  if (!w) return;
+  if (w.tc - t > Math.min(P.look, 0.92 * R.visR / speedAt(t))) return; // still in the fog (it reads a row once it is drawn)
+  if (w.seenAt < 0) { w.seenAt = t; w.react = lerp(P.react[0], P.react[1], R.rAI()); }
+  if (t < w.seenAt + w.react) return;
+  if (w.lockT > 0 && t < w.lockT + w.react * 0.6) return; // a shutter: its faces only count once it locks
+  R.planRow = w.id;
+  const N = w.N, f0 = (R.cur - R.held + N) % N, need = needFrom(w, f0), start = Math.max(t, prevEnd + 0.03 + w.react * 0.15);
+  const end = w.tc - w.hw - 0.02, room = k => k === 0 || start + (k - 1) * P.gap <= end;
+  // the target: the nearest free face, or a gold lure further round when there is time; one row of lookahead
+  const n2 = P.ahead ? nextRow(w) : null;
+  const okNext = k => { if (!n2) return true; const g = (f0 - k + N) % N, k2 = needFrom(n2, g); return (n2.tc - n2.hw - 0.02) - (w.tc + w.hw + 0.03) >= k2 * P.gap; };
+  let n = -1;
+  for (let k = need; k < N; k++) {
+    const g = (f0 - k + N) % N;
+    if (w.blocked & (1 << g)) continue;
+    if (!room(k)) break;
+    if (n < 0 && okNext(k)) n = k;
+    if (k > need && (w.gold & (1 << g)) && w.greedy && R.rAI() < P.greed && okNext(k)) { n = k; break; }
+  }
+  if (n < 0) n = need;
+  let act = null;
+  const sc = R.script;
+  if (sc.length && t - R.t0 + (w.tc - t) >= sc[0].at && need >= 1) act = sc.shift().act;
+  const r1 = R.rAI(), r2 = R.rAI();
+  // press: misreads grow when the slack is short (a rushed count), and shrink when there is time to look twice
+  const slack = end - start - Math.max(0, n - 1) * P.gap, pf = P.press ? clamp(1.6 - slack * 1.6, 0.4, 2) : 1;
+  if (!act) {
+    if (n >= 2 && r1 < P.slip * pf) n += r2 < 0.5 ? -1 : 1;
+    else if (n === 1 && r1 < P.slip1 * pf) n = r2 < 0.5 ? 0 : 2;
+    if (P.extra && R.rAI() < P.extra) n++;
+  }
+  const times = [];
+  if (act === "near" && n >= 1) { // the last tap just before the row arrives (a close call on purpose)
+    const last = w.tc - w.hw - 0.045;
+    for (let j = 0; j < n; j++) times.push(Math.max(start, last - (n - 1 - j) * P.gap));
+  } else if (act === "fail") { // one tap short on a 2+ row, or a tap that comes too late
+    if (need >= 2) for (let j = 0; j < need - 1; j++) times.push(start + j * P.gap);
+    else times.push(w.tc - w.hw + GRACE + 0.04);
+  } else for (let j = 0; j < n; j++) times.push(start + j * P.gap + gauss(R.rAI, 0, P.jit));
+  for (let j = 1; j < times.length; j++) times[j] = Math.max(times[j], times[j - 1] + 0.03);
+  R.plan = times.map(x => Math.max(x, t));
+}
+
+// ---------- KEEP: audio. SFX are data-like functions (w = start time); every voice goes through the kit bus ----------
+const midi = m => 440 * Math.pow(2, (m - 69) / 12);
+// a voice through a lowpass then a bandpass (the near-miss zip): raw saws never reach the bus unfiltered
+function zip(w, f0, f1, dur, peak, band) {
+  const c = AU.ctx, o = c.createOscillator(), lp = c.createBiquadFilter(), bp = c.createBiquadFilter(), g = c.createGain();
+  o.type = "sawtooth"; o.frequency.setValueAtTime(f0, w); o.frequency.exponentialRampToValueAtTime(f1, w + dur * 0.8);
+  lp.type = "lowpass"; lp.frequency.value = 5200; bp.type = "bandpass"; bp.frequency.value = band; bp.Q.value = 2.5;
+  env(g, peak, w, 0.003, dur);
+  o.connect(lp); lp.connect(bp); bp.connect(g); g.connect(AU.sfx); o.start(w); o.stop(w + dur + 0.05);
+}
+let tapW = -9, tapDens = 0;  // tap density (decays over 0.6 s): a stream on every 8th note sits about 4 dB lower
+const SFX = {
+  // the ratchet: two clicks, a 900 Hz body and a blip that a phone speaker carries, over a thump; chained taps climb
+  // (root, minor third, fifth, octave), the top step a little softer so a fast stream does not tire the ear
+  tap(w, chain) {
+    tapDens = w < tapW ? 1 : tapDens * Math.exp((tapW - w) / 0.6) + 1; tapW = w;
+    const m = [1, 1.189, 1.498, 2][chain || 0], q = vary(35, 0.1), g = q.g * (chain === 3 ? 0.8 : 1) / (1 + 0.3 * (tapDens - 1));
+    hiss("bandpass", 3000 * m * q.f, 5, 0.02, 0.8 * g, w);
+    hiss("bandpass", 4100 * m * q.f, 5, 0.02, 0.5 * g, w + 0.024);
+    tone("sine", 150 * m * q.f, 72 * m, 0.09, 0.3 * g, w, null, 0.002);
+    tone("triangle", 900 * m * q.f, 0, 0.05, 0.21 * g, w, null, 0.002);
+    tone("square", midi(74) * m * q.f, 0, 0.08, 0.16 * g, w + 0.01, null, 0.003, 3000);
+  },
+  // gold: a bright ping that climbs with the streak, two octaves at most
+  gold(w, n) {
+    const semi = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24][Math.min(10, n | 0)], q = vary(12, 0.08), f = midi(86 + semi) * q.f;
+    hiss("highpass", 7000, 1, 0.03, 0.1, w);
+    tone("sine", f, 0, 0.3, 0.3 * q.g, w); tone("sine", f * 2, 0, 0.16, 0.06, w); tone("triangle", f * 1.5, 0, 0.12, 0.05, w + 0.05);
+  },
+  near(w) { const q = vary(45, 0.1); hiss("highpass", 4800 * q.f, 0.8, 0.06, 0.3 * q.g, w); zip(w, 2600 * q.f, 500, 0.11, 0.5 * q.g, 2200); },
+  // the gate: a rising rush, then the ka-chunk of the tunnel changing shape
+  chunk(w) {
+    hiss("bandpass", 300, 1.5, 0.26, 0.14, w, null, 5000);
+    hiss("highpass", 3000, 0.7, 0.05, 0.12, w + 0.2); tone("square", 1500, 900, 0.05, 0.1, w + 0.2, null, 0.002, 4000);
+    tone("sine", 95, 42, 0.3, 0.13, w + 0.2, null, 0.002);
+  },
+  whoosh(w) { hiss("bandpass", 380, 1.2, 0.38, 0.32, w, null, 3400); },
+  crash(w) {
+    hiss("lowpass", 5000, 0.8, 0.75, 0.38, w, null, 140); hiss("highpass", 4000, 0.7, 0.05, 0.3, w);
+    tone("sine", 96, 26, 0.65, 0.3, w, null, 0.002); tone("square", 220, 70, 0.3, 0.08, w, null, 0.002, 900);
+  },
+  best(w) { [86, 90, 93, 98].forEach((n, i) => tone("triangle", midi(n), 0, 0.28, 0.12, w + i * 0.07)); hiss("highpass", 6000, 1, 0.3, 0.05, w + 0.2); },
+  start(w) { tone("sine", 70, 140, 0.18, 0.5, w, null, 0.002); hiss("highpass", 3500, 0.7, 0.05, 0.3, w); },
+  // the lock row slams shut on the beat before it arrives
+  slam(w) { const q = vary(30, 0.08); hiss("lowpass", 1400, 1, 0.16, 0.4 * q.g, w, null, 200); tone("sine", 120 * q.f, 38, 0.24, 0.62 * q.g, w, null, 0.002); tone("square", 700, 300, 0.05, 0.08, w, null, 0.002, 2500); },
+  // a shutter clamps where it stops; while it turns it ratchets quietly
+  clamp(w) { const q = vary(30, 0.1); hiss("bandpass", 2600 * q.f, 3, 0.05, 0.42 * q.g, w); tone("square", 1180 * q.f, 900, 0.05, 0.08, w, null, 0.002, 3500); tone("sine", 200, 90, 0.1, 0.32, w, null, 0.002); },
+  ratchet(w) { const q = vary(50, 0.1); hiss("bandpass", 3600 * q.f, 6, 0.012, 0.18 * q.g, w); },
+  triple(w) { const q = vary(10, 0.06); [74, 78, 81, 86].forEach((n, i) => tone("triangle", midi(n) * q.f, 0, 0.18, 0.2, w + i * 0.045)); hiss("highpass", 5000, 1, 0.12, 0.08, w); },
+  tick(w, i) { tone("sine", 900 + (i % 12) * 40, 0, 0.035, 0.24, w); },
+  stamp(w) { tone("sine", 140, 60, 0.15, 0.5, w); hiss("lowpass", 1200, 1, 0.08, 0.3, w); },
+  ui(w) { tone("sine", 880, 1320, 0.09, 0.32, w); hiss("bandpass", 3000, 4, 0.015, 0.2, w); }
+};
+const sfx = {};
+for (const k in SFX) sfx[k] = n => { if (audioOn()) SFX[k](AU.ctx.currentTime + 0.004, n); };
+const PEAK_SET = ["crash", "slam", "chunk", "tap", "gold", "clamp", "near", "best"]; // the 8 loudest, for the peak test
+// Music: an original 132 BPM loop on the run clock (D, Bb, F, C), scheduled ahead on the audio clock. The run clock
+// leads: the music slides to it, never the other way. Layers: kick, hats and the bass always; the snare from the
+// second bar; arpeggios by sector (triangle 2 per bar, hexagon every off-beat); a riser before each gate; an engine
+// hum that follows the speed. It muffles on the title, sweeps down at a crash and plays a soft bed on the result.
+const ROOTS = [38, 34, 41, 36], CHORD = [[62, 65, 69, 74], [58, 62, 65, 70], [65, 69, 72, 77], [60, 64, 67, 72]], BASSN = [0, 0, 12, 0, 0, 12, 0, 7];
+const mus = { bus: null, filt: null, t0: 0, i: 0, level: "title" };
+const LEVELS = { title: [0.5, 1500], play: [0.8, 16000], duck: [0.45, 160], bed: [0.42, 900], off: [0, 900] };
+function musicLevel(lv) {
+  const prev = mus.level; mus.level = lv;
+  if (!mus.bus || !AU.ctx) return;
+  const [v, f] = LEVELS[lv], t = AU.ctx.currentTime, g = mus.bus.gain, fr = mus.filt.frequency;
+  g.cancelScheduledValues(t); g.setTargetAtTime(v, t, lv === "off" ? 0.012 : 0.2);
+  fr.cancelScheduledValues(t);
+  if (lv === "duck") { fr.setValueAtTime(8000, t); fr.exponentialRampToValueAtTime(160, t + 0.5); }
+  else fr.setTargetAtTime(f, t, prev === "duck" ? 0.4 : 0.15);
+}
+// what the speakers lag behind the audio clock (Bluetooth and some Android paths: 40 to 200 ms); the music is
+// scheduled that much early so the beat you hear lands with the rows you see
+const auLat = () => AU.ctx && !AU.offline ? Math.min(0.25, AU.ctx.outputLatency || AU.ctx.baseLatency || 0) : 0;
+function musicSync() { // the audio time at which the run clock reads 0
+  if (!audioOn() || AU.offline || !run) return;
+  const c = AU.ctx.currentTime;
+  mus.t0 = c - run.t - auLat(); mus.i = Math.max(0, Math.ceil((c + 0.02 - mus.t0) / EIGHTH));
+}
+function hum(f, w, dur, peak) { // the engine: a held saw pair through a lowpass, swelling in and out (never a click)
+  const c = AU.ctx, g = c.createGain(), lp = c.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 420; g.gain.value = 0;
+  g.gain.setValueAtTime(0, w); g.gain.linearRampToValueAtTime(peak, w + 0.06); g.gain.setValueAtTime(peak, w + dur - 0.06); g.gain.linearRampToValueAtTime(0, w + dur);
+  lp.connect(g); g.connect(mus.bus);
+  for (const d of [0, 0.9]) { const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = f + d; o.connect(lp); o.start(w); o.stop(w + dur + 0.05); }
+}
+function playStep(i, w) {
+  const lv = mus.level, full = lv === "play" || lv === "title", tt = i * EIGHTH, bar = fl(i / 8), st = i % 8, sec = fl(tt / SEC_LEN), ch = bar % 4, b = mus.bus;
+  const preGate = tt % SEC_LEN > SEC_LEN - BEAT * 2;
+  if (full) {
+    if (st % 2 === 0 && !(preGate && st >= 4)) {
+      tone("sine", 150, 42, 0.32, 0.8, w, b, 0.002);
+      hiss("bandpass", 2300, 1.4, 0.016, 0.28, w, b);           // a 1-3 kHz click so the kick reads on phone speakers
+      tone("triangle", 240, 120, 0.06, 0.13, w, b, 0.002);
+    }
+    if (st % 2 === 1) hiss("highpass", 7600, 0.7, 0.035, 0.15, w, b);
+    if ((st === 2 || st === 6) && (bar >= 2 || sec > 0)) { hiss("bandpass", 1900, 0.9, 0.13, 0.36, w, b); tone("triangle", 210, 170, 0.07, 0.15, w, b); }
+    if (preGate && st >= 4) hiss("bandpass", 2400 + st * 300, 1.2, 0.07, 0.26, w, b);
+    if (st % 2 === 0 && run && lv === "play") hum(110 * speedAt(tt) / 10, w, BEAT + 0.04, 0.022);
+  }
+  if (lv !== "off") {
+    const bm = ROOTS[ch] + BASSN[st];
+    if (lv !== "bed" || st % 2 === 0) {
+      const c = AU.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+      o.type = "sawtooth"; o.frequency.value = midi(bm);
+      f.type = "lowpass"; f.Q.value = 6; f.frequency.setValueAtTime(900 + Math.min(sec, 8) * 250, w); f.frequency.exponentialRampToValueAtTime(220, w + 0.18);
+      env(g, lv === "bed" ? 0.12 : 0.19, w, 0.005, 0.21);
+      o.connect(f); f.connect(g); g.connect(b); o.start(w); o.stop(w + 0.26);
+    }
+    const arp = sec % 3 === 1 ? (st === 3 || st === 7) : sec % 3 === 2 ? (st % 2 === 1) : (sec >= 3 && st === 7);
+    if (arp || (lv === "bed" && st === 3)) tone("triangle", midi(CHORD[ch][(i >> 1) % 4] + 12), 0, 0.14, 0.07, w, b);
+  }
+}
+function musicStep() {
+  if (!audioOn() || AU.offline) return;
+  const c = AU.ctx;
+  if (!mus.bus || mus.bus.context !== c) {
+    mus.filt = c.createBiquadFilter(); mus.filt.type = "lowpass"; mus.filt.frequency.value = LEVELS[mus.level][1];
+    mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(mus.filt); mus.filt.connect(AU.music);
+    musicLevel(mus.level); musicSync();
+  }
+  const live = run && run.alive && !run.hold && (state === "play" || state === "title" || state === "demo");
+  if (live) { // slide toward the run clock; jump when far off (a stall, a resume)
+    const want = c.currentTime - run.t - auLat(), d = want - mus.t0;
+    if (Math.abs(d) > 0.12) { mus.t0 = want; mus.i = Math.max(0, Math.ceil((c.currentTime + 0.02 - mus.t0) / EIGHTH)); }
+    else mus.t0 += d * 0.05;
+  }
+  if (mus.level === "off") { mus.i = Math.max(mus.i, Math.ceil((c.currentTime - mus.t0) / EIGHTH)); return; }
+  while (mus.t0 + mus.i * EIGHTH < c.currentTime + 0.12) {
+    const w = mus.t0 + mus.i * EIGHTH;
+    if (w > c.currentTime - 0.02) playStep(mus.i, Math.max(w, c.currentTime));
+    mus.i++;
+  }
+}
+
+// ---------- GAME-SPECIFIC: light sprites. Light that comes from something in the tunnel (kouhei 2026-10-08) is
+// baked once per pixel (no gradient API) and laid on with a screen blend; the UI never glows ----------
+function glowSprite(c, size) {
+  const g = cnv(size, size), x = g.getContext("2d"), im = x.createImageData(size, size), d = im.data, h = size / 2;
+  const K = [[0, 1], [0.16, 0.6], [0.4, 0.2], [0.7, 0.05], [1, 0]];
+  for (let y = 0; y < size; y++) for (let X = 0; X < size; X++) {
+    const r = Math.hypot(X + 0.5 - h, y + 0.5 - h) / h, i = (y * size + X) * 4;
+    let a = 0;
+    for (let k = 1; k < K.length; k++) if (r < K[k][0]) { a = lerp(K[k - 1][1], K[k][1], (r - K[k - 1][0]) / (K[k][0] - K[k - 1][0])); break; }
+    d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = a * 255;
+  }
+  x.putImageData(im, 0, 0);
+  return g;
+}
+const SPRG = { mag: glowSprite(TC.danger, 128), gold: glowSprite(TC.gold, 96), white: glowSprite(TC.white, 96),
+  light: PAL3.map(p => glowSprite(p.light, 256)), liv: {} };
+const livSpr = k => SPRG.liv[k] || (SPRG.liv[k] = glowSprite(TC[k], 128));
+// the dark rim of the view: alpha rises from the middle out, at a quarter of the screen size
+function makeVignette(w, h) {
+  const c = cnv(Math.max(2, Math.round(w / 4)), Math.max(2, Math.round(h / 4))), x = c.getContext("2d"), im = x.createImageData(c.width, c.height), d = im.data;
+  const cx = c.width / 2, cy = (vpY + unit * 0.3) / 4, D = Math.hypot(c.width, c.height), v = TC.vig;
+  for (let y = 0; y < c.height; y++) for (let X = 0; X < c.width; X++) {
+    const r = Math.hypot(X + 0.5 - cx, y + 0.5 - cy) / D, i = (y * c.width + X) * 4;
+    const g = clamp((r - 0.18) / 0.44, 0, 1), a = g < 0.6 ? 0.25 * g / 0.6 : 0.25 + 0.37 * (g - 0.6) / 0.4;
+    d[i] = v[0]; d[i + 1] = v[1]; d[i + 2] = v[2]; d[i + 3] = a * 255;
+  }
+  x.putImageData(im, 0, 0);
+  // scaled once to device pixels, so each frame lays it on 1:1 with no filtering (a full-screen resample is costly)
+  const f = cnv(Math.round(w * L.dpr), Math.round(h * L.dpr));
+  f.getContext("2d").drawImage(c, 0, 0, f.width, f.height);
+  return f;
+}
+
+// ---------- GAME-SPECIFIC: particles (a pooled, capped set in screen px: chips and streaks) ----------
+const PMAX = 220;
+let PN = 0;
+const pxA = new Float32Array(PMAX), pyA = new Float32Array(PMAX), pvx = new Float32Array(PMAX), pvy = new Float32Array(PMAX);
+const plA = new Float32Array(PMAX), pmA = new Float32Array(PMAX), pkA = new Uint8Array(PMAX), psA = new Float32Array(PMAX), prA = new Float32Array(PMAX);
+function spawn(x, y, vx, vy, life, kind, size) {
+  if (PN >= PMAX) return;
+  pxA[PN] = x; pyA[PN] = y; pvx[PN] = vx; pvy[PN] = vy; plA[PN] = life; pmA[PN] = life; pkA[PN] = kind; psA[PN] = size; prA[PN] = Math.random() * TAU; PN++;
+}
+// speed streaks in tunnel space
+const SN = 40, sPhi = new Float32Array(SN), sRho = new Float32Array(SN), sW = new Float32Array(SN);
+for (let i = 0; i < SN; i++) { sPhi[i] = Math.random() * TAU; sRho[i] = 0.72 + Math.random() * 0.24; sW[i] = Math.random() * (VIS + 2); }
+
+// ---------- GAME-SPECIFIC: where the tunnel sits on screen (CSS px) ----------
+let TW = 360, TH = 640, unit = 150, vpY = 300, VIG = null;
+const Z0 = { x: 0, y: 0 };
+function shake() { const a = Juice.reduce ? 0 : Juice.trauma * Juice.trauma * 10; return a < 0.05 ? Z0 : { x: vnoise(Juice.t * 24) * a, y: vnoise(Juice.t * 24 + 57.3) * a }; }
+function swayNow() { if (Juice.reduce) return 0; const sx = fx.vt - fx.swayT; return fx.swaySign * 0.035 * (sx < 0.05 ? sx / 0.05 : Math.exp(-(sx - 0.05) / 0.2)); }
+const rollNow = () => run ? rollAt(run.dead ? run.dead.t : run.t) : 0;
+// the shuttle's floor point at depth f (it turns with sway and roll, never with the tap rotation)
+function shipXY(f) { const a = swayNow() + rollNow(), y = unit * f; return [TW / 2 - Math.sin(a) * y, vpY + Math.cos(a) * y]; }
+// the middle of face f of the current tunnel, near the shuttle's depth, on screen
+function faceScreen(f, z) {
+  const R = run, N = R.curN, ang = fx.Rd + swayNow() + rollNow() + f * TAU / N, r = 0.62 * unit / (z || 1);
+  return [TW / 2 - Math.sin(ang) * r, vpY + Math.cos(ang) * r];
+}
+const wsNow = () => clamp(unit / 150, 1, 1.8);   // world words grow with the tunnel (wide screens)
+const liveryNow = () => run && run.mode === "play" ? LIVERY[liveryOf(bestSecOf())].c : run && run.mode === "attract" ? LIVERY[liveryOf(bestSecOf())].c : "cyan";
+
+// ---------- GAME-SPECIFIC: drawing the tunnel ----------
+const RMAX = 34, rgP = [], rgZ = new Float32Array(RMAX), rgR = new Int32Array(RMAX), rgN = new Int8Array(RMAX);
+const rgPure = new Uint8Array(RMAX), rgU = new Float32Array(RMAX), rgL = new Float32Array(RMAX * 3), rgA = new Float32Array(RMAX * 3);
+for (let i = 0; i < RMAX; i++) rgP.push(new Float32Array(48));
+const tmpA = [0, 0, 0], tmpB = [0, 0, 0], tmpC = [0, 0, 0], ringC = [0, 0, 0], PANEL = TC.panel, SEAM = TC.seam, STEEL = TC.steel;
+let GLN = 0;
+const GMAX = 90, gX = new Float32Array(GMAX), gY = new Float32Array(GMAX), gRr = new Float32Array(GMAX), gA = new Float32Array(GMAX), gS = [];
+function glow(spr, x, y, r, a) { if (GLN >= GMAX || a <= 0.01) return; gS[GLN] = spr; gX[GLN] = x; gY[GLN] = y; gRr[GLN] = r; gA[GLN] = a; GLN++; }
+function palOfRing(r, out, outA) {
+  const s = secOfRing(r), b = s % 3;
+  let f = 1, a = 0;
+  if (s > 0) { const k = r - gateRow(s); if (k < MORPH) { f = k / MORPH; a = (s - 1) % 3; } }
+  if (f >= 1) { out[0] = PAL3[b].light[0]; out[1] = PAL3[b].light[1]; out[2] = PAL3[b].light[2]; outA[0] = PAL3[b].acc[0]; outA[1] = PAL3[b].acc[1]; outA[2] = PAL3[b].acc[2]; }
+  else { mixc(PAL3[a].light, PAL3[b].light, f, out); mixc(PAL3[a].acc, PAL3[b].acc, f, outA); }
+}
+// panel light: walls a little lifted near the runner, brighter toward the far light, which stops at about 60 %
+function litAt(u) { u = u < 0 ? 0 : u; const a = 0.08 + 0.44 * Math.pow(u, 1.3); return a + (0.6 - a) * sstep(0.72, 1.1, u); }
+const rotMask = (m, k, N) => { k = ((k % N) + N) % N; return ((m << k) | (m >>> (N - k))) & ((1 << N) - 1); };
+let viewA = 0, viewX = 0, viewY = 0, labX = 0, labY = 0, labA = 0, ringPath = null, ghX = -1, ghY = -1;
+function ringLine(x, A, k) { x.moveTo(A[0] * k, A[1] * k); for (let j = 1; j < 24; j++) x.lineTo(A[j * 2] * k, A[j * 2 + 1] * k); x.closePath(); }
+
+function drawWorld() {
+  const x = ctx, R = run, dpr = L.dpr, vt = fx.vt;
+  x.setTransform(dpr, 0, 0, dpr, 0, 0); x.globalCompositeOperation = "source-over"; x.globalAlpha = 1;
+  x.fillStyle = HX.base; x.fillRect(0, 0, TW, TH);
+  const ze = (vt - fx.zoomT) / 0.22, zt = (vt - fx.tripVt) / 0.18;
+  const zf = Juice.reduce ? 1 : Math.max(ze >= 0 && ze < 1 ? 1 + 0.05 * (1 - ze) * (1 - ze) : 1, zt >= 0 && zt < 1 ? 1 + 0.04 * (1 - zt) * (1 - zt) : 1);
+  const U = unit * zf * (1 + (Juice.reduce ? 0 : 0.012 * Math.exp(-(vt - fx.beatT) * 10)));
+  const sway = swayNow() + rollNow(), sh = shake(), vx = TW / 2 + sh.x, vy = vpY + sh.y, pv = fx.posVis, visR = R.visR;
+  x.translate(vx, vy); x.rotate(fx.Rd + sway);
+  viewA = fx.Rd + sway; viewX = vx; viewY = vy; labA = 0; GLN = 0; ghX = -1;
+  // rings; ring 0 is a cover ring pushed close to the camera so the near band always fills the screen
+  const r0 = Math.ceil(pv - (1 - ZMIN) / DEPTH), r1 = fl(pv + visR) + 2;
+  let nR = 0, i, j, A, B;
+  for (let r = r0 - 1; r <= r1 && nR < RMAX; r++, nR++) {
+    const s = secOfRing(r);
+    let Na, Nb, k = 0;
+    if (s === 0) Na = Nb = secShape(0);
+    else { k = r - gateRow(s); if (k >= MORPH) { Na = Nb = secShape(s); k = 0; } else { Na = secShape(s - 1); Nb = secShape(s); } }
+    const pts = ringPts(Na, Nb, k), z = nR === 0 ? 0.035 : 1 + (r - pv) * DEPTH, sc = U / z, P = rgP[nR];
+    for (let q = 0; q < 48; q++) P[q] = pts[q] * sc;
+    rgZ[nR] = z; rgR[nR] = r; rgPure[nR] = k === 0 ? 1 : 0; rgN[nR] = (k === 0 || k / MORPH < 0.5) ? Na : Nb;
+    rgU[nR] = (r - pv) / visR;
+    palOfRing(r, tmpA, tmpB);
+    rgL[nR * 3] = tmpA[0]; rgL[nR * 3 + 1] = tmpA[1]; rgL[nR * 3 + 2] = tmpA[2];
+    rgA[nR * 3] = tmpB[0]; rgA[nR * 3 + 1] = tmpB[1]; rgA[nR * 3 + 2] = tmpB[2];
+  }
+  // panels: light fixed to the screen, so the floor under the shuttle is brightest and the ceiling darkest
+  for (i = 0; i < nR - 1; i++) {
+    A = rgP[i]; B = rgP[i + 1];
+    const lt = litAt((rgU[i] + rgU[i + 1]) / 2);
+    tmpA[0] = rgL[i * 3]; tmpA[1] = rgL[i * 3 + 1]; tmpA[2] = rgL[i * 3 + 2];
+    mixc(PANEL, tmpA, lt, tmpC);
+    if (rgPure[i] && rgPure[i + 1] && rgN[i] === rgN[i + 1]) {
+      const N = rgN[i], F = FACE[N], st0 = TAU / N;
+      for (j = 0; j < N; j++) {
+        const fa = F[j].ia * 2, fb = F[j].ib * 2, ca = Math.cos(j * st0 + fx.Rd);
+        const m = (0.62 + 0.3 * ca + 0.12 * ca * ca * (ca > 0 ? 1 : 0)) * (((rgR[i] + j) & 1) ? 0.8 : 1);
+        x.beginPath(); x.moveTo(A[fa], A[fa + 1]); x.lineTo(A[fb], A[fb + 1]); x.lineTo(B[fb], B[fb + 1]); x.lineTo(B[fa], B[fa + 1]); x.closePath();
+        x.fillStyle = rgbM(tmpC, m); x.fill();
+        if ((rgR[i] & 7) === 0 && rgZ[i] < 2.2) { // a machined inset plate every 8 rows, so the near walls read as machinery
+          const ax = A[fa], ay = A[fa + 1], bx = A[fb], by = A[fb + 1], cx = B[fa], cy = B[fa + 1], dx = B[fb], dy = B[fb + 1];
+          const pt = (u, v) => [lerp(lerp(ax, bx, u), lerp(cx, dx, u), v), lerp(lerp(ay, by, u), lerp(cy, dy, u), v)];
+          const p0 = pt(0.2, 0.25), p1 = pt(0.8, 0.25), p2 = pt(0.8, 0.75), p3 = pt(0.2, 0.75);
+          x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]); x.lineTo(p3[0], p3[1]); x.closePath();
+          x.fillStyle = rgbM(tmpC, m * 0.82); x.fill(); x.strokeStyle = rgbA(SEAM, 1); x.lineWidth = 1; x.stroke();
+        }
+      }
+    } else {
+      x.beginPath(); ringLine(x, A, 1);
+      x.moveTo(B[0], B[1]); for (j = 23; j >= 1; j--) x.lineTo(B[j * 2], B[j * 2 + 1]); x.closePath();
+      x.fillStyle = rgbM(tmpC, 1); x.fill();
+    }
+  }
+  // the far light at the end of the tunnel; its glow goes under everything else, so far rows read as silhouettes
+  const Lr = nR - 1;
+  A = rgP[Lr];
+  tmpA[0] = rgL[Lr * 3]; tmpA[1] = rgL[Lr * 3 + 1]; tmpA[2] = rgL[Lr * 3 + 2];
+  x.beginPath(); ringLine(x, A, 1); x.fillStyle = rgbM(tmpA, 0.6); x.fill();
+  x.globalCompositeOperation = "screen";
+  const LSP = SPRG.light[secOfRing(rgR[Lr]) % 3];
+  x.globalAlpha = 0.6; x.drawImage(LSP, -U * 0.85, -U * 0.85, U * 1.7, U * 1.7);
+  x.globalAlpha = 0.85; x.drawImage(SPRG.white, -U * 0.16, -U * 0.16, U * 0.32, U * 0.32);   // the hot core
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+  // seams: one ring per row, a major ring every 4 rows
+  x.lineJoin = "miter";
+  for (i = 1; i < nR - 1; i++) {
+    const uu = rgU[i], fog = 1 - sstep(0.82, 1.08, uu);
+    if (fog <= 0.01) continue;
+    tmpB[0] = rgA[i * 3]; tmpB[1] = rgA[i * 3 + 1]; tmpB[2] = rgA[i * 3 + 2];
+    mixc(SEAM, tmpB, 0.15 + 0.45 * clamp(uu, 0, 1), tmpC);
+    const major = (rgR[i] & 3) === 0;
+    x.beginPath(); ringLine(x, rgP[i], 1);
+    x.strokeStyle = rgbA(tmpC, (major ? 0.95 : 0.6) * fog * (0.75 + 0.25 * uu)); x.lineWidth = major ? 1.6 : 1; x.stroke();
+  }
+  // kick rings travelling toward the runner on each beat
+  for (const kr of fx.kicks) {
+    const idx = kr.r - rgR[0];
+    if (idx < 1 || idx >= nR - 1) continue;
+    const la = Math.exp(-(vt - kr.t0) * 1.1) * (1 - sstep(0.85, 1.05, rgU[idx]));
+    if (la < 0.03) continue;
+    tmpB[0] = rgA[idx * 3]; tmpB[1] = rgA[idx * 3 + 1]; tmpB[2] = rgA[idx * 3 + 2];
+    x.beginPath(); ringLine(x, rgP[idx], 1); x.strokeStyle = rgbA(tmpB, 0.75 * la); x.lineWidth = 2; x.stroke();
+  }
+  // steel corner rails: a click pulse runs down them on each tap; before a new machine row they pulse amber
+  const pa = vt - fx.railT, pc = pv - 1 + pa * 70, pk2 = Math.exp(-pa * 3.5);
+  let warnR = -1;
+  for (const w of R.rows) if (!w.done && w.first && w.s === R.curSec && w.c - pv < visR) { warnR = w.c; break; }
+  const warnA = warnR > 0 ? 0.5 + 0.5 * Math.cos(vt * TAU * 2.5) : 0;
+  x.lineCap = "butt";
+  for (i = 0; i < nR - 1; i++) {
+    const u2 = (rgU[i] + rgU[i + 1]) / 2, fog2 = 1 - sstep(0.85, 1.08, u2);
+    if (fog2 <= 0.01) continue;
+    A = rgP[i]; B = rgP[i + 1];
+    const V = VIDX[rgN[i]], dd = Math.abs(rgR[i] + 0.5 - pc);
+    let boost = dd < 2 ? (1 - dd / 2) * pk2 : 0;
+    boost = Math.max(boost, (rgR[i] - pv < 3 && rgR[i] - pv > -2) ? Math.exp(-pa * 10) * 0.8 : 0);
+    tmpA[0] = rgL[i * 3]; tmpA[1] = rgL[i * 3 + 1]; tmpA[2] = rgL[i * 3 + 2];
+    const warn = warnA > 0 && rgR[i] < warnR && rgR[i] >= warnR - 3;
+    if (warn) { mixc(TC.amber, TC.amberL, warnA, tmpC); boost = 0.6 * warnA; }
+    else mixc(STEEL, tmpA, clamp(u2 * 0.6 + boost, 0, 1), tmpC);
+    x.beginPath();
+    for (j = 0; j < V.length; j++) { const vi = V[j] * 2; x.moveTo(A[vi], A[vi + 1]); x.lineTo(B[vi], B[vi + 1]); }
+    x.strokeStyle = rgbA(tmpC, warn ? 0.9 * fog2 : (0.45 + 0.35 * u2 + boost * 0.5) * fog2); x.lineWidth = 2.2 * clamp(1.4 / rgZ[i], 0.6, 3); x.stroke();
+    if (i > 0 && (rgR[i] & 3) === 0 && rgPure[i]) { // machined notches where a major ring meets a rail
+      x.beginPath();
+      const nv = V.length;
+      for (j = 0; j < nv; j++) {
+        const c0 = V[j] * 2, cp = V[(j + nv - 1) % nv] * 2, cn = V[(j + 1) % nv] * 2;
+        x.moveTo(A[c0] + (A[cp] - A[c0]) * 0.07, A[c0 + 1] + (A[cp + 1] - A[c0 + 1]) * 0.07); x.lineTo(A[c0], A[c0 + 1]);
+        x.lineTo(A[c0] + (A[cn] - A[c0]) * 0.07, A[c0 + 1] + (A[cn + 1] - A[c0 + 1]) * 0.07);
+      }
+      tmpB[0] = rgA[i * 3]; tmpB[1] = rgA[i * 3 + 1]; tmpB[2] = rgA[i * 3 + 2];
+      x.strokeStyle = rgbA(tmpB, (0.55 + boost * 0.45) * fog2); x.lineWidth = 2 * clamp(1.4 / rgZ[i], 0.6, 2.5); x.stroke();
+    }
+  }
+  // gate rings and the best frame (a gold ring you fly through)
+  drawRing(gateRow(R.curSec + 1), nR, U, true);
+  if (R.alive) drawRing(gateRow(R.curSec + 2), nR, U, true);
+  if (R.alive && R.mode === "play" && R.best > 0 && !R.bestPassed && R.best - R.bonus > pv + 0.5) drawRing(R.best - R.bonus, nR, U, false);
+  // streaks
+  const sv = Math.max(R.alive ? speedAt(R.t) : 0, 0.01), slen = 0.5 + sv * 0.09;
+  x.globalCompositeOperation = "screen";
+  x.beginPath();
+  for (let k = 0; k < SN; k++) {
+    const za = 1 + sW[k] * DEPTH, zb = 1 + (sW[k] + slen) * DEPTH;
+    if (za < 0.45) continue;
+    if (zb <= za) continue;
+    const px = -Math.sin(sPhi[k]) * sRho[k], py = Math.cos(sPhi[k]) * sRho[k];
+    x.moveTo(px * U / za, py * U / za); x.lineTo(px * U / zb, py * U / zb);
+  }
+  tmpA[0] = rgL[3]; tmpA[1] = rgL[4]; tmpA[2] = rgL[5];
+  x.strokeStyle = rgbA(tmpA, R.alive ? 0.12 + sv * 0.012 : 0.08); x.lineWidth = 1.6; x.stroke();
+  x.globalCompositeOperation = "source-over";
+  // hazards, far to near
+  for (i = R.rows.length - 1; i >= 0; i--) {
+    const w = R.rows[i];
+    if (w.c + 0.5 < r0 || w.c - 0.5 > r1) continue;
+    drawRow(w, U, pv);
+  }
+  // light pass
+  x.globalCompositeOperation = "screen";
+  for (i = 0; i < GLN; i++) { x.globalAlpha = gA[i]; x.drawImage(gS[i], gX[i] - gRr[i], gY[i] - gRr[i], gRr[i] * 2, gRr[i] * 2); }
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+  // the shuttle (sway, roll and bank, never the world turn)
+  x.setTransform(dpr, 0, 0, dpr, 0, 0); x.translate(vx, vy); x.rotate(sway);
+  drawShuttle(x, U);
+  x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawSparks(x, U);
+  drawParticles(x);
+  if (VIG) { x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(VIG, 0, 0); x.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  drawWorldText(x, U, vx, vy, pv, nR);
+}
+function drawRing(r, nR, U, isGate) {
+  const x = ctx, idx = r - rgR[0];
+  if (idx < 1 || idx >= nR - 1) return;
+  const A = rgP[idx], fog = 1 - sstep(0.9, 1.08, rgU[idx]);
+  if (fog <= 0.02) return;
+  let c = TC.gold;
+  if (isGate) { palOfRing(r + MORPH, tmpA, ringC); c = ringC; }
+  const lw = (isGate ? 0.05 : 0.035) * U / rgZ[idx];
+  x.beginPath(); ringLine(x, A, 0.97);
+  x.globalCompositeOperation = "screen"; x.strokeStyle = rgbA(c, 0.25 * fog); x.lineWidth = lw * 3.2; x.stroke();
+  x.globalCompositeOperation = "source-over";
+  x.strokeStyle = rgbA(c, 0.95 * fog); x.lineWidth = lw; x.stroke();
+  x.strokeStyle = rgbA(TC.white, 0.7 * fog); x.lineWidth = Math.max(1, lw * 0.25); x.stroke();
+}
+// a machine row (shutter or lock) sits in a steel collar; it flashes white when the row locks or slams
+function drawCollar(x, w, U, ahead, al) {
+  const z = 1 + ahead * DEPTH;
+  if (z < ZMIN + 0.05) return;
+  const R = run, k = U / z * 0.995, P = ringPts(w.N, w.N, 0), ev = w.lock ? w.slamT : w.lockT, since = R.t - ev;
+  const hot = since >= 0 && since < 0.3 ? 1 - since / 0.3 : 0;
+  // a heavy machined collar: a dark band, a steel face and a bright inner lip, so a machine row reads as one
+  x.beginPath(); ringLine(x, P, k);
+  x.strokeStyle = rgbA(TC.uiD, 0.95 * al); x.lineWidth = Math.max(4, 0.15 * U / z); x.stroke();
+  x.strokeStyle = rgbA(STEEL, al); x.lineWidth = Math.max(2.5, 0.09 * U / z); x.stroke();
+  x.strokeStyle = rgbA(hot > 0 ? TC.white : TC.ink, (hot > 0 ? hot : 0.7) * al); x.lineWidth = Math.max(1, 0.025 * U / z); x.stroke();
+  x.beginPath(); ringLine(x, P, k * 0.955); x.strokeStyle = rgbA(TC.white, 0.35 * al); x.lineWidth = Math.max(1, 0.012 * U / z); x.stroke();
+  // ratchet teeth on the collar while a shutter still turns
+  if (w.lockT > 0 && R.t < w.lockT) {
+    x.beginPath();
+    for (let j = 0; j < 24; j += 2) { const a = P[j * 2], b = P[j * 2 + 1]; x.moveTo(a * k, b * k); x.lineTo(a * k * 0.93, b * k * 0.93); }
+    x.strokeStyle = rgbA(TC.amber, 0.85 * al); x.lineWidth = Math.max(1.5, 0.03 * U / z); x.stroke();
+  }
+}
+function drawRow(w, U, pv) {
+  const x = ctx, R = run, N = w.N, F = FACE[N], c = w.c, ahead = c - pv, vt = fx.vt;
+  let al = clamp((1.06 - ahead / R.visR) / 0.28, 0, 1);
+  if (al <= 0) return;
+  const zA = 1 + (ahead - BLK) * DEPTH, zB = 1 + (ahead + BLK) * DEPTH;
+  const zH0 = 1 + (ahead - 0.44) * DEPTH, zH1 = 1 + (ahead + 0.44) * DEPTH;
+  const s1 = U / zA, s2 = U / zB, killer = !!(R.dead && R.dead.w === w);
+  if (!killer) al *= sstep(0.45, 0.95, zA);   // rows fade as they pass the camera; the one that killed you stays solid
+  if (al <= 0.01) return;
+  const nearK = fx.vt - (w.nearVt || -9) < 0.14 ? 1 - (fx.vt - w.nearVt) / 0.14 : 0;   // a close call: its edges flash white
+  const ink = sstep(6, 9, ahead), tgt = w === R.labRow ? (R.cur - R.labNeed + N) % N : -1;
+  // a shutter before it locks: its blocks stand where they are now, one face further on each 8th note
+  let mask = w.blocked, holes = w.holes, hgt = 0.34;
+  if (w.lockT > 0 && R.t < w.lockT) { const st = Math.ceil((w.lockT - R.t) / EIGHTH - 1e-6); mask = rotMask(w.blocked, st, N); holes = 0; }
+  const slam = w.lock ? (R.t >= w.slamT ? easeBack(clamp((R.t - w.slamT) / 0.12, 0, 1)) : 0) : 1;
+  const killF = run.dead && run.dead.w === w ? run.dead.face : -1, blink = killF >= 0 && (fl((fx.vt - fx.deadVt) / 0.2) & 1) === 0;
+  if (w.lockT > 0 || w.lock) drawCollar(x, w, U, ahead, al);
+  for (let j = 0; j < N; j++) {
+    const f = F[j], bit = 1 << j, dx = f.bx - f.ax, dy = f.by - f.ay;
+    if (mask & bit) {
+      if (holes & bit) {
+        if (zH0 < ZMIN + 0.01) continue;
+        const h0 = U / zH0, h1 = U / zH1, ax = f.ax + dx * 0.05, ay = f.ay + dy * 0.05, bx = f.bx - dx * 0.05, by = f.by - dy * 0.05;
+        x.beginPath(); x.moveTo(ax * h0, ay * h0); x.lineTo(bx * h0, by * h0); x.lineTo(bx * h1, by * h1); x.lineTo(ax * h1, ay * h1); x.closePath();
+        x.globalAlpha = al; x.fillStyle = HX.hole; x.fill();
+        x.strokeStyle = (j === killF && blink) || nearK > 0 ? HX.white : HX.danger; x.lineWidth = Math.max(nearK > 0 ? 2 : 1.2, 0.03 * h0); x.lineJoin = "round"; x.stroke();
+        x.globalAlpha = 1;
+        glow(SPRG.mag, (ax + bx) / 2 * h0, (ay + by) / 2 * h0, 0.5 * h0, 0.35 * al);
+      } else {
+        if (zA < ZMIN + 0.01) continue;
+        const hg = hgt * Math.max(0.0001, slam);
+        const Ax = f.ax + dx * 0.06, Ay = f.ay + dy * 0.06, Bx = f.bx - dx * 0.06, By = f.by - dy * 0.06;
+        const Ix = Ax - f.nx * hg, Iy = Ay - f.ny * hg, Jx = Bx - f.nx * hg, Jy = By - f.ny * hg;
+        x.globalAlpha = al;
+        if (slam <= 0) { // a lock row before it slams: the frame of every block, already deadly
+          const Ox = Ax - f.nx * hgt, Oy = Ay - f.ny * hgt, Px = Bx - f.nx * hgt, Py = By - f.ny * hgt;
+          x.beginPath(); x.moveTo(Ax * s1, Ay * s1); x.lineTo(Bx * s1, By * s1); x.lineTo(Px * s1, Py * s1); x.lineTo(Ox * s1, Oy * s1); x.closePath();
+          x.fillStyle = HX.dangerSlot; x.fill();
+          x.strokeStyle = HX.danger; x.lineWidth = Math.max(1.5, 0.03 * s1); x.stroke();
+          x.globalAlpha = 1;
+          continue;
+        }
+        x.beginPath(); x.moveTo(Ix * s1, Iy * s1); x.lineTo(Jx * s1, Jy * s1); x.lineTo(Jx * s2, Jy * s2); x.lineTo(Ix * s2, Iy * s2); x.closePath();
+        x.fillStyle = HX.dangerTop; x.fill();
+        x.beginPath(); x.moveTo(Ix * s2, Iy * s2); x.lineTo(Jx * s2, Jy * s2); x.strokeStyle = HX.dangerEdge; x.lineWidth = Math.max(1, 0.012 * s2); x.stroke();
+        x.beginPath(); x.moveTo(Ax * s1, Ay * s1); x.lineTo(Bx * s1, By * s1); x.lineTo(Jx * s1, Jy * s1); x.lineTo(Ix * s1, Iy * s1); x.closePath();
+        x.fillStyle = HX.danger; x.fill();
+        // a machined slot across the front and a bright top edge
+        const mx0 = (Ax + Ix) / 2, my0 = (Ay + Iy) / 2, mx1 = (Bx + Jx) / 2, my1 = (By + Jy) / 2;
+        x.beginPath(); x.moveTo(lerp(mx0, mx1, 0.08) * s1, lerp(my0, my1, 0.08) * s1); x.lineTo(lerp(mx0, mx1, 0.92) * s1, lerp(my0, my1, 0.92) * s1);
+        x.strokeStyle = rgbA(TC.dangerSlot, 0.7); x.lineWidth = Math.max(1, 0.03 * s1); x.stroke();
+        x.beginPath(); x.moveTo(Ix * s1, Iy * s1); x.lineTo(Jx * s1, Jy * s1); x.strokeStyle = HX.dangerHi; x.lineWidth = Math.max(1, 0.018 * s1); x.stroke();
+        if (ink > 0.02 || j === killF) {
+          x.beginPath(); x.moveTo(Ax * s1, Ay * s1); x.lineTo(Bx * s1, By * s1); x.lineTo(Jx * s1, Jy * s1); x.lineTo(Jx * s2, Jy * s2); x.lineTo(Ix * s2, Iy * s2); x.lineTo(Ix * s1, Iy * s1); x.closePath();
+          if (j === killF) { x.strokeStyle = blink ? HX.white : HX.ink; x.lineWidth = 3; }
+          else { x.strokeStyle = rgbA(TC.ink, 0.9 * ink); x.lineWidth = 1.4; }
+          x.stroke();
+        }
+        if (nearK > 0) {
+          x.beginPath(); x.moveTo(Ax * s1, Ay * s1); x.lineTo(Bx * s1, By * s1); x.lineTo(Jx * s1, Jy * s1); x.lineTo(Ix * s1, Iy * s1); x.closePath();
+          x.strokeStyle = rgbA(TC.white, nearK); x.lineWidth = Math.max(2, 0.03 * s1); x.stroke();
+        }
+        x.globalAlpha = 1;
+        glow(SPRG.mag, (Ax + Bx + Ix + Jx) / 4 * s1, (Ay + By + Iy + Jy) / 4 * s1, 0.75 * s1, 0.38 * al);
+      }
+    } else {
+      const open = w.lock && (w.first || slam <= 0), ghost = killF >= 0 && j === run.dead.safe && run.mode !== "attract";
+      if (ghost && zA >= ZMIN + 0.01) { // the freeze: the face that would have lived, outlined white where it meets you
+        const g0 = U / Math.max(zA, 0.3), g1 = U / zB;
+        x.beginPath(); x.moveTo(f.ax * g0, f.ay * g0); x.lineTo(f.bx * g0, f.by * g0); x.lineTo(f.bx * g1, f.by * g1); x.lineTo(f.ax * g1, f.ay * g1); x.closePath();
+        x.globalCompositeOperation = "screen"; x.fillStyle = rgbA(TC.white, 0.22); x.fill(); x.globalCompositeOperation = "source-over";
+        x.strokeStyle = HX.white; x.lineWidth = 3; x.lineJoin = "round"; x.stroke();
+        const zc = 1 + ahead * DEPTH, lx = f.nx * 0.5 * U / zc, ly = f.ny * 0.5 * U / zc, ca = Math.cos(viewA), sa = Math.sin(viewA);
+        ghX = viewX + lx * ca - ly * sa; ghY = viewY + lx * sa + ly * ca;
+      }
+      if ((j === tgt || open) && zH0 >= ZMIN + 0.01) {
+        // the face one count reaches glows white with its count (cyan would vanish in the cyan square); a lock's open
+        // face gets brackets
+        const g0 = U / zH0, g1 = U / zH1;
+        x.beginPath(); x.moveTo(f.ax * g0, f.ay * g0); x.lineTo(f.bx * g0, f.by * g0); x.lineTo(f.bx * g1, f.by * g1); x.lineTo(f.ax * g1, f.ay * g1); x.closePath();
+        x.globalCompositeOperation = "screen";
+        if (!open) { x.fillStyle = rgbA(TC.white, 0.2 * al * (0.75 + 0.25 * Math.sin(vt * 9))); x.fill(); }
+        x.strokeStyle = rgbA(TC.white, (open ? 0.55 + 0.35 * Math.cos(vt * TAU * 2) : 0.75) * al); x.lineWidth = open ? 3 : 2; x.stroke();
+        x.globalCompositeOperation = "source-over";
+        if (j === tgt) {
+          // screen position of the face centre for the tap-count label (drawn unrotated)
+          const zc = 1 + ahead * DEPTH, lx = f.nx * 0.62 * U / zc, ly = f.ny * 0.62 * U / zc, ca = Math.cos(viewA), sa = Math.sin(viewA);
+          labX = viewX + lx * ca - ly * sa; labY = viewY + lx * sa + ly * ca; labA = al;
+        }
+      }
+    }
+    if ((w.gold & bit) && !w.taken) {
+      const zg = 1 + ahead * DEPTH;
+      if (zg < ZMIN + 0.05) continue;
+      const zs = U / zg, sg = zs * (w.inv ? 1.5 : 1), cx = f.nx * 0.72 * zs, cy = f.ny * 0.72 * zs;   // the tutorial's lure is bigger
+      const hh = 0.12 * sg, spin = Math.cos(vt * 5 + c), hw = (0.09 * Math.abs(spin) + 0.012) * sg, sd = spin > 0 ? 1 : -1;
+      x.globalAlpha = al;
+      x.beginPath(); x.moveTo(cx + f.nx * hh, cy + f.ny * hh); x.lineTo(cx + f.tx * hw, cy + f.ty * hw); x.lineTo(cx - f.nx * hh, cy - f.ny * hh); x.lineTo(cx - f.tx * hw, cy - f.ty * hw); x.closePath();
+      x.fillStyle = HX.gold; x.fill();
+      x.strokeStyle = rgbA(TC.goldRim, 0.95); x.lineWidth = Math.max(1, 0.016 * sg); x.stroke();   // a dark rim: reads against the amber hexagon light
+      x.beginPath(); x.moveTo(cx + f.nx * hh, cy + f.ny * hh); x.lineTo(cx + f.tx * hw * sd, cy + f.ty * hw * sd); x.lineTo(cx, cy); x.closePath();
+      x.fillStyle = HX.goldL; x.fill();
+      const cr = hh * 0.32, cw = hw * 0.4;
+      x.beginPath(); x.moveTo(cx + f.nx * cr, cy + f.ny * cr); x.lineTo(cx + f.tx * cw, cy + f.ty * cw); x.lineTo(cx - f.nx * cr, cy - f.ny * cr); x.lineTo(cx - f.tx * cw, cy - f.ty * cw); x.closePath();
+      x.fillStyle = HX.white; x.fill();
+      x.globalAlpha = 1;
+      glow(SPRG.gold, cx, cy, 0.42 * sg, 0.55 * al);
+    }
+  }
+}
+function drawShuttle(x, U) {
+  // the base sits on the floor at the collision depth (y = U), so what you see is what hits
+  const R = run, dead = !R.alive, vt = fx.vt, lv = liveryNow(), LS = livSpr(lv), y0 = U * 0.94, hw = U * 0.17, hh = U * 0.07;
+  const pulse = 0.85 + 0.15 * Math.exp(-(vt - fx.beatT) * 6), age = vt - fx.deadVt;
+  x.globalCompositeOperation = "screen";
+  if (!(dead && fx.shattered)) {
+    x.globalAlpha = 0.4 * pulse; x.drawImage(LS, -hw * 4.2, U * 0.66, hw * 8.4, U * 0.62);
+    x.globalAlpha = 0.8 * pulse; x.drawImage(LS, -hw * 1.7, U * 0.94, hw * 3.4, U * 0.16);
+  }
+  if (dead && age < 0.6) {
+    const ha = 1 - age / 0.6;
+    x.globalAlpha = 0.55 * ha; x.drawImage(SPRG.mag, -U * 0.4, y0 - U * 0.4, U * 0.8, U * 0.8);   // marks the impact, never tints the field
+    x.globalAlpha = ha * 0.6; x.drawImage(SPRG.white, -U * 0.16, y0 - U * 0.16, U * 0.32, U * 0.32);
+  }
+  x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+  if (dead && fx.shattered) return;
+  x.save();
+  x.translate(0, y0 + (dead ? 0 : Math.sin(vt * 7) * 1.2));
+  // each tap leans the shuttle into the turn (a spring that settles in about 150 ms) and squashes it for 80 ms
+  x.rotate(clamp(-fx.bank * 0.4, -0.2, 0.2));
+  const sq = dead || Juice.reduce ? 0 : Math.exp(-(vt - fx.tapT) / 0.04);
+  if (sq > 0.01) x.scale(1 + 0.06 * sq, 1 - 0.06 * sq);
+  const frozen = dead;
+  // body: a low wedge seen from behind
+  x.beginPath();
+  x.moveTo(-hw, hh * 0.35); x.lineTo(-hw * 0.38, -hh); x.lineTo(hw * 0.38, -hh); x.lineTo(hw, hh * 0.35);
+  x.lineTo(hw * 0.52, hh * 0.85); x.lineTo(-hw * 0.52, hh * 0.85); x.closePath();
+  x.fillStyle = frozen ? HX.white : HX.ship; x.fill();
+  if (frozen) { x.strokeStyle = HX.danger; x.lineWidth = 2.5; x.stroke(); }
+  else {
+    x.beginPath(); x.moveTo(-hw, hh * 0.35); x.lineTo(hw, hh * 0.35); x.lineTo(hw * 0.52, hh * 0.85); x.lineTo(-hw * 0.52, hh * 0.85); x.closePath();
+    x.fillStyle = HX.shipB; x.fill();
+    x.beginPath(); x.moveTo(-hw * 0.24, -hh * 0.92); x.lineTo(hw * 0.24, -hh * 0.92); x.lineTo(hw * 0.32, -hh * 0.1); x.lineTo(-hw * 0.32, -hh * 0.1); x.closePath();
+    x.fillStyle = HX.cockpit; x.fill();
+    x.fillStyle = HX[lv];
+    x.fillRect(-hw * 0.46, hh * 0.45, hw * 0.24, hh * 0.32); x.fillRect(hw * 0.22, hh * 0.45, hw * 0.24, hh * 0.32);
+    x.strokeStyle = HX.ink; x.lineWidth = 1; x.beginPath(); x.moveTo(-hw * 0.38, -hh); x.lineTo(-hw, hh * 0.35); x.lineTo(-hw * 0.52, hh * 0.85); x.lineTo(hw * 0.52, hh * 0.85); x.lineTo(hw, hh * 0.35); x.lineTo(hw * 0.38, -hh); x.stroke();
+    x.globalCompositeOperation = "screen";
+    const eg = 0.6 + 0.25 * Math.sin(vt * 40) + 0.3 * Math.exp(-(vt - fx.tapT) * 8);
+    x.globalAlpha = clamp(eg * 0.7, 0, 1);   // short exhaust flares streaming back toward the camera
+    for (let e = -1; e <= 1; e += 2) { const ex = e * hw * 0.34, flr = hh * (1.5 + 0.35 * Math.sin(vt * 53 + e)); x.drawImage(LS, ex - hw * 0.16, hh * 0.45, hw * 0.32, flr * 2); }
+    x.globalAlpha = clamp(eg, 0, 1);
+    x.drawImage(LS, -hw * 0.34 - hh * 0.9, hh * 0.6 - hh * 0.9, hh * 1.8, hh * 1.8);
+    x.drawImage(LS, hw * 0.34 - hh * 0.9, hh * 0.6 - hh * 0.9, hh * 1.8, hh * 1.8);
+    x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+  }
+  x.restore();
+}
+// a close call: a white spark scraped along the near frame where the block went by; a triple: a ring off the shuttle
+function drawSparks(x, U) {
+  const R = run, vt = fx.vt, na = (vt - fx.nearVt) / 0.22;
+  if (na >= 0 && na < 1 && R.curN === fx.nearN) {
+    const p = faceScreen((R.cur + fx.nearF) % R.curN, 0.6), dx = p[0] - TW / 2, dy = p[1] - vpY, d = Math.hypot(dx, dy) || 1, tx = -dy / d, ty = dx / d;
+    const len = U * (0.18 + 0.32 * easeOut(na));
+    x.beginPath(); x.moveTo(p[0] - tx * len, p[1] - ty * len); x.lineTo(p[0] + tx * len, p[1] + ty * len);
+    x.lineCap = "round"; x.strokeStyle = rgbA(TC.white, 1 - na); x.lineWidth = 4 * (1 - na) + 1; x.stroke(); x.lineCap = "butt";
+  }
+  const ta = (vt - fx.tripVt) / 0.25;
+  if (ta >= 0 && ta < 1) {
+    const p = shipXY(0.94), r = U * 0.35 * easeOut(ta) + 6;
+    x.beginPath(); x.ellipse(p[0], p[1], r, r * 0.5, swayNow() + rollNow(), 0, TAU);
+    x.strokeStyle = rgbA(TC.cyanL, 1 - ta); x.lineWidth = 4 * (1 - ta) + 1; x.stroke();
+  }
+}
+function shatter() {
+  fx.shattered = true;
+  const p = shipXY(0.95), lvc = 1;
+  for (let i = 0; i < 70; i++) {
+    const a = Math.random() * TAU, sp = 120 + Math.random() * 520;
+    spawn(p[0] + (Math.random() - 0.5) * unit * 0.3, p[1] + (Math.random() - 0.5) * 10, Math.cos(a) * sp, Math.sin(a) * sp - 160, 0.45 + Math.random() * 0.45, i < 40 ? 0 : lvc, 2 + Math.random() * 4);
+  }
+  for (let i = 0; i < 34; i++) { const b = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sq = 200 + Math.random() * 600; spawn(p[0], p[1] - 6, Math.cos(b) * sq, Math.sin(b) * sq, 0.3 + Math.random() * 0.4, 2, 2); }
+}
+function drawParticles(x) {
+  if (!PN) return;
+  x.globalCompositeOperation = "screen";
+  const cols = [HX.ship, HX[liveryNow()], HX.danger, HX.gold];
+  for (let kind = 0; kind < 4; kind++) {
+    x.beginPath();
+    let any = false;
+    for (let i = 0; i < PN; i++) {
+      if (pkA[i] !== kind) continue;
+      any = true;
+      const a = plA[i] / pmA[i], X = pxA[i], Y = pyA[i];
+      if (kind < 2) { const s = psA[i] * (0.5 + 0.5 * a), c = Math.cos(prA[i]) * s, d = Math.sin(prA[i]) * s; x.moveTo(X + c, Y + d); x.lineTo(X - d * 0.6, Y + c * 0.6); x.lineTo(X - c, Y - d); x.closePath(); }
+      else { x.moveTo(X, Y); x.lineTo(X - pvx[i] * 0.03, Y - pvy[i] * 0.03); }
+    }
+    if (!any) continue;
+    if (kind < 2) { x.fillStyle = cols[kind]; x.fill(); } else { x.strokeStyle = cols[kind]; x.lineWidth = 2; x.stroke(); }
+  }
+  x.globalCompositeOperation = "source-over";
+}
+// words in the world (CSS px, never turned): the sector name at the gate ring, the one judgement slot, the tap
+// counts on the first run and the tap ripple under the shuttle until the first success (bar 1.7.1)
+function drawWorldText(x, U, vx, vy, pv, nR) {
+  // words in the world grow with the tunnel (a wide screen's tunnel is twice a phone's), so they keep their weight
+  const R = run, vt = fx.vt, quiet = R.mode === "attract", ws = wsNow();
+  if (!quiet && R.alive) {
+    const gr = gateRow(R.curSec + 1), idx = gr - rgR[0];
+    if (idx >= 1 && idx < nR - 1) {
+      const z = rgZ[idx], u = rgU[idx], a = sstep(0.95, 0.78, u) * sstep(1.5, 2.3, z);
+      if (a > 0.02) { x.globalAlpha = a; text(x, sectorName(R.curSec + 1), vx, vy - U / z - 18 * ws, 17 * ws, "uiT", { ol: "ink", ow: 0.24, w: 800 }); x.globalAlpha = 1; }
+    }
+    const since = R.t - R.t0;
+    if (since < 2.4 && R.mode !== "attract") { x.globalAlpha = 1 - sstep(1.6, 2.4, since); text(x, sectorName(R.curSec), vx, vy - U * 0.62, 17 * ws, "uiT", { ol: "ink", ow: 0.24, w: 800 }); x.globalAlpha = 1; }
+  }
+  const cl = fx.call;
+  if (cl) {
+    const age = vt - cl.t;
+    if (age > 0.8) fx.call = null;
+    else {
+      const sc = (age < 0.16 ? lerp(0.8, 1, easeBack(age / 0.16)) : 1) * cl.k;
+      x.globalAlpha = age > 0.55 ? 1 - (age - 0.55) / 0.25 : 1;
+      at(x, cl.x, cl.y - Math.min(age, 0.55) * 40 * ws, sc, 0, () => text(x, cl.str, 0, 0, 21 * ws, cl.col, { ol: "ink", ow: 0.3, w: 900 }));
+      x.globalAlpha = 1;
+    }
+  }
+  if (!R.alive && !quiet && isDying() && R.dead) { // the cause, next to the face that would have lived
+    const str = causeText(R.dead), sz = 20 * ws, tw = textW(x, str, sz, { w: 900 }) / 2 + 10;
+    let X = ghX >= 0 ? ghX : TW / 2, Y = ghY >= 0 ? ghY - 34 * ws : vy - unit * 0.3;
+    X = clamp(X, tw + 8, TW - tw - 8); Y = clamp(Y, 90, TH - 60);
+    const a = Math.min(1, (vt - fx.deadVt) / 0.08);
+    x.globalAlpha = a; at(x, X, Y, 1 + 0.25 * (1 - a), 0, () => text(x, str, 0, 0, sz, "white", { ol: "ink", ow: 0.28, w: 900 })); x.globalAlpha = 1;
+  }
+  if (R.alive && R.labRow && labA > 0.05) { x.globalAlpha = clamp(labA, 0, 1); text(x, "×" + R.labNeed, labX, labY, 24 * ws, "white", { ol: "ink", ow: 0.26, w: 900 }); x.globalAlpha = 1; }
+  if (state === "play" && hint.active && R.alive) {
+    let want = false;
+    for (const w of R.rows) {
+      if (w.done || w.s !== R.curSec) continue;
+      if (w.tc - R.t < 0.95) want = (w.blocked & (1 << R.cur)) || (w.inv && w.gold && !(w.gold & (1 << R.cur)));
+      break;
+    }
+    if (want) { // expanding rings under the shuttle: press now
+      const p = shipXY(1.16);
+      x.lineWidth = 2.5;
+      for (let k = 0; k < 2; k++) { const ph = ((vt * 1.6 + k * 0.5) % 1), r = 10 + ph * unit * 0.22; x.strokeStyle = rgbA(TC.white, 0.9 * (1 - ph)); x.beginPath(); x.ellipse(p[0], p[1], r, r * 0.45, 0, 0, TAU); x.stroke(); }
+    }
+  }
+}
+function visualStep(dt) { // springs, the turn tween, particles and streaks (the rules never read them)
+  if (!dt || !run) return;
+  const R = run;
+  fx.vt += dt;
+  // the turn tween runs on through the freeze, so a fatal tap is seen landing on the face that killed you
+  if (fx.twT0 >= 0) { const a = (fx.vt - fx.twT0) / fx.twDur; if (a >= 1) { fx.Rd = R.Rt; fx.twT0 = -1; } else fx.Rd = fx.twFrom + (R.Rt - fx.twFrom) * easeOutBack(a); }
+  else if (R.alive) fx.Rd = R.Rt;
+  if (R.alive) {
+    fx.posVis = R.pos;
+  } else {
+    const ag = fx.vt - fx.deadVt;
+    if (!fx.shattered && ag >= SHATTER) shatter();
+    const ra = clamp((ag - SHATTER) / 0.3, 0, 1);
+    fx.posVis = R.pos - 0.45 * (1 - (1 - ra) * (1 - ra));   // the tunnel eases back a little from the crash
+  }
+  fx.bankV += (-fx.bank * 500 - fx.bankV * 36) * dt; fx.bank += fx.bankV * dt;
+  if (fx.bank > 1.5) fx.bank = 1.5;
+  const drag = Math.exp(-dt * 2.2);
+  for (let i = 0; i < PN; i++) {
+    plA[i] -= dt;
+    if (plA[i] <= 0) {
+      PN--; pxA[i] = pxA[PN]; pyA[i] = pyA[PN]; pvx[i] = pvx[PN]; pvy[i] = pvy[PN]; plA[i] = plA[PN]; pmA[i] = pmA[PN]; pkA[i] = pkA[PN]; psA[i] = psA[PN]; prA[i] = prA[PN];
+      i--; continue;
+    }
+    pvx[i] = pvx[i] * drag; pvy[i] = pvy[i] * drag + 700 * dt;
+    pxA[i] += pvx[i] * dt; pyA[i] += pvy[i] * dt; prA[i] += dt * 9;
+  }
+  const sv = R.alive ? speedAt(R.t) : 0;
+  for (let k = 0; k < SN; k++) {
+    sW[k] -= sv * 1.5 * dt;
+    if (sW[k] < -1.6) { sW[k] = R.visR + Math.random() * 3; sPhi[k] = Math.random() * TAU; sRho[k] = 0.72 + Math.random() * 0.24; }
+  }
+}
+
+// ---------- KEEP: result screen. Steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
+// the labels and row guides show with the cause, so the board is never an empty plate; values follow in order
+const RES = { drop: 260, head: 200, count: 320, countDur: 560, rank: 900, rows: 940, best: 1060, goal: 1180 };
+function makeResult(now) {
+  const R = run, play = R.mode === "play", best = bestOf(), runs = runsOf(), bs0 = bestSecOf(), reached = R.maxSec + 1, bs = Math.max(bs0, reached);
+  // a new shuttle colour is a lasting reward from the second run on (bar 1.6.2): one earned on the first run waits
+  const earned = play && liveryOf(bs) > liveryOf(bs0) ? liveryOf(bs) : -1, pend = Number(store.get("livNew", -1));
+  const bestGold = Math.max(Number(store.get("bestGold", 0)) || 0, R.golds), bestNear = Math.max(Number(store.get("bestNear", 0)) || 0, R.nears);
+  const r = { at: now, score: R.score, best, newBest: play && R.score > best && R.score > 0, sec: R.maxSec, nears: R.nears, golds: R.golds,
+    rank: rankOf(bs), showRank: play && runs >= 1, cause: causeText(R.dead), ticks: 0, rankDone: false, stamped: false, goal: null,
+    livery: play && runs >= 1 ? Math.max(earned, pend) : -1, livPend: play && runs < 1 ? earned : -1, bestGold, bestNear };
+  // one concrete next goal from a small rotating pool (bar 1.6.1), always above the saved best
+  const pool = [{ k: "g_sector", n: reached + 1 }, { k: "g_gold", n: Math.max(3, bestGold + 1) }, store.get("hexDone", false) || R.hexClear ? null : { k: "g_hex" },
+    R.triples ? null : { k: "g_triple" }, { k: "g_near", n: Math.max(3, bestNear + 1) }];
+  for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
+  return r;
+}
+function resultStep(now) {
+  const r = run.result, age = resAge(r, now);
+  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
+  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
+  if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
+    r.stamped = true; sfx.best(); platform("happytime");
+    const p = boardPt(70, 168);
+    for (let q = 0; q < 18; q++) { const a = Math.random() * TAU, sp = 160 + Math.random() * 260; spawn(p[0], p[1], Math.cos(a) * sp, Math.sin(a) * sp - 120, 0.5 + Math.random() * 0.3, 3, 2); }
+  }
+}
+const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
+function skipResult(now) { const r = run && run.result; if (r && now - r.at < RES.goal) { r.at = now - RES.goal; r.ticks = 99; r.rankDone = true; return true; } return false; }
+
+// ---------- GAME-SPECIFIC: where things sit (scene coords; the tunnel fills the whole screen around the scene) ----------
+const vTop = () => -L.y0, vBot = () => L.H - L.y0, vLeft = () => -L.x0, vRight = () => CW + L.x0;
+const sideX = s => s < 0 ? -L.x0 / 2 : CW + L.x0 / 2;          // the middle of the left (-1) or right (1) side area
+const hudS = () => L.wide ? clamp(L.x0 / 230, L.u, 1.6) : L.u;  // HUD scale: bigger in the side areas
+const sideS = w => L.wide ? Math.max(Math.min(hudS(), (L.x0 - 18) / w), L.u * 0.95) : L.u; // a board that must fit a side
+const shipY = () => (vpY + unit * 0.94) / L.kc - L.y0;          // the shuttle on screen, in scene coords
+const plaqueY = () => vTop() + 10;
+const signY = () => vTop() + 14 + 48 * L.u;                     // below the corner plaques
+const pauseY = () => vTop() + clamp((L.H - 220 * L.u) * 0.32, 20, 160);
+const UI = {};
+function layoutUI() {
+  const u = L.u, sy = shipY(), ty = clamp((sy + vBot()) / 2 - 30 * u, sy + 34 * u, vBot() - 66 * u), py = pauseY();
+  const lw = Math.max(48, textW(ctx, S("lang"), 16, { f: SANS }) + 24), ui = (cx, y, w, h) => ({ cx, y, w, h, s: u });
+  UI.start = ui(180, ty, 190, 56);
+  UI.retry = ui(180, ty, 190, 56);
+  UI.toTitle = L.wide ? ui(180 + 176 * u, ty + 8 * u, 132, 40) : ui(180, Math.min(ty + 62 * u, vBot() - 46 * u), 132, 40);
+  UI.resume = ui(180, py + 76 * u, 200, 54);
+  UI.restart = ui(180 - 74 * u, py + 146 * u, 136, 44);
+  UI.quit = ui(180 + 74 * u, py + 146 * u, 136, 44);
+  UI.mute = ui(vRight() - 12 - 22 * u, plaqueY(), 44, 40);
+  UI.pause = ui(UI.mute.cx - 52 * u, plaqueY(), 44, 40);
+  UI.lang = ui(vLeft() + 12 + lw * u / 2, plaqueY(), lw, 40);
+  const hit = (el, e, p) => place(el, e.cx - e.w * u / 2 - p, e.y - p, e.w * u + 2 * p, e.h * u + 2 * p);
+  hit($("btnStart"), UI.start, 6); hit($("btnRetry"), UI.retry, 4); hit($("btnToTitle"), UI.toTitle, 2);
+  hit($("btnResume"), UI.resume, 2); hit($("btnRestart"), UI.restart, 2); hit($("btnQuit"), UI.quit, 2);
+  hit(btnMute, UI.mute, 5); hit(btnPause, UI.pause, 5); hit($("btnLang"), UI.lang, 5);
+}
+
+// ---------- GAME-SPECIFIC: UI plates. Machined steel, flat colours, cut corners, no glow (STYLE.md 7 and 10) ----------
+function steel(q, w, h, kind) {
+  const prim = kind === "main", c = Math.min(10, h * 0.24), p = pCut(-w / 2, 0, w, h, c);
+  q.fillStyle = C(prim ? "uiA" : kind === "dark" ? "uiD" : "ui"); q.fill(p);
+  q.lineJoin = "miter"; q.lineWidth = 1.6; q.strokeStyle = C(prim ? "cyanL" : "uiE"); q.stroke(p);
+  if (kind === "dark") { q.lineWidth = 1; q.strokeStyle = C("uiL"); q.stroke(pCut(-w / 2 + 4, 4, w - 8, h - 8, Math.max(2, c - 3))); }
+  if (kind === "board" || kind === "sign") { // steel clamps where the struts hold the plate (struts sit at 0.36 of the width)
+    for (const d of [-0.36, 0.36]) { q.fillStyle = C("uiE"); q.fillRect(d * w - 8, 0, 16, 9); q.fillStyle = C("uiD"); q.fillRect(d * w - 8, 7, 16, 2); }
+  }
+}
+const plate = (w, h, kind) => bake("pl" + kind + w + "x" + h, w + 4, h + 4, w / 2 + 2, 2, q => steel(q, w, h, kind));
+// a sign hangs from two struts that run up off the top of the screen (the title, the result, the pause board)
+function struts(x, cx, y, w, s) { x.strokeStyle = C("uiE"); x.lineWidth = 2; x.beginPath(); for (const d of [-0.36, 0.36]) { x.moveTo(cx + d * w * s, vTop() - 2); x.lineTo(cx + d * w * s, y + 2); } x.stroke(); }
+function btn(x, e, label, size, kind, dy) {
+  at(x, e.cx, e.y + (dy || 0), e.s, 0, () => { put(x, plate(e.w, e.h, kind), 0, 0); text(x, label, 0, e.h / 2 + 1, size, kind === "main" ? "ink" : "uiT", { w: 900, f: SANS, max: e.w - 20 }); });
+}
+// a pointer that nods at the main button (a machined arrowhead, never a glove)
+function pointAt(x, e, vt) {
+  const d = Juice.reduce ? 0 : (fl(vt / 0.3) & 1) * 5, X = e.cx - (e.w / 2 + 12 + d) * e.s, Y = e.y + e.h / 2 * e.s, s = e.s;
+  x.fillStyle = C("uiA"); x.strokeStyle = C("ink"); x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(X, Y); x.lineTo(X - 16 * s, Y - 11 * s); x.lineTo(X - 11 * s, Y); x.lineTo(X - 16 * s, Y + 11 * s); x.closePath(); x.fill(); x.stroke();
+}
+// a stamp: a cut-corner frame with a word, landing from 1.5x with a thump (age in ms)
+function stamp(x, X, Y, label, age, col, size) {
+  size = size || 16;
+  const s = 1 + 0.5 * (1 - easeOut(age / 140)), w = textW(x, label, size, { f: SANS, w: 900 }) + size * 1.2, h = size * 1.8;
+  at(x, X, Y, s, -0.06, () => {
+    x.fillStyle = C("uiD"); x.fill(pCut(-w / 2, -h / 2, w, h, 4));
+    x.lineWidth = 2; x.strokeStyle = C(col); x.stroke(pCut(-w / 2, -h / 2, w, h, 4));
+    text(x, label, 0, 1, size, col, { f: SANS, w: 900 });
+  });
+}
+function drawPlaques(x) {
+  const pq = (e, kind) => at(x, e.cx, e.y, e.s, 0, () => {
+    put(x, plate(e.w, e.h, "dark"), 0, 0);
+    x.fillStyle = x.strokeStyle = C("uiT"); x.lineWidth = 2; x.lineCap = "butt";
+    if (kind === "pause") { x.fillRect(-7, 12, 5, 16); x.fillRect(2, 12, 5, 16); }
+    if (kind === "sound" || kind === "mute") x.fill(pPoly([[-11, 16], [-6, 16], [0, 11], [0, 29], [-6, 24], [-11, 24]]));
+    if (kind === "sound") { for (const r of [6, 10]) { x.beginPath(); x.arc(0, 20, r, -0.75, 0.75); x.stroke(); } }
+    if (kind === "mute") { x.beginPath(); x.moveTo(4, 15); x.lineTo(12, 25); x.moveTo(12, 15); x.lineTo(4, 25); x.stroke(); }
+    if (kind === "lang") text(x, S("lang"), 0, e.h / 2 + 1, 16, "uiT", { f: SANS, w: 800 });
+  });
+  if (!btnMute.hidden) pq(UI.mute, AU.muted ? "mute" : "sound");
+  if (!btnPause.hidden) pq(UI.pause, "pause");
+  if (isTitle() && !ovTitle.hidden) pq(UI.lang, "lang");
+}
+
+// ---------- GAME-SPECIFIC: HUD, title, pause, result ----------
+function drawHud(x, now) { // two things only: the score and (in play) the best; in the side area on a wide screen
+  const s = hudS(), wide = L.wide, X = wide ? sideX(-1) : vLeft() + 16, Y = vTop() + (wide ? 36 : 14), a = wide ? "center" : "left", R = run;
+  at(x, X, Y, s, 0, () => {
+    const pop = 1 + 0.16 * Math.max(0, wob((now - fx.scoreT) / 300, 8, 5));
+    at(x, 0, 20, pop, 0, () => text(x, fx.disp, 0, 0, 34, "uiT", { a, w: 900, f: SANS, ol: "ink", ow: 0.16 }));
+    if (!DEMO && R.mode === "play" && R.best > 0) text(x, S("best") + " " + Math.max(R.best, R.score), 0, 50, 15, R.bestPassed ? "gold" : "uiS", { a, w: 800, f: SANS, ol: "ink", ow: 0.22 });
+  });
+}
+function drawTitle(x, now) { // the title is a machined sign hung in the tunnel; the start plate sits under the shuttle
+  const u = L.u, wide = L.wide, ja = lang === "ja", W = 320, H = 156, s = wide ? sideS(W) : u;
+  const cx = wide ? sideX(-1) : 180, y = wide ? vTop() + 70 * s : signY();
+  struts(x, cx, y, W, s);
+  at(x, cx, y, s, 0, () => {
+    put(x, plate(W, H, "sign"), 0, 0);
+    text(x, S("title"), 0, 44, ja ? 34 : 36, "uiT", { w: 900, f: SANS, max: 290 });
+    text(x, ja ? S("titleEn") : STRINGS.ja.title, 0, 74, 15, "uiA", { w: 800, f: SANS });
+    x.fillStyle = C("uiL"); x.fillRect(-W / 2 + 22, 90, W - 44, 1.5);
+    text(x, S("how1"), 0, 110, 16, "uiT", { w: 700, f: SANS, max: 296 });
+    text(x, S("how2"), 0, 134, 15, "uiS", { w: 700, f: SANS, max: 296 });
+  });
+  const b = bestOf();
+  if (b > 0) { // best and, from the second run, the rank: a plate under the sign, or in the right side area
+    const rk = runsOf() >= 2 ? S("ranks")[rankOf(bestSecOf())] : "", t = S("best") + " " + b, bs = wide ? sideS(240) : u;
+    const w = Math.round((textW(x, t, 16, { f: SANS }) + (rk ? textW(x, rk, 15, { f: SANS }) + 40 : 0) + 40) / 10) * 10;
+    at(x, wide ? sideX(1) : 180, wide ? vTop() + 70 * bs : y + (H + 12) * u, bs, 0, () => {
+      put(x, plate(w, 38, "dark"), 0, 0);
+      text(x, t, rk ? -w / 2 + 18 : 0, 20, 16, "uiT", { a: rk ? "left" : "center", w: 800, f: SANS });
+      if (rk) text(x, rk, w / 2 - 16, 20, 15, "uiA", { a: "right", w: 800, f: SANS });
+    });
+  }
+  const st = UI.start;
+  btn(x, st, S("start"), 24, "main", Juice.reduce ? 0 : Math.sin(now / 260) * 1.2);
+  pointAt(x, st, fx.vt);
+  if (finePointer) { // the key hint: right of the plate when it fits, else under it
+    const kw = textW(x, S("space"), 14 * u, { f: SANS, w: 700 }), rx = st.cx + (st.w / 2 + 12) * u, by = st.y + (st.h + 16) * u;
+    if (rx + kw < vRight() - 10) text(x, S("space"), rx, st.y + st.h / 2 * u, 14 * u, "uiS", { a: "left", ol: "ink", ow: 0.3, w: 700, f: SANS });
+    else if (by < vBot() - 34 * u) text(x, S("space"), st.cx, by, 14 * u, "uiS", { ol: "ink", ow: 0.3, w: 700, f: SANS });
+  }
+  text(x, S("credit"), vLeft() + 12, vBot() - 16, 14 * u, "uiS", { a: "left", ol: "ink", ow: 0.3, w: 700, f: SANS });
+}
+function drawPause(x, now) {
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.5); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  const u = L.u, dy = -70 * (1 - easeBack((now - fx.pauseT) / 240)), y = pauseY() + dy;
+  struts(x, 180, y, 300, u);
+  at(x, 180, y, u, 0, () => { put(x, plate(300, 214, "board"), 0, 0); text(x, S("paused"), 0, 40, 26, "uiT", { w: 900, f: SANS }); });
+  btn(x, UI.resume, S("resume"), 22, "main", dy); btn(x, UI.restart, S("restart"), 17, "plain", dy); btn(x, UI.quit, S("toTitle"), 17, "plain", dy);
+}
+let BOARD = { x: 180, y: 0, s: 1 };
+const boardPt = (bx, by) => [(BOARD.x + bx * BOARD.s + L.x0) * L.kc, (BOARD.y + by * BOARD.s + L.y0) * L.kc]; // board coords -> screen px
+function drawOver(x, now) {
+  const r = run.result, play = state === "over", age = resAge(r, now), W = 312, H = play ? (r.livery >= 0 ? 290 : 258) : 168;
+  const wide = L.wide, s = wide ? sideS(W) : L.u, cx = wide ? sideX(1) : 180, y0 = wide ? vTop() + 60 * s : signY();
+  const y = y0 - (H + 80) * s * (1 - easeBack(age / RES.drop));
+  BOARD = { x: cx, y, s };
+  struts(x, cx, y, W, s);
+  at(x, cx, y, s, 0, () => {
+    put(x, plate(W, H, "board"), 0, 0);
+    // cause, score with rank, reached, best or the gap, one goal: five things, read top to bottom
+    const hasBest = play && (r.newBest || r.best > 0);   // no "BEST 0 / 0 TO GO" on a first record
+    const rowIn = k => clamp((age - RES.rows - k * 70) / 70, 0, 1);
+    const row = (ry, k, v, a) => {
+      const lw = textW(x, S(k), 15, { w: 700, f: SANS });
+      text(x, S(k), -136, ry, 15, "uiS", { a: "left", w: 700, f: SANS });
+      x.fillStyle = C("uiL"); for (let i = -136; i < 136; i += 5) x.fillRect(i, ry + 14, 2, 1.5);
+      if (v != null && a > 0) { x.globalAlpha = a; text(x, v, 136, ry, 17, "uiT", { a: "right", w: 800, f: SANS, max: 272 - lw - 14 }); x.globalAlpha = 1; }
+    };
+    if (age > RES.head) {
+      text(x, r.cause, 0, 32, 18, "dangerHi", { w: 900, f: SANS, max: W - 30 });
+      row(130, "rReached", sectorName(r.sec), rowIn(0));
+      if (hasBest) row(164, "rBest", r.newBest ? null : r.best, rowIn(1));
+    }
+    if (age > RES.count) {
+      text(x, Math.round(r.score * easeOut((age - RES.count) / RES.countDur)), r.showRank ? -50 : 0, 82, 52, "uiT", { w: 900, f: SANS });
+      if (r.showRank && r.rankDone) stamp(x, 88, 82, S("ranks")[r.rank], age - RES.rank, "uiA", 15);
+    }
+    if (hasBest && age > RES.rows + 70) {
+      if (r.newBest) { if (age > RES.best) stamp(x, 70, 164, S("newBest"), age - RES.best, "gold", 15); }
+      else { x.globalAlpha = rowIn(1); text(x, r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), 20, 164, 15, "uiA", { w: 800, f: SANS }); x.globalAlpha = 1; }
+    }
+    if (play && age > RES.goal && r.goal) {
+      const gt = S(r.goal.k, r.goal.n), tw = Math.min(260, textW(x, gt, 16, { f: SANS, w: 800 }));
+      x.fillStyle = C("uiA"); x.beginPath(); x.moveTo(-tw / 2 - 6, 214); x.lineTo(-tw / 2 - 16, 207); x.lineTo(-tw / 2 - 16, 221); x.closePath(); x.fill();
+      text(x, gt, -tw / 2, 214, 16, "uiT", { a: "left", w: 800, f: SANS, max: 260 });
+      if (r.livery >= 0 && age > RES.goal + 250) {
+        const lt = S("newLivery", S("livery")[r.livery]), lw = textW(x, lt, 15, { f: SANS, w: 800 });
+        x.fillStyle = C(LIVERY[r.livery].c); x.fillRect(-lw / 2 - 22, 245, 14, 14); x.strokeStyle = C("ink"); x.lineWidth = 1; x.strokeRect(-lw / 2 - 22, 245, 14, 14);
+        text(x, lt, -lw / 2, 252, 15, LIVERY[r.livery].c, { a: "left", w: 800, f: SANS });
+      }
+    }
+  });
+  if (play) { btn(x, UI.retry, S("retry"), 24, "main"); btn(x, UI.toTitle, S("toTitle"), 17, "plain"); if (retryReady()) pointAt(x, UI.retry, fx.vt); }
+}
+function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
+  const u = L.u;
+  at(x, 180, vBot() - 62 * u, u, 0, () => { put(x, plate(220, 48, "dark"), 0, 0); text(x, STRINGS.ja.title, 0, 16, 16, "uiT", { w: 800, f: SANS }); text(x, STRINGS.en.title, 0, 34, 14, "uiS", { w: 700, f: SANS }); });
+}
+function draw(now) {
+  if (!run) return;
+  const x = ctx;
+  drawWorld();
+  view(x); // the HUD and the boards never shake or turn
+  if (!isTitle() && !isOver()) drawHud(x, now);
+  if (isTitle()) drawTitle(x, now);
+  if (state === "paused") drawPause(x, now);
+  if (isOver()) drawOver(x, now);
+  if (DEMO) drawDemoLabel(x); else drawPlaques(x);
+  textEnd();
+}
+
+// ---------- KEEP: screen, language, mute ----------
+// the backing scale steps down (2, 1.5, 1.25, 1) when frames run long on a slow device; the layout never changes
+let dprCap = 2, slowN = 0, slowSum = 0, fastN = 0, upTried = false;
+function fitCanvas(w, h) {
+  artResize(cv, w, h, CW, CH, 220);
+  if (dprCap >= L.dpr) return;
+  const dpr = L.dpr = dprCap, dw = Math.max(2, Math.round(w * dpr)), dh = Math.max(2, Math.round(h * dpr)), K = Math.min(dw / CW, dh / CH);
+  if (K !== L.K) SPR.clear();
+  cv.width = dw; cv.height = dh;
+  Object.assign(L, { K, kc: K / dpr, W: dw / K, H: dh / K });
+  L.x0 = (L.W - CW) / 2; L.y0 = (L.H - CH) * 0.6;
+  L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1);
+  L.wide = L.x0 >= 220 * L.u;
+}
+function watchFrames(ms) { // mean frame interval over 1.5 s of live play; above 22 ms, a lower backing scale
+  if (state !== "play" && state !== "demo" && state !== "title") { slowN = slowSum = 0; return; }
+  slowSum += Math.min(ms, 100); if (++slowN < 20 || slowSum < 1500) return;
+  const mean = slowSum / slowN; slowN = slowSum = 0;
+  // a phone held at 30 Hz (power saving) stays at 1.25; only a really slow one drops to 1
+  if (mean > 22 && L.dpr > 1.25) { dprCap = L.dpr > 1.5 ? 1.5 : 1.25; fastN = 0; resize(); }
+  else if (mean > 45 && L.dpr > 1) { dprCap = 1; fastN = 0; resize(); }
+  // after a slow spell (loading, another app), one step back up once 6 s hold 60 fps; only once, so it cannot flicker
+  else if (mean < 18 && dprCap < 2 && !upTried && ++fastN >= 4) { upTried = true; dprCap = dprCap < 1.25 ? 1.25 : dprCap < 1.5 ? 1.5 : 2; resize(); }
+}
+function resize() {
+  const w = wrap.clientWidth || innerWidth, h = wrap.clientHeight || innerHeight;
+  fitCanvas(w, h);
+  TW = w; TH = h;
+  unit = Math.min(w * 0.45, h * (w > h ? 0.28 : 0.235));
+  vpY = h * 0.72 - unit;
+  VIG = makeVignette(w, h);
+  layoutUI();
+  if (run && manual) draw(simT);
+}
+window.addEventListener("resize", resize);
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = STRINGS[lang].title === STRINGS.en.title ? "Dial Tunnel" : STRINGS.ja.title + " / Dial Tunnel";
+  document.querySelectorAll("[data-s]").forEach(el => { el.textContent = S(el.getAttribute("data-s")); });
+  $("btnLang").textContent = S("lang");
+  layoutUI();
+}
+function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
+
+// ---------- KEEP: flow ----------
+function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
+const newSeed = () => (Math.random() * 4294967296) >>> 0;
+function startAI(mode, seed) {
+  state = mode === "demo" ? "demo" : "title";
+  const sd = seed == null ? newSeed() : seed;
+  if (mode === "demo") newRun("demo", sd, DEMO_RUNS[demoIdx++ % DEMO_RUNS.length]);
+  else newRun("attract", sd, { at: ATTRACT_AT[(sd >>> 4) % ATTRACT_AT.length] });
+  btnPause.hidden = true;
+}
+function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+function startPlay(o) {
+  if (auInit()) auResume();
+  sfx.start(); hideAll();
+  state = "play"; runCount++;
+  newRun("play", newSeed(), Object.assign({ tut: !store.get("tutDone", false) }, o || {}));
+  btnPause.hidden = false;
+  pfStart();
+}
+function showOver(now) {
+  const R = run;
+  state = "over"; R.result = makeResult(now); musicLevel("bed");
+  if (R.result.newBest) store.set("best", R.score);
+  if (R.maxSec + 1 > bestSecOf()) store.set("bestSec", R.maxSec + 1);
+  store.set("bestGold", R.result.bestGold); store.set("bestNear", R.result.bestNear);
+  if (R.result.livPend >= 0) store.set("livNew", R.result.livPend); else if (R.result.livery >= 0) store.set("livNew", -1);
+  store.set("runs", runsOf() + 1); store.set("tutDone", true);
+  ovOver.hidden = false; overShownAt = T(); btnPause.hidden = true;
+  platform("gameOver", R.score);
+}
+function pauseGame() {
+  if (state !== "play") return;
+  state = "paused"; fx.pauseT = T();
+  musicLevel("off");
+  ovPause.hidden = false; btnPause.hidden = true;
+  pfStop();
+}
+function resumeGame() {
+  if (state !== "paused") return;
+  if (auInit()) auResume();
+  state = "play"; ovPause.hidden = true; btnPause.hidden = false;
+  musicLevel("play"); musicSync();
+  pfStart();
+}
+function holdClock() { if (run && (state === "title" || state === "demo")) run.hold = true; }
+function releaseClock() { if (run) run.hold = false; }
+function onHide() { if (state === "play") pauseGame(); else holdClock(); }
+function onShow() { releaseClock(); lastNow = performance.now(); }
+const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
+function retry() { if (state === "over" && retryReady()) startPlay(); }
+
+// ---------- KEEP: input. Gameplay on pointerdown / keydown; the turn starts on the next rule step and frame ----------
+function press() { if (state === "play" && run && run.alive && !run.prof) doTap(); }
+auUnlock();
+const on = (el, f) => el.addEventListener("click", e => { e.stopPropagation(); f(); });
+cv.addEventListener("pointerdown", e => { e.preventDefault(); if (state === "play") press(); });
+cv.addEventListener("pointercancel", e => e.preventDefault()); // nothing is held, so a cancelled touch commits nothing
+ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
+ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
+// inside the lockout a press only skips the result animation; after it, one press starts the next run (bar 1.5.4)
+ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (retryReady()) retry(); else skipResult(T()); });
+on($("btnLang"), () => { lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
+on(btnMute, () => { if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
+on(btnPause, () => { pauseGame(); btnPause.blur(); });
+on($("btnResume"), resumeGame);
+on($("btnRestart"), () => { pfStop(); startPlay(); });
+on($("btnQuit"), toTitle);
+on($("btnRetry"), retry);
+on($("btnToTitle"), () => { if (retryReady()) toTitle(); });
+document.addEventListener("keydown", e => {
+  if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
+  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar", esc = k === "Escape" || k === "p" || k === "P";
+  if (ok || k.startsWith("Arrow")) e.preventDefault();
+  if (e.repeat) return;
+  if (k === "m" || k === "M") { setMute(!AU.muted); return; }
+  if (isTitle()) { if (ok) startPlay(); }
+  else if (state === "play") { if (esc) pauseGame(); else if (ok || k === "ArrowUp" || k === "ArrowRight" || k === "ArrowDown" || k === "ArrowLeft") press(); }
+  else if (state === "paused") { if (ok || esc) resumeGame(); }
+  else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") toTitle(); }
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) onHide(); else onShow(); });
+window.addEventListener("blur", () => { if (state === "play") pauseGame(); });
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+// ---------- KEEP: update and loop ----------
+function update(now, dt) {
+  if (!run) return;
+  if ((state === "play" || state === "title" || state === "demo") && !run.hold) {
+    run.acc += dt;
+    while (run.acc >= SIM_DT - 1e-9 && run.alive) { run.acc -= SIM_DT; simStep(SIM_DT); }
+  }
+  if (isDying()) {
+    const el = now - run.dead.at, wait = state === "dying" ? FREEZE : state === "demo-dying" ? 1150 : 700; // the demo lingers on the failure
+    if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else startAI("attract"); }
+  }
+  if (state === "demo-over" && now - run.result.at > 2600) startAI("demo"); // a short result hold, then the clip loops
+  if (isOver()) resultStep(now);
+  juiceStep(dt);
+  if (state === "paused") return;
+  visualStep(Juice.stop > 0 ? dt * 0.25 : dt); // hitstop slows the picture only; the run clock never stops
+}
+function step(now, dt) {
+  update(now, dt);
+  if (run) fx.disp = run.score < fx.disp ? run.score : fx.disp + Math.ceil((run.score - fx.disp) * Math.min(1, dt * 14));
+  musicStep();
+}
+let lastNow = performance.now(), fStat = new Float32Array(240), fN = 0;
+function frame() {
+  requestAnimationFrame(frame);
+  if (manual) return;
+  const t0 = performance.now();
+  let now = t0; if (now < lastNow) now = lastNow;
+  const raw = now - lastNow; lastNow = now;
+  if (raw > 300 && state === "play") pauseGame(); // a long stall must not count as time the player had
+  else if (raw > 0) watchFrames(raw);
+  step(now, clamp(raw, 0, 50) / 1000);
+  draw(now);
+  fStat[fN++ % 240] = performance.now() - t0;
+}
+
+// ---------- KEEP: test hooks (the contract in tools/README.md; tools/qa.mjs, review-kit and the bots read them) ----------
+function aheadRows() { // the rows of this sector still to come, as the player sees them (shutters: unknown until they lock)
+  const R = run; if (!R) return [];
+  const out = [], cur = (R.cur - R.held + R.curN) % R.curN;   // a turn pressed early counts as made (it lands when its row passes)
+  for (const w of R.rows) {
+    if (w.done || w.s !== R.curSec) continue;
+    const known = !(w.lockT > 0 && R.t < w.lockT), k = [], g = [];
+    if (known) for (let f = 0; f < w.N; f++) { const d = (cur - f + w.N) % w.N; if (w.blocked & (1 << f)) k.push(d); if (w.gold & (1 << f)) g.push(d); }
+    out.push({ id: w.id, dt: +(w.tc - R.t).toFixed(4), hw: +w.hw.toFixed(4), N: w.N, k, g, known, fam: w.fam, need: known ? needFrom(w, cur) : -1 });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+window.__game = {
+  get state() { return state === "demo-over" || state === "demo-dying" ? "demo" : state === "title-dying" ? "title" : state; },
+  get score() { return run ? run.score : 0; },
+  get mode() { return run ? run.mode : null; },
+  snap() { // gameplay state for frame-rate parity: integers only, no wall clock
+    const R = run; if (!R) return null;
+    return { state, score: R.score, sec: R.curSec, N: R.curN, cur: R.cur, golds: R.golds, nears: R.nears, taps: R.taps, dead: R.dead && R.dead.cause, t: Math.round(R.t * 1000) };
+  },
+  manual(on) { manual = !!on; simT = performance.now(); lastNow = simT; },
+  tick(ms, render) { simT += ms; step(simT, ms / 1000); if (render) draw(simT); },
+  demo(seed) { hideAll(); btnPause.hidden = true; demoIdx = 0; startAI("demo", seed); },
+  tap() { press(); },
+  autoplay(on) { autopilot = !!on; },
+  fail() { // prefer a row that blocks the current face, so the caption reads like a real failure
+    if (state !== "play" || !run.alive) return;
+    const R = run, w = R.rows.find(r => !r.done && r.s === R.curSec && (r.blocked & (1 << R.cur))) || R.rows.find(r => !r.done && r.s === R.curSec) || { blocked: 0, N: R.curN, tc: R.t, hw: 0, fam: "single" };
+    die(w);
+  },
+  audioState() { return AU.ctx ? AU.ctx.state : "none"; },
+  // K = device px per logical px; textMin = the smallest text drawn so far, in logical px as it shows on screen;
+  // left and cw = where the core scene sits across the screen (logical px), for the wide-sides check
+  view() { return { K: L.K, dpr: L.dpr, w: L.W, h: L.H, top: L.y0, left: L.x0, cw: CW, reduce: Juice.reduce, textMin: TXT.min, wide: L.wide }; },
+  texts() { return TXT.last.slice(); },
+  target() { const b = cv.getBoundingClientRect(), p = shipXY(1.3); return { x: b.left + p[0], y: b.top + Math.min(TH - 4, p[1]) }; }, // under the shuttle, never a button
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); },
+  // for the bots and screenshots (not used by the game itself)
+  play(seed, o) { // start a play run with a fixed seed; o: { tut, at (s), prof (an AI profile that plays it) }
+    hideAll(); state = "play"; runCount++; newRun("play", seed >>> 0, o || {}); btnPause.hidden = false; return this.info();
+  },
+  adv(sec) { // run the rules only (no picture) until the run ends or sec more seconds pass
+    const R = run, end = R.t + sec;
+    while (R.alive && R.t < end && state === "play") simStep(SIM_DT);
+    if (!R.alive && state === "play") kill();
+    return this.info();
+  },
+  info() { const R = run; if (!R) return null; return { t: +R.t.toFixed(3), alive: R.alive, score: R.score, sec: R.curSec, maxSec: R.maxSec, N: R.curN, cur: R.cur, golds: R.golds, nears: R.nears, triples: R.triples, taps: R.taps, dead: R.dead ? { cause: R.dead.cause, need: R.dead.need, fam: R.dead.fam, sec: R.dead.sec, t: +R.dead.t.toFixed(2) } : null }; },
+  ahead: aheadRows,
+  verify,
+  rows(seed, t0, t1) { // the rows a seed makes between t0 and t1 s (headless, for balance tools): [8th note, family, taps, faces]
+    const g = makeGen(seed >>> 0, false), out = [];
+    for (let it = 0; it < 5000; it++) { const n0 = out.length; generate(g, out, posAt(t1), null); if (out.length === n0) break; }
+    return out.filter(w => w.tc >= t0).map(w => [w.m, w.fam, w.need, w.N]);
+  },
+  frames() { const n = Math.min(240, fN), a = Array.from(fStat.slice(0, n)).sort((p, q) => p - q); let s = 0; for (const v of a) s += v; return n ? { n, avg: +(s / n).toFixed(3), p95: +a[fl(n * 0.95)].toFixed(3), max: +a[n - 1].toFixed(3) } : null; },
+  skip(T0) { this.play(newSeed(), { at: T0 }); }
+};
+
+// ---------- boot ----------
+resize();
+applyLang();
+AU.muted = !!store.get("mute", false); setMute(AU.muted);
+if (DEMO) { hideAll(); btnMute.hidden = true; btnPause.hidden = true; auInit(); startAI("demo"); } // recordings start the bus without a gesture when the browser allows it
+else toTitle();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
