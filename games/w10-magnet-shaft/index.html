@@ -239,6 +239,13 @@ const PX = 138, CROSS = 2 * PX;                   // attached pod centre |X|, fl
 const ACC = 9000, VMAX = 2400, KICK = 900;        // magnet pull, cap, launch kick (px/s^2, px/s, px/s)
 const HB = 1 / 240, HW = 6, HH = 9;               // physics substep, pod hitbox half sizes (12 x 18)
 const ZMIN = 0.78, SW0 = 4, EDGE = 20;            // deepest roll zoom-out; gentle sway amplitude (deg); rails keep 20 CSS px from the screen edge
+// Camera roll (kouhei 10-12: "why does the screen tilt?"). ROLL caps the shaft's sway in degrees; one edit picks the
+// answer on kouhei's card:
+//   4  "小さくする" (smaller, now): the 2.5 degree lean toward the pod's rail and a sway that never passes 4 degrees
+//   12 "そのまま" (as it was): the 10-11 build, where the sway grows to AMAX (9 to 12 degrees, per screen) from 29 s
+//   0  "なくす" (none): a level camera, no lean and no sway; the barrel spins are unchanged
+// Reduced motion still scales the lean and the sway to 30 % (RM).
+const ROLL = 4, LEAN = ROLL > 0 ? 2.5 : 0;
 const FLOOR = 384;                                // one painted floor of the shaft (px)
 
 // flight curve: launch kick plus constant magnet pull, capped; crosses 276 px in 0.167 s
@@ -270,10 +277,12 @@ function ALT(t) { if (t <= 0) return t * 480; const p = segAt(t); return p.a + (
 function SPEED(t) { return t <= 0 ? 480 : segAt(t).v; }
 function altInv(a) { if (a <= 0) return a / 480; let i = SPD.length - 1; while (i > 0 && SPD[i].a > a) i--; return SPD[i].t + (a - SPD[i].a) / SPD[i].v; }
 // Front-loaded ramp (data, bar 1.5.2): plates and a 2 degree sway 5.8 s, the first barrel spin and a 4 degree sway
-// 9.7 s, lasers 11.6 s, pulse rails 19.4 s, the second spin and the full sway 29 s, the long squeeze 38.7 s, goal
-// 69.7 s, then overdrive (denser phrases, barrel spins every 5 bars). The shaft's own motion (sway and spin) comes
-// early on purpose: the spin is this game's signature move, so every first run sees it inside 10 s (bar 1.1.4), and
-// its run-up sits in the plate stage, which leaves the whole laser stage to the lasers.
+// 9.7 s, lasers 11.6 s, pulse rails 19.4 s, the second spin 29 s (the sway stays at 4 degrees, see ROLL), the long
+// squeeze 38.7 s, goal 69.7 s, then overdrive (denser phrases, barrel spins every 5 bars). The shaft's own motion
+// (sway and spin) comes early on purpose: the spin is this game's signature move, so every first run sees it inside
+// 10 s (bar 1.1.4), and its run-up sits in the plate stage, which leaves the whole laser stage to the lasers.
+// T_SWAY0: the 4 degree sway; T_SWAYF: the second spin, where a varied run's pulse rails step up (pLv) and, only when
+// ROLL is above 4, the sway grows toward AMAX
 const T_PLATE = 3 * BAR, T_LASER = 6 * BAR, T_SWAY0 = 5 * BAR, T_PULSE = 10 * BAR, T_SWAYF = 15 * BAR, T_SWAY = 20 * BAR, T_GOAL = 36 * BAR;
 const A_GOAL = ALT(T_GOAL);
 const BARRELS = [5, 15, 25, 31, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86, 91, 96, 101, 106, 111, 116, 121].map(b => b * BAR);
@@ -453,31 +462,39 @@ function centerP(cs, P, minW) {
   LV.cur = t0 + P * BEAT;
   return true;
 }
-// Pulse rails keep their own cycle on the eighth-note grid: lit in eighth e when mod(e - ph, cyc) < on. Three speeds
-// (kouhei 10-11: "isn't only the switching platform way too hard?"; the old one-beat pulse gave a 0.24 s cue, faster
-// than a person reacts, and was 4.4x the deaths of the stage before it). Each slower speed keeps an overlap, a stretch
-// when both rails are lit, so a player who reacts to what is drawn can follow it:
-// L1 (pulse rails before the second barrel spin, and before the squeeze in a player's first two runs): a hop every
-//   2 beats, rails lit 3 beats of 4, both lit for 1 beat (0.72 s from the cue to the last safe hop).
-// L2 (the long squeeze; from the 3rd run also 29-38.7 s): a hop every beat, lit 1.5 beats of 2 (0.48 s).
-// L3 (overdrive, past 100 %): the old one-beat pulse (0.24 s).
-const PG = 0.07, EI = BEAT / 2;   // grace at each edge of a lit stretch (s); one eighth note (s)
+// Pulse rails keep their own cycle on a grid of GB steps a beat (sixths: the grid holds both eighths and thirds): lit in
+// step e when mod(e - ph, cyc) < on. Every piece turns lit on a beat (ph and cyc are whole beats), so the tick that
+// marks it stays on the beat. Three speeds (kouhei 10-11: "isn't only the switching platform way too hard?"; the old
+// one-beat pulse gave a 0.24 s cue, faster than a person reacts, and was 4.4x the deaths of the stage before it). Each
+// slower speed keeps an overlap, a stretch when both rails are lit, so a player who reacts to what is drawn can follow it.
+// No pulse rail is dark for more than a third of its cycle (kouhei 10-12: "the vanishing ones alone are too hard; make
+// the time they are gone 1/3 instead of 1/2"). The rails that were dark half their cycle (every stepping stone, so also
+// the taught stone and its blink, and the overdrive ladder) keep their cycle and the beat they turn lit on and stay lit
+// longer, which leaves more time to hop back; the L1 and L2 ladders were already dark only a quarter and are unchanged.
+// L1 (pulse rails before the second barrel spin, and before the squeeze in a player's first two runs): ladders hop every
+//   2 beats, rails lit 3 beats of 4, both lit for 1 beat (0.72 s from the cue to the last safe hop); the stone's far
+//   rail is lit 8/3 beats of 4 (it was 2 of 4).
+// L2 (the long squeeze; from the 3rd run also 29-38.7 s): ladders hop every beat, lit 1.5 beats of 2 (0.48 s); the
+//   stone is lit 2 beats of 3 (it was 1.5 of 3).
+// L3 (overdrive, past 100 %): ladders hop every beat, lit 4/3 beats of 2, so both rails are lit for a third of a beat
+//   (0.40 s from the cue to the last safe hop; it was the old one-beat pulse, 0.24 s); the stone is lit 4/3 beats of 2.
+const PG = 0.07, GB = 6, EI = BEAT / GB;   // grace at each edge of a lit stretch (s); grid steps a beat; one grid step (s)
 // pLv: the level of a pulse phrase starting at cs before the squeeze. With L1 all the way to 38.7 s a reacting player
 // never fell to a pulse rail at all, so from the 3rd run the stretch after the second spin already takes L2 (fixer
 // 10-11). The first pulse rails of a run come before 29 s in every order, so they stay on L1.
 const pLv = cs => LV.vary && !LV.soft && cs >= T_SWAYF ? 2 : 1;
 const PLV = [null,
-  { sb: 2, on: 6, son: 4, sx: 0.75 },   // sb beats between ladder hops; on lit eighths of 4 * sb; son stone lit eighths; sx stone break offset (beats)
-  { sb: 1, on: 3, son: 3, sx: 0.5 },
-  { sb: 1, on: 2, son: 2, sx: 0 }];
+  { sb: 2, on: 3, son: 8 / 3, sc: 4, sx: 0.75 },   // sb beats between ladder hops; on: a ladder rail's lit beats of its 2 * sb; son: the stone's lit beats of its cycle sc (beats); sx: stone break offset (beats)
+  { sb: 1, on: 1.5, son: 2, sc: 3, sx: 0.5 },
+  { sb: 1, on: 4 / 3, son: 4 / 3, sc: 2, sx: 0 }];
 // The pod has to be on rail A for the beat before a pulse phrase, as a break on the far rail used to make it; nothing is
 // drawn now (kouhei 10-11: the pod was never near that break, so it asked nothing; the dark pulse rail says "not yet")
 function holdA(A, kT, minW) { const t0 = kT - 1.5 * BEAT, t1 = kT - 0.5 * BEAT; return need(A, t0 + 4 / SPEED(t0), t1 - 4 / SPEED(t1), minW); }
-// stepping stone: the far rail is lit for son / 2 beats; hop over in it and back before it goes dark. At L1 and L2 the
-// break on the pod's own rail comes later, so the hop over is not rushed. The first one in a run is taught: the far rail
-// blinks in the stone's rhythm for a bar before it, with the tick.
+// stepping stone: the far rail is lit for son beats of its sc-beat cycle (dark a third of it); hop over in it and back
+// before it goes dark. At L1 and L2 the break on the pod's own rail comes later, so the hop over is not rushed. The
+// first one in a run is taught: the far rail blinks in the stone's rhythm for a bar before it, with the tick.
 function stone(cs, minW, teach, L) {
-  const P = PLV[L || 3], lb = P.son / 2;   // lit beats of the far rail
+  const P = PLV[L || 3], lb = P.son;   // lit beats of the far rail
   LV.last = "stone" + (L === 1 ? "A" : L === 2 ? "B" : "");
   const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT), kb = Math.round(kT / BEAT);
   if (!holdA(A, kT, minW)) return false;
@@ -489,17 +506,19 @@ function stone(cs, minW, teach, L) {
   if (hi2 - lo2 < minW || hi2 - Math.max(lo2, hi1 + TFLY) < 0.1) return false;
   const f2 = (lo2 + hi2) / 2;
   addF(A, { k: 0, a0: ALT(g0), a1: ALT(g1) });
-  const st = { k: 1, a0: ALT(kT - 0.5 * BEAT), a1: ALT(kT + (lb + 0.5) * BEAT), ph: 2 * kb, cyc: 2 * P.son, on: P.son, forgive: teach && (LV.soft || LV.t5) ? 1 : 0 };
+  const st = { k: 1, a0: ALT(kT - 0.5 * BEAT), a1: ALT(kT + (lb + 0.5) * BEAT), ph: GB * kb, cyc: Math.round(GB * P.sc), on: Math.round(GB * P.son), forgive: teach && (LV.soft || LV.t5) ? 1 : 0 };
   addF(B, st);
   if (teach) LV.tele = { s: B, a0: ALT(kT - 1.5 * BEAT - BAR), a1: ALT(kT - 1.5 * BEAT), t0: kT - 1.5 * BEAT - BAR - 1.2, t1: kT + (lb + 0.5) * BEAT, st };
   LV.path.push(f1, f2); LV.side = A; LV.free = f2 + TFLY; LV.late = hi2 + TFLY;
   LV.hz[B] = kT + (lb + 0.5) * BEAT + 10 / v; LV.hz[A] = Math.max(LV.hz[A], g1);
-  LV.cur = kT + Math.max(2, lb + 1) * BEAT;
+  // the next phrase starts half a beat or more past the piece's end (kT + lb + 0.5 beats), on a beat or a half beat
+  // (4, 3 and 2.5 beats past kT at L1, L2 and L3), so its blocks stay on the beat grid as before
+  LV.cur = kT + Math.max(2, Math.ceil(2 * (lb + 1) - 1e-9) / 2) * BEAT;
   return true;
 }
 // pulse ladder: both rails pulse in turn, a hop every sb beats inside the stretch when both are lit
 function pladder(cs, n, minW, L) {
-  const P = PLV[L || 3], sb = P.sb, ov = P.on / 2 - sb;   // beats between hops; beats when both rails are lit (1, 0.5, 0)
+  const P = PLV[L || 3], sb = P.sb, ov = P.on - sb;   // beats between hops; beats when both rails are lit (1, 0.5, 1/3)
   LV.last = "pladder" + (L === 1 ? "A" : L === 2 ? "B" : "") + n;
   const A = LV.side, B = 1 - A, kT = cs + BEAT, v = SPEED(kT), kb = Math.round(kT / BEAT);
   if (!holdA(A, kT, minW)) return false;
@@ -512,13 +531,14 @@ function pladder(cs, n, minW, L) {
     f = lo + (hi - lo) * 0.55; fls.push(f); prevF = f; prevHi = hi; s = 1 - s;
   }
   const tE = kT + ((n - 1) * sb + (sb + ov) / 2) * BEAT;   // the end: the rail left behind is dark there
-  const a0 = ALT(kT - 0.5 * BEAT), a1 = ALT(tE), cyc = 4 * sb;
-  addF(A, { k: 1, a0, a1, ph: 2 * (kb + sb), cyc, on: P.on });
-  addF(B, { k: 1, a0, a1, ph: 2 * kb, cyc, on: P.on });
+  const a0 = ALT(kT - 0.5 * BEAT), a1 = ALT(tE), cyc = 2 * GB * sb, on = Math.round(GB * P.on);
+  addF(A, { k: 1, a0, a1, ph: GB * (kb + sb), cyc, on });
+  addF(B, { k: 1, a0, a1, ph: GB * kb, cyc, on });
   Array.prototype.push.apply(LV.path, fls);
   LV.side = s; LV.free = f + TFLY; LV.late = hi + TFLY;
   LV.hz[1 - s] = tE + 10 / v; LV.hz[s] = Math.max(LV.hz[s], tE);
-  LV.cur = kT + ((n - 1) * sb + (sb + ov) / 2 + 0.5) * BEAT;   // half a beat past the end (ending at kT + n * sb beats made the next phrase fail more)
+  // half a beat past the end, on a sixteenth (ending at kT + n * sb beats made the next phrase fail more)
+  LV.cur = kT + Math.ceil(4 * ((n - 1) * sb + (sb + ov) / 2 + 0.5) - 1e-9) / 4 * BEAT;
   return true;
 }
 
@@ -692,7 +712,7 @@ function phrase() {
     const e = cs < T_PULSE + 2 * BAR;
     return pulseStage(cs, ib, x, 2, e, kinds => gaps(ib, 4, 1, 0.76, kinds, e ? 0.2 : 0.16));
   }
-  if (!od) {                     // 38.7-69.7 s: full sway; the breaks grow longer as the goal nears
+  if (!od) {                     // 38.7-69.7 s: the long squeeze; the breaks grow longer as the goal nears
     const u = clamp((cs - T_SWAY) / (T_GOAL - T_SWAY), 0, 1);
     if (x < 0.1) return stone(ib, 0.2 - 0.03 * u, false, 2);
     if (x < 0.25) return pladder(ib, 5 + fl(u * 1.99), 0.19 - 0.03 * u, 2);
@@ -753,9 +773,10 @@ function setWin(a0, a1) {
   for (const p of LV.pl) if (p.a1 >= a0 - 20 && p.a0 <= a1 + 20) WP.push(p);
   for (const z of LV.lz) if (z.a >= a0 - 20 && z.a <= a1 + 20) WL.push(z);
 }
-// pulse rails hold in their lit eighths, with 70 ms of grace at each edge (f: the rail piece, which carries its cycle)
+// pulse rails hold in their lit grid steps (EI each), with 70 ms of grace at each edge (f: the rail piece, which carries
+// its cycle)
 const litB = (f, e) => mod(e - f.ph, f.cyc) < f.on;
-const litOn = (f, e) => litB(f, e) && !litB(f, e - 1);            // the eighth a piece turns lit
+const litOn = (f, e) => litB(f, e) && !litB(f, e - 1);            // the grid step a piece turns lit
 const litOK = (t, f) => litB(f, fl((t + PG) / EI)) || litB(f, fl((t - PG) / EI));
 const litNow = (t, f) => litB(f, fl(t / EI));
 // 0 to 1 through the last lit beat before the piece goes dark, so a long lit stretch glows steady and fades only then
@@ -1061,7 +1082,7 @@ function newRun(mode, seed, t0, o) {
     spinI: 0, charge: 0, shield: false, ghost: -9, saves: 0, chain: 0, chainT: -9, cring: 0, shT: -9, pctT: -9, pctLast: -1, closeTry: 0, closeN: 0 };
   while (R.gate < GATES.length && GATES[R.gate] <= t0) R.gate++;
   for (const b of BARRELS) if (b + SPIN <= t0) R.spinsSeen = (R.spinsSeen || 0) + 1;
-  cam.a = R.alt; cam.v = SPEED(t0); cam.tilt = -2.5 * DEG * RM; cam.kick = 0; cam.zoomEnv = 0; cam.punch = 0; cam.od = odAim(t0); cam.tr = trAim(); trN = 0;
+  cam.a = R.alt; cam.v = SPEED(t0); cam.tilt = -LEAN * DEG * RM; cam.kick = 0; cam.zoomEnv = 0; cam.punch = 0; cam.od = odAim(t0); cam.tr = trAim(); trN = 0;
   for (const p of parts) p.on = false;
   for (const p of shell) p.on = false;
   Juice.trauma = 0; Juice.stop = 0;
@@ -1575,8 +1596,11 @@ function schedSfx() {
   if (nb !== lastTickBeat && nb * BEAT - R.t < 0.12) {
     lastTickBeat = nb;
     let tick = false, big = false;
-    for (let s = 0; s < 2 && !tick; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > R.alt - 200 && litOn(f, 2 * nb)) { tick = true; break; }
-    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && litOn(tl.st, 2 * nb)) tick = big = true;   // the taught stone ticks 6 dB louder
+    // GB * nb: the grid step that starts beat nb. Only a piece that still reaches the pod at that beat counts (aB), so a
+    // rail the pod has already passed does not tick when it turns lit again below the pod
+    const aB = ALT(nb * BEAT);
+    for (let s = 0; s < 2 && !tick; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > aB && litOn(f, GB * nb)) { tick = true; break; }
+    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && litOn(tl.st, GB * nb)) tick = big = true;   // the taught stone ticks 6 dB louder
     // from 100 % the arp and the lead move up into the tick's octave, so the tick moves up one more (2.1 to 4.2 kHz)
     if (tick) { const w = musAt(nb * BEAT), c = chordAt(nb * BEAT); if (w > now) SFX.tick(w, big ? 2 : 1, fold(hzA(c.ch.r + c.k + (nb & 1 ? 7 : 0)), nb * BEAT >= T_GOAL ? 2093 : 1046)); }
   }
@@ -1725,7 +1749,8 @@ function buildArt() {
     for (let i = 0; i < n; i++) { const x0 = Math.round(vw * i / n), x1 = Math.round(vw * (i + 1) / n), a = al((i + 0.5) / n); if (a > 0.01) bands.push([x0, x1 - x0, rgba("shadow", a)]); }
     VIG = { w: vw, bands };
   }
-  // the largest sway that keeps both rails on screen up to the top, with the roll pivot at mid-lookahead
+  // the largest sway that keeps both rails on screen up to the top, with the roll pivot at mid-lookahead (used only
+  // when ROLL is above 4: camera() caps the sway at ROLL)
   PIV = Math.min(ANCH * L.H / L.S, 700) / 2;
   AMAX = 2;
   for (let A = 12; A >= 2; A -= 0.5) { const th = (A + 4) * DEG; if (L.S * ZMIN * (150 * Math.cos(th) + Math.sin(th) * PIV) <= L.W / 2 - EDGE) { AMAX = A; break; } }
@@ -1774,8 +1799,9 @@ function layoutUI() {
 const demoZoom = () => (DEMO && L.wide ? 1.15 : 1);
 function camera(t) {
   const W = L.W, H = L.H, Sc = L.S, M = spinM(t), sh = Math.sqrt(Math.max(0, 1 - M * M));
-  // sway: 2 degrees from the plates, 4 from the first spin (9.7 s), the full sway from the second spin (each eased in over a bar)
-  const swA = (t >= T_SWAYF ? lerp(SW0, AMAX, clamp((t - T_SWAYF) / BAR, 0, 1)) : t >= T_SWAY0 ? lerp(2, SW0, clamp((t - T_SWAY0) / BAR, 0, 1)) :
+  // sway: 2 degrees from the plates, 4 from the first spin (9.7 s), each eased in over a bar, never above ROLL; with
+  // ROLL above 4 it grows toward AMAX from the second spin (29 s)
+  const swA = Math.min(ROLL, t >= T_SWAYF ? lerp(SW0, AMAX, clamp((t - T_SWAYF) / BAR, 0, 1)) : t >= T_SWAY0 ? lerp(2, SW0, clamp((t - T_SWAY0) / BAR, 0, 1)) :
     t >= T_PLATE ? 2 * clamp((t - T_PLATE) / BAR, 0, 1) : 0) * RM;
   // at 100 % the roll eases to level and holds for a beat, so the goal moment reads
   const gk = R.goal === 1 ? t - R.goalT : 9, hold = gk < 0.15 ? 1 - gk / 0.15 * (gk >= 0 ? 1 : 0) : gk < BEAT ? 0 : gk < 1.5 * BEAT ? (gk - BEAT) / (0.5 * BEAT) : 1;
@@ -2668,8 +2694,9 @@ function drawSys(c) { // mute, pause and language: small plain glyphs in the top
 function visualStep(dt) { // the camera and particles (the rules never read them)
   if (!R) return;
   const m = spinM(R.t), scrSide = (R.side === 1) !== (m < 0);
-  // the roll toward the rail the pod sits on: 2.5 degrees, eased over about 0.2 s, so dense flips do not jerk the view
-  const tgt = R.dead ? cam.tilt : (scrSide ? 1 : -1) * 2.5 * DEG * RM;
+  // the roll toward the rail the pod sits on: LEAN degrees (2.5; 0 with ROLL 0), eased over about 0.2 s, so dense
+  // flips do not jerk the view
+  const tgt = R.dead ? cam.tilt : (scrSide ? 1 : -1) * LEAN * DEG * RM;
   cam.tilt += (tgt - cam.tilt) * (1 - Math.exp(-dt / 0.09));
   cam.kick *= Math.exp(-dt / 0.06);
   cam.zoomEnv = Math.max(0, cam.zoomEnv - dt * 1.1); cam.punch = Math.max(0, cam.punch - dt / 0.35);
@@ -2713,10 +2740,13 @@ const newSeed = () => ((Math.random() * 4294967296) >>> 0) || 1;
 // 2.4 s, a close call at about 4 s, a speed gate at 10 s, a second spin at 14 s, the 100 % moment at 23.7 s and an
 // overdrive crash into a plate or beam from 25 s (the fail cue moved from 26.2 to 25.6 s with the 10-11 course changes:
 // the only plate in reach of a dive now sits at about 25.8 s). Run B starts at 16.4 s (lasers, the first pulse rail, a close call
-// at about 8 s, a barrel spin at 12.6 s, a crash from 21 s). Each run's flips come from the same AI as the attract play.
+// at about 8.4 s, a barrel spin at 12.6 s, a crash from 19.75 s: with the 10-13 pulse rails its course changes after
+// 22 s, and from a cue at 20.25 s or later no plate or beam is in reach, so it fell through a break 2.7 to 3 s later;
+// from 19.75 s it flies into a beam 0.3 s after the cue, and cues 0.25 s either side also end on a beam). Each run's
+// flips come from the same AI as the attract play.
 const DEMO_RUNS = [
   { t0: 46, script: [{ at: 1.7, act: "close" }, { at: 5, act: "close" }, { at: 18.5, act: "close" }, { at: 25.6, act: "fail" }] },
-  { t0: 16.45, script: [{ at: 0.2, act: "close" }, { at: 7.6, act: "close" }, { at: 21.0, act: "fail" }] }
+  { t0: 16.45, script: [{ at: 0.2, act: "close" }, { at: 7.6, act: "close" }, { at: 19.75, act: "fail" }] }
 ];
 function startAI(mode, seed) {
   state = mode === "demo" ? "demo" : "title";
