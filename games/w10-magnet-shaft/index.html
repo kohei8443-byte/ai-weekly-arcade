@@ -239,13 +239,13 @@ const PX = 138, CROSS = 2 * PX;                   // attached pod centre |X|, fl
 const ACC = 9000, VMAX = 2400, KICK = 900;        // magnet pull, cap, launch kick (px/s^2, px/s, px/s)
 const HB = 1 / 240, HW = 6, HH = 9;               // physics substep, pod hitbox half sizes (12 x 18)
 const ZMIN = 0.78, SW0 = 4, EDGE = 20;            // deepest roll zoom-out; gentle sway amplitude (deg); rails keep 20 CSS px from the screen edge
-// Camera roll (kouhei 10-12: "why does the screen tilt?"). ROLL caps the shaft's sway in degrees; one edit picks the
-// answer on kouhei's card:
-//   4  "小さくする" (smaller, now): the 2.5 degree lean toward the pod's rail and a sway that never passes 4 degrees
+// Camera roll (kouhei 10-12: "why does the screen tilt?"). ROLL caps the shaft's sway in degrees; kouhei picked
+// "なくす" on the card (10-13), so the camera stays level:
+//   0  "なくす" (none, now): a level camera, no lean and no sway; the barrel spins, the landing nudge and the shake stay
+//   4  "小さくする" (smaller): the 2.5 degree lean toward the pod's rail and a sway that never passes 4 degrees
 //   12 "そのまま" (as it was): the 10-11 build, where the sway grows to AMAX (9 to 12 degrees, per screen) from 29 s
-//   0  "なくす" (none): a level camera, no lean and no sway; the barrel spins are unchanged
-// Reduced motion still scales the lean and the sway to 30 % (RM).
-const ROLL = 4, LEAN = ROLL > 0 ? 2.5 : 0;
+// With a roll, reduced motion scales the lean and the sway to 30 % (RM).
+const ROLL = 0, LEAN = ROLL > 0 ? 2.5 : 0;
 const FLOOR = 384;                                // one painted floor of the shaft (px)
 
 // flight curve: launch kick plus constant magnet pull, capped; crosses 276 px in 0.167 s
@@ -276,12 +276,12 @@ function segAt(t) { let i = SPD.length - 1; while (i > 0 && SPD[i].t > t) i--; r
 function ALT(t) { if (t <= 0) return t * 480; const p = segAt(t); return p.a + (t - p.t) * p.v; }
 function SPEED(t) { return t <= 0 ? 480 : segAt(t).v; }
 function altInv(a) { if (a <= 0) return a / 480; let i = SPD.length - 1; while (i > 0 && SPD[i].a > a) i--; return SPD[i].t + (a - SPD[i].a) / SPD[i].v; }
-// Front-loaded ramp (data, bar 1.5.2): plates and a 2 degree sway 5.8 s, the first barrel spin and a 4 degree sway
-// 9.7 s, lasers 11.6 s, pulse rails 19.4 s, the second spin 29 s (the sway stays at 4 degrees, see ROLL), the long
+// Front-loaded ramp (data, bar 1.5.2): plates 5.8 s, the first barrel spin 9.7 s, lasers 11.6 s, pulse rails 19.4 s,
+// the second spin 29 s (with ROLL above 0 the sway starts at 2 degrees 5.8 s and is 4 from 9.7 s, see ROLL), the long
 // squeeze 38.7 s, goal 69.7 s, then overdrive (denser phrases, barrel spins every 5 bars). The shaft's own motion
-// (sway and spin) comes early on purpose: the spin is this game's signature move, so every first run sees it inside
+// (the spin, and the sway when ROLL is above 0) comes early on purpose: the spin is this game's signature move, so every first run sees it inside
 // 10 s (bar 1.1.4), and its run-up sits in the plate stage, which leaves the whole laser stage to the lasers.
-// T_SWAY0: the 4 degree sway; T_SWAYF: the second spin, where a varied run's pulse rails step up (pLv) and, only when
+// T_SWAY0: the 4 degree sway (ROLL above 0) and the sway's phase; T_SWAYF: the second spin, where a varied run's pulse rails step up (pLv) and, only when
 // ROLL is above 4, the sway grows toward AMAX
 const T_PLATE = 3 * BAR, T_LASER = 6 * BAR, T_SWAY0 = 5 * BAR, T_PULSE = 10 * BAR, T_SWAYF = 15 * BAR, T_SWAY = 20 * BAR, T_GOAL = 36 * BAR;
 const A_GOAL = ALT(T_GOAL);
@@ -1030,8 +1030,8 @@ const cam = { a: 0, v: 0, tilt: 0, kick: 0, zoomEnv: 0, beat: 0, od: 0, tr: 1, p
 // the last speed step before 100 % and overdrive pull the camera back and lower the pod a little, so the shaft above
 // still shows at least 0.82 s of climb at every speed
 const odAim = t => clamp((SPEED(t) - 674) / (880 - 674), 0, 1);
-// the phone title plate hangs across the top of the shaft, far from the roll pivot: half the roll there keeps its
-// corners on screen; the full roll eases back in once the run starts
+// with ROLL above 0 the phone title plate hangs across the top of the shaft, far from the roll pivot: half the roll there
+// keeps its corners on screen; the full roll eases back in once the run starts (no effect with ROLL 0)
 const trAim = () => (!L.wide && isTitle() ? 0.5 : 1);
 let PIV = 325, AMAX = 12;
 const NP = 220, parts = [];
@@ -1684,7 +1684,7 @@ function glowSprite(c, size, hot) {
   g.putImageData(im, 0, 0); return cv2;
 }
 // Back-wall tile: staggered rows of small low-contrast machine panels (vents, hatch, lamp, seam), baked at device scale.
-// It is drawn in screen space without the roll, so it costs one tiled copy a frame (the shaft sways in front of it).
+// It is drawn in screen space without the roll, so it costs one tiled copy a frame (the shaft turns in front of it in a barrel spin, and sways only when ROLL is above 0).
 function makeTile(st, K) {
   const w = Math.max(8, Math.round(TW * K)), h = Math.max(8, Math.round(TH * K)), cv2 = cnv(w, h), g = cv2.getContext("2d");
   g.scale(w / TW, h / TH);
@@ -1803,7 +1803,7 @@ function camera(t) {
   // ROLL above 4 it grows toward AMAX from the second spin (29 s)
   const swA = Math.min(ROLL, t >= T_SWAYF ? lerp(SW0, AMAX, clamp((t - T_SWAYF) / BAR, 0, 1)) : t >= T_SWAY0 ? lerp(2, SW0, clamp((t - T_SWAY0) / BAR, 0, 1)) :
     t >= T_PLATE ? 2 * clamp((t - T_PLATE) / BAR, 0, 1) : 0) * RM;
-  // at 100 % the roll eases to level and holds for a beat, so the goal moment reads
+  // with ROLL above 0, at 100 % the roll eases to level and holds for a beat, so the goal moment reads
   const gk = R.goal === 1 ? t - R.goalT : 9, hold = gk < 0.15 ? 1 - gk / 0.15 * (gk >= 0 ? 1 : 0) : gk < BEAT ? 0 : gk < 1.5 * BEAT ? (gk - BEAT) / (0.5 * BEAT) : 1;
   const hl = gk >= 0 && gk < 1.5 * BEAT ? hold : 1;
   const sway = swA * DEG * Math.sin(TAU * (t - T_SWAY0) / (2 * BAR));
@@ -1920,7 +1920,8 @@ function draw(now) {
     c.globalAlpha = 1 - gk; c.strokeStyle = C("gold"); c.lineWidth = (6 * (1 - gk) + 1.5) * (DEMO ? 3 : 1);
     c.beginPath(); c.arc(R.x * M, camA - R.alt, 20 + 280 * Math.sqrt(gk), 0, TAU); c.stroke(); c.globalAlpha = 1;
   }
-  // the title plate on a phone: clamped to the rails across the shaft, so it rolls with it (it does not mirror in a
+  // the title plate on a phone: clamped to the rails across the shaft, so it moves with it (and rolls with it when ROLL
+  // is above 0; it does not mirror in a
   // barrel spin, so the words stay readable)
   if (isTitle() && !L.wide) {
     const T = titleLayout(c); T.k = k;
@@ -1948,7 +1949,7 @@ function draw(now) {
   textEnd();
 }
 // The back wall in screen space: one tiled copy per frame (two during the 0.6 s crossfade), panel rows that light
-// on the beat, girders and columns in front of it, all level while the shaft sways in front.
+// on the beat, girders and columns in front of it, all level whatever the shaft does in front.
 function drawWall(c, t, pal, V) {
   const dw = cv.width, dh = cv.height, ky = TILE.h / TH, wa = cam.a * 0.4;
   const ox = Math.round(dw / 2 + V.sk.x * L.dpr * 0.5), ay = V.ay * L.dpr, oy = Math.round(ay + mod(wa, TH) * ky) - TILE.h;
@@ -2518,7 +2519,7 @@ function fitLines(c, str, size, o, maxW) {
   const at = cut >= 0 ? cut : any;
   return at < 0 ? [str] : [str.slice(0, at), str.slice(at)];
 }
-// the title plate: on a phone it is clamped to both rails across the shaft and rolls with it; on a wide screen it
+// the title plate: on a phone it is clamped to both rails across the shaft and moves with it; on a wide screen it
 // hangs from the girder on the left wall. Sizes are CSS px; (0, 0) is the plate's top centre.
 function titleLayout(c) {
   const u = L.u, W = L.W, pw = L.wide ? Math.min(W / 2 - shaftHalf() - 24 * u, 400 * u) : Math.min(W - 32, 350 * u);
