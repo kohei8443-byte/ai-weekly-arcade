@@ -69,7 +69,9 @@ const PALS = {
     // world tints for shadows, painted lines, sparks and trails (round 3: every colour lives in this table, STYLE.md 3)
     shadow: "#030618", wallHi: "#78a0ff", rib: "#5082f0", floorLn: "#78a5ff", numeral: "#82afff", lampK: "#96beff",
     streak: "#96dcff", gateLn: "#788cb4", girderL: "#5a82e6", notch: "#283c6e", spark: "#ffd6aa", trailCore: "#dcfaff",
-    sparkC: "#aaf5ff", sparkO: "#ff9650", sparkG: "#ffd65a"
+    sparkC: "#aaf5ff", sparkO: "#ff9650", sparkG: "#ffd65a",
+    // plain rails are neutral steel (no blue, no cyan): cyan beside a rail means a lit pulse bar and nothing else
+    rail: "#a9abae", railLn: "#77797d", railK: "#2e3034", railF: "#14161a", railB: "#000000"
   }
 };
 const PAL = PALS.M;
@@ -576,7 +578,7 @@ const SLOT = [T_PLATE, T_LASER - 1.5 * BEAT, T_PULSE, T_SWAY];
 const kin = s => { if (!LV.vary) return s; let o = ""; for (const c of s) if (c === "g" || (c === "d" ? LV.seen.d : LV.seen.l)) o += c; return o || "g"; };
 const seenD = () => !LV.vary || LV.seen.d;
 // The pulse rails' own stage, in whichever slot k the run brings them in (the standard order: k 2 at 19.4 s). Its first
-// phrase is the taught stone (the blink, the big tick, the landing ring and the first-runs' forgiveness go with it).
+// phrase is the taught stone (the big tick, the landing ring and the first-runs' forgiveness go with it).
 // e: the first two bars of the slot (shorter ladders, wider windows). fill: the slot's own block run.
 function pulseStage(cs, ib, x, k, e, fill) {
   if (!LV.seen.p) { LV.seen.p = 1; return stone(ib, 0.26, true, 1); }
@@ -979,9 +981,9 @@ const STRINGS = {
     title: "マグネ・シャフト", titleEn: "Magnet Shaft", how1: "タップで左右のレールに飛びうつる。", how2: "切れ目と、光るオレンジをよけて登ろう。",
     start: "タップでスタート", space: "スペースキーでも", lang: "EN", paused: "一時停止", resume: "つづける", restart: "さいしょから", toTitle: "タイトル",
     retry: "タップでもう一回", best: "ベスト", newBest: "ベスト更新!", toBest: "あと {n}%", tieBest: "ベストとおなじ",
-    goal100: "100%!", od: "オーバードライブ", odRow: "100% のあと +{n} 階", close: "ギリギリ!", pulseOk: "パルス!", spinOk: "回転!", pulseWarn: "パルスは光ったときだけ乗れる", tPlate: "オレンジの板はさわるとアウト", tLaser: "レーザーは太く光るときだけ危ない", tPillar: "まん中の柱もさわるとアウト",
+    goal100: "100%!", od: "オーバードライブ", odRow: "100% のあと +{n} 階", close: "ギリギリ!", pulseOk: "パルス!", spinOk: "回転!", pulseWarn: "パルスは水色の所だけ乗れる", tPlate: "オレンジの板はさわるとアウト", tLaser: "レーザーは太く光るときだけ危ない", tPillar: "まん中の柱もさわるとアウト",
     shield: "シールド!", saved: "セーフ!", shieldHint: "ギリギリ 3 回でシールド", g_shield: "ギリギリ 3 回でシールドをためる",
-    cVoid: "レールの切れ目から落ちた", cPulse: "消えたパルスレールに乗った", cPlate: "放電板にふれた", cPillar: "放電柱にふれた", cLaser: "レーザーに当たった", cGiveUp: "おしまい",
+    cVoid: "レールの切れ目から落ちた", cPulse: "パルスレールのオレンジの所に乗った", cPlate: "放電板にふれた", cPillar: "放電柱にふれた", cLaser: "レーザーに当たった", cGiveUp: "おしまい",
     sClose: "ギリギリ", sPulse: "パルス", sSpin: "回転", next: "つぎ:", missLate: "{n} 秒おそかった", missEarly: "{n} 秒はやかった",
     g_pct: "{n}% まで登る", g_floor: "{n} 階まで登る", g_pulse: "パルスレールを {n} 回わたる", g_spin: "回転を {n} 回のりきる", g_close: "1 回のプレイでギリギリ {n} 回",
     lamps: "記録ランプ", height: "高さ", floor: "{n} 階", credit: "Made with Claude",
@@ -991,9 +993,9 @@ const STRINGS = {
     title: "Magnet Shaft", titleEn: "Magnet Shaft", how1: "Tap to jump to the other rail.", how2: "Avoid the breaks and anything glowing orange.",
     start: "Tap to start", space: "or press Space", lang: "日本語", paused: "Paused", resume: "Resume", restart: "Restart", toTitle: "Title",
     retry: "Tap to go again", best: "Best", newBest: "New best!", toBest: "{n}% to go", tieBest: "Same as your best",
-    goal100: "100%!", od: "OVERDRIVE", odRow: "+{n} floors past 100%", close: "CLOSE!", pulseOk: "PULSE!", spinOk: "SPIN!", pulseWarn: "Ride pulse rails only when lit", tPlate: "Orange plates are deadly", tLaser: "Beams hurt only when thick and bright", tPillar: "The middle pillar is deadly too",
+    goal100: "100%!", od: "OVERDRIVE", odRow: "+{n} floors past 100%", close: "CLOSE!", pulseOk: "PULSE!", spinOk: "SPIN!", pulseWarn: "Ride only the cyan parts of pulse rails", tPlate: "Orange plates are deadly", tLaser: "Beams hurt only when thick and bright", tPillar: "The middle pillar is deadly too",
     shield: "SHIELD!", saved: "SAVED!", shieldHint: "3 close calls make a shield", g_shield: "Charge a shield (3 close calls)",
-    cVoid: "Fell through a break in the rail", cPulse: "Rode a pulse rail while it was dark", cPlate: "Touched a discharge plate", cPillar: "Touched a discharge pillar", cLaser: "Hit by a laser", cGiveUp: "Run over",
+    cVoid: "Fell through a break in the rail", cPulse: "Rode the orange part of a pulse rail", cPlate: "Touched a discharge plate", cPillar: "Touched a discharge pillar", cLaser: "Hit by a laser", cGiveUp: "Run over",
     sClose: "Close", sPulse: "Pulse", sSpin: "Spin", next: "Next:", missLate: "{n} s too late", missEarly: "{n} s too early",
     g_pct: "Climb to {n}%", g_floor: "Reach floor {n}", g_pulse: "Cross {n} pulse rails", g_spin: "Ride out {n} spins", g_close: "{n} close calls in one run",
     lamps: "Record lamps", height: "Height", floor: "Floor {n}", credit: "Made with Claude",
@@ -1120,7 +1122,7 @@ function onLand() {
     if (!(R.goal && R.t - R.goalT < 0.3)) sfx.land(scr ? 1 : 0, root, line.f);   // the 100 % chord has the moment to itself
     humOn();
   }
-  emit(R.x + (R.side ? 7 : -7), R.alt, 10, 0, 520, 1.6, R.side ? Math.PI : 0, 0.28);
+  emit(R.x + (R.side ? 7 : -7), R.alt, 10, 2, 520, 1.6, R.side ? Math.PI : 0, 0.28);   // white: cyan beside a rail means a lit pulse bar only
   if (R.mode === "play" && !R.firstLand) { R.firstLand = true; hint.success(); }
   // landing on a pulse rail: a clean ride counts when the pod leaves it alive
   for (const f of WF[R.side]) if (f.k === 1 && R.alt > f.a0 - 5 && R.alt < f.a1 + 5) { R.pulseOn = f; f.ridden = f.ridden || 1; }
@@ -1327,9 +1329,9 @@ function simStep(dt) {
   }
   const flr = fl(R.alt / FLOOR);
   if (flr > R.floorMax) { R.floorMax = flr; if (flr % 25 === 0 && flr > 0 && loud()) sfx.floor(chordAt(R.t).root); }
-  // a parked pod: sparks run down the rail on each beat
+  // a parked pod: white sparks run down the rail on each beat (cyan beside a rail means a lit pulse bar only)
   const bi = fl(R.t / BEAT);
-  if (bi !== R.beatI) { R.beatI = bi; if (R.attached) emit(R.x + (R.side ? 9 : -9), R.alt - 10, 3, 0, 300, 0.5, -Math.PI / 2, 0.22); }
+  if (bi !== R.beatI) { R.beatI = bi; if (R.attached) emit(R.x + (R.side ? 9 : -9), R.alt - 10, 3, 2, 300, 0.5, -Math.PI / 2, 0.22); }
   cam.a = R.alt; cam.v = SPEED(R.t);
   trX[trI] = R.x; trA[trI] = R.alt; trT[trI] = R.t; trI = (trI + 1) % TRN; trN = Math.min(TRN, trN + 1);
   if ((++frameNo & 31) === 0) prune(R.alt - 1600);
@@ -1595,14 +1597,15 @@ function schedSfx() {
   const nb = fl(R.t / BEAT) + 1;
   if (nb !== lastTickBeat && nb * BEAT - R.t < 0.12) {
     lastTickBeat = nb;
-    let tick = false, big = false;
+    let tick = false, at = false, big = false;
     // GB * nb: the grid step that starts beat nb. Only a piece that still reaches the pod at that beat counts (aB), so a
-    // rail the pod has already passed does not tick when it turns lit again below the pod
+    // rail the pod has already passed does not tick when it turns lit again below the pod. at: the lit bar starts level
+    // with the pod on this beat (the hop cue, full tick); otherwise the tick only counts in (6 dB down, kouhei 10-13)
     const aB = ALT(nb * BEAT);
-    for (let s = 0; s < 2 && !tick; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > aB && litOn(f, GB * nb)) { tick = true; break; }
-    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && litOn(tl.st, GB * nb)) tick = big = true;   // the taught stone ticks 6 dB louder
+    for (let s = 0; s < 2; s++) for (const f of WF[s]) if (f.k === 1 && f.a0 < top && f.a1 > aB && litOn(f, GB * nb)) { tick = true; if (f.a0 <= aB + 1) at = true; }
+    const tl = LV.tele; if (tl && R.t > tl.t0 && R.t < tl.t1 && litOn(tl.st, GB * nb)) { tick = true; if (tl.st.a0 <= aB + 1) at = big = true; }   // the taught stone's hop ticks 6 dB louder
     // from 100 % the arp and the lead move up into the tick's octave, so the tick moves up one more (2.1 to 4.2 kHz)
-    if (tick) { const w = musAt(nb * BEAT), c = chordAt(nb * BEAT); if (w > now) SFX.tick(w, big ? 2 : 1, fold(hzA(c.ch.r + c.k + (nb & 1 ? 7 : 0)), nb * BEAT >= T_GOAL ? 2093 : 1046)); }
+    if (tick) { const w = musAt(nb * BEAT), c = chordAt(nb * BEAT); if (w > now) SFX.tick(w, big ? 2 : at ? 1 : 0.5, fold(hzA(c.ch.r + c.k + (nb & 1 ? 7 : 0)), nb * BEAT >= T_GOAL ? 2093 : 1046)); }
   }
 }
 
@@ -2024,11 +2027,11 @@ function drawSpinMarks(c, t, aBot, aTop, camA, M) {
       c.save(); c.beginPath();
       for (let i = 0; i < P.length; i += 5) if (!P[i + 3]) c.rect(x0, camA - P[i + 1], 14, P[i + 1] - P[i]);
       c.clip();
-      c.fillStyle = C("frame"); c.fillRect(x0, y - H, 14, H);
+      c.fillStyle = C("railF"); c.fillRect(x0, y - H, 14, H);
       c.beginPath();
       for (let k = -2; k < H / 14 + 2; k++) { const yy = y - H + k * 14 + roll; c.moveTo(x0, yy); c.lineTo(x0 + 14, yy - 7 * dir); c.lineTo(x0 + 14, yy - 7 * dir + 6); c.lineTo(x0, yy + 6); c.closePath(); }
-      c.fillStyle = rgba("steelD", 0.75); c.fill();
-      c.fillStyle = rgba("steelD", 0.9); c.fillRect(x0, y - H, 14, 2); c.fillRect(x0, y - 2, 14, 2);   // the pole's ends, inside the strip
+      c.fillStyle = rgba("railLn", 0.75); c.fill();
+      c.fillStyle = rgba("railLn", 0.9); c.fillRect(x0, y - H, 14, 2); c.fillRect(x0, y - 2, 14, 2);   // the pole's ends, inside the strip
       c.restore();
     }
     c.globalAlpha = 1;
@@ -2046,7 +2049,19 @@ function railPieces(s, aBot, aTop) { // flat list of [a0, a1, 0, pulse?, piece] 
   return out;
 }
 // Rails sit at x * M (barrel spin); widths stay constant, the near rail grows and the far one dims while edge-on.
-const RAILC = rgb(mix("steel", "steelD", 0.55));   // brushed steel: under the pod and the hazards in value
+const RAILC = C("rail");   // neutral brushed steel: under the pod and the hazards in value
+// the lit stretches of a pulse piece between altitudes lo and hi, as altitude pairs in out: grid step e is lit when
+// mod(e - ph, cyc) < on, and the pod passes grid step e at altitude ALT(e * EI)
+const RUNS = [];
+function litRuns(f, lo, hi, out) {
+  out.length = 0;
+  const e0 = fl(altInv(lo) / EI), e1 = Math.ceil(altInv(hi) / EI);
+  for (let s = f.ph + fl((e0 - f.ph) / f.cyc) * f.cyc; s < e1; s += f.cyc) {
+    const a0 = Math.max(lo, ALT(s * EI)), a1 = Math.min(hi, ALT((s + f.on) * EI));
+    if (a1 > a0 + 0.5) out.push(a0, a1);
+  }
+  return out;
+}
 function drawRails(c, t, aBot, aTop, camA, M, sh) {
   const pcs = [railPieces(0, aBot, aTop), railPieces(1, aBot, aTop)];
   const RW = [1 - 0.3 * sh, 1 + 0.5 * sh], RA = [1 - 0.55 * sh, 1], VR = Math.min(vs(), 1.2);
@@ -2058,21 +2073,22 @@ function drawRails(c, t, aBot, aTop, camA, M, sh) {
     const s = M >= 0 ? o : 1 - o;   // the far rail first
     const P = pcs[s], xr = M * (s ? RX : -RX), xf = M * (s ? 160 : -160), w = 6 * RW[s] * VR;
     let i;
-    c.globalAlpha = RA[s];
-    // frame strip outside the rail (absent in the breaks: that is the void)
-    c.fillStyle = C("frame");
+    // frame strip outside the rail (absent in the breaks: that is the void), drawn opaque with a black bed under the
+    // rail, so a rail dimmed by a barrel spin fades to grey and not to the navy wall
+    c.globalAlpha = 1; c.fillStyle = C("railF");
     for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xf - 7, camA - P[i + 1], 14, P[i + 1] - P[i]);
-    c.fillStyle = rgba("cyan", 0.07 + 0.09 * cam.beat);
-    for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xr - 7 * RW[s], camA - P[i + 1], 14 * RW[s], P[i + 1] - P[i]);
+    c.fillStyle = C("railB");
+    for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xr - w / 2, camA - P[i + 1], w, P[i + 1] - P[i]);
+    c.globalAlpha = RA[s];
     c.fillStyle = RAILC;
     for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xr - w / 2, camA - P[i + 1], w, P[i + 1] - P[i]);
-    c.fillStyle = rgba("gateLn", 0.9);
+    c.fillStyle = rgba("railLn", 0.9);
     const edge = (xr > 0 ? 1 : -1) * (w / 2 - 1.5);
     for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xr + edge - 0.75, camA - P[i + 1], 1.5, P[i + 1] - P[i]);
     // world-fixed notches, end brackets, chevrons streaming at 2x climb speed
     c.beginPath();
     for (i = 0; i < P.length; i += 5) { if (P[i + 3]) continue; for (let na = Math.ceil(P[i] / 40) * 40; na < P[i + 1]; na += 40) c.rect(xr - w / 2, camA - na, w, 1.5); }
-    c.fillStyle = rgba("notch", 0.55); c.fill();
+    c.fillStyle = rgba("railK", 0.55); c.fill();
     // a fall through a break: the missing stretch shows as an orange ghost rail and its end brackets blink (bar 1.4.1)
     const vg = voidGap && voidGap.s === s ? voidGap : null;
     if (vg) {
@@ -2092,66 +2108,58 @@ function drawRails(c, t, aBot, aTop, camA, M, sh) {
       const y0 = camA - P[i + 1], y1 = camA - P[i];
       for (let y = Math.ceil((y0 - off) / 44) * 44 + off; y < y1 - 6; y += 44) { c.moveTo(xf - 4.5, y + 4); c.lineTo(xf, y - 0.5); c.lineTo(xf + 4.5, y + 4); c.lineTo(xf + 4.5, y + 6); c.lineTo(xf, y + 1.5); c.lineTo(xf - 4.5, y + 6); c.closePath(); }
     }
-    c.fillStyle = rgba("cyan", 0.35 + 0.35 * cam.beat); c.fill();   // filled chevrons (a stroked path redraws with different edges)
+    c.fillStyle = rgba("ice", 0.22); c.fill();   // filled chevrons (a stroked path redraws with different edges)
     // floor lamps and speed gates live on the frame strip outside the rail, never on the pod's track (kouhei 10-11): a
-    // lamp blinks on the beat at each floor. A speed gate is a bright bar across the strip that juts out onto the wall
+    // steady white lamp sits at each floor (nothing beside a plain rail moves with the beat, kouhei 10-13). A speed gate
+    // is a bright bar across the strip that juts out onto the wall
     // (a shape the frame never uses) under two open chevrons, and as the pod passes it both frame strips flash for a
     // beat, so the speed-up is seen without anything across the shaft (fixer 10-11)
     const solid = a => { for (let j = 0; j < P.length; j += 5) if (!P[j + 3] && a > P[j] + 6 && a < P[j + 1] - 6) return true; return false; };
     c.beginPath();
     for (let f = Math.max(0, fl(aBot / FLOOR)); f * FLOOR < aTop; f++) if (solid(f * FLOOR)) c.rect(xf - 3, camA - f * FLOOR - 7, 6, 4);
-    c.fillStyle = rgba("cyan", 0.25 + 0.75 * cam.beat); c.fill();
+    c.fillStyle = rgba("ice", 0.4); c.fill();
     const ox = xf > 0 ? 1 : -1;
     for (const g of GATES) {
       const ga = ALT(g); if (ga < aBot || ga > aTop || !solid(ga)) continue;
       const gy = camA - ga;
-      c.fillStyle = rgba("cyanL", 0.95); c.fillRect(ox > 0 ? xf - 7 : xf - 13, gy - 2.5, 20, 5);
+      c.fillStyle = rgba("ice", 0.95); c.fillRect(ox > 0 ? xf - 7 : xf - 13, gy - 2.5, 20, 5);
       c.beginPath(); for (const d of [10, 19]) { c.moveTo(xf - 6, gy - d + 5); c.lineTo(xf, gy - d); c.lineTo(xf + 6, gy - d + 5); }
-      c.strokeStyle = rgba("cyanL", 0.9); c.lineWidth = 2; c.stroke();
+      c.strokeStyle = rgba("ice", 0.9); c.lineWidth = 2; c.stroke();
     }
     const gk = R.gateT != null ? (t - R.gateT) / BEAT : 9;
     if (gk >= 0 && gk < 1) {
-      c.fillStyle = rgba("cyanL", 0.4 * (1 - gk));
+      c.fillStyle = rgba("ice", 0.3 * (1 - gk));
       for (i = 0; i < P.length; i += 5) if (!P[i + 3]) c.fillRect(xf - 7, camA - P[i + 1], 14, P[i + 1] - P[i]);
     }
-    // the first pulse rail of a run is taught: this stretch of the far rail blinks in the stone's rhythm for a bar.
-    // Only the solid rail blinks: a break inside the stretch stays dark, so cyan never paints over a hole (fixer 10-11)
-    const tl = LV.tele;
-    if (tl && tl.s === s && tl.a1 > aBot && tl.a0 < aTop && litNow(t, tl.st)) {
-      const tlo = Math.max(tl.a0, aBot, R.attached && R.side === s ? R.alt + 60 : -1e9), thi = Math.min(tl.a1, aTop), ga = RA[s] * (0.6 - 0.3 * litFade(t, tl.st));
-      c.fillStyle = C("cyanL");
-      for (i = 0; i < P.length; i += 5) {
-        if (P[i + 3]) continue;
-        const lo = Math.max(tlo, P[i]), hi = Math.min(thi, P[i + 1]);
-        if (hi - lo < 2) continue;
-        c.globalAlpha = ga; c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); c.globalAlpha = RA[s];
-        c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
-      }
-    }
-    // pulse rails: cyan when lit (cyan always means safe), solid dim steel with a thin orange edge when dark (deadly, and
-    // orange, so the title's "anything orange" rule covers it; never dashed, which read as a break, kouhei 10-11). They
-    // change one flight (TFLY) early: a dark rail that a flip now would land on lit shows dim cyan, and a lit rail that
-    // would be dark by then loses its glow and gains the orange edge, so the rail always agrees with the landing ring
-    // (round 3, R1)
-    const lead = R.dead ? 0 : TFLY;
+    // pulse rails are drawn in space (kouhei 10-13: "when the alternating bridges switch can't be felt"): each height
+    // of the rail shows whether it holds at the moment the pod passes that height, so the lit stretches are cyan bars
+    // fixed to the shaft and the dark ones orange bars. The end of the pod's bar slides down to the pod and reaches it as
+    // its rail goes dark; the start of the other rail's bar reaches the pod's height on the beat it turns lit, with the
+    // tick. Bars use the grid edges (litNow); the 70 ms grace at each edge (litOK) stays hidden forgiveness
     for (i = 0; i < P.length; i += 5) {
       if (!P[i + 3]) continue;
-      const lo = P[i], hi = P[i + 1], litN = litNow(t, P[i + 4]), litL = litNow(t + lead, P[i + 4]);
-      if (litN) {
-        if (litL) { c.globalAlpha = RA[s] * (0.75 - 0.35 * litFade(t, P[i + 4])); c.drawImage(GLOW.c, xr - 16, camA - hi - 16, 32, hi - lo + 32); }
-        c.globalAlpha = RA[s] * (litL ? 1 : 0.7);
-        c.fillStyle = C("cyan"); c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
-        c.fillStyle = C("cyanL"); c.fillRect(xr - 1, camA - hi, 2, hi - lo);
-        c.globalAlpha = RA[s];
-        if (!litL) { c.strokeStyle = rgba("orange", 0.55); c.lineWidth = 1.2; c.strokeRect(xr - w / 2 - 1, camA - hi, w + 2, hi - lo); }
-      } else {
-        const warn = P[i + 4] && P[i + 4].warnT != null && perfT - P[i + 4].warnT < 0.6 && (fl(perfT * 6) & 1);
-        c.fillStyle = warn || (blink && R.dk === "pulse" && R.side === s && R.palt > lo - 10 && R.palt < hi + 10) ? C("orangeL") : litL ? rgba("cyan", 0.5) : rgba("steelD", 0.55);
-        c.fillRect(xr - w / 2, camA - hi, w, hi - lo);
-        // the dark rail's orange edge is the strongest edge on it (2 px, light orange), brighter than a plain rail even in
-        // grayscale, so "dark = deadly" never reads as a dim but safe rail (fixer 10-11)
-        if (litL) { c.strokeStyle = rgba("orange", 0.3); c.lineWidth = 1.2; c.strokeRect(xr - w / 2 - 1, camA - hi, w + 2, hi - lo); }
-        else { c.strokeStyle = rgba("orangeL", 0.9); c.lineWidth = 2; c.strokeRect(xr - w / 2 - 1.5, camA - hi, w + 3, hi - lo); }
+      const lo = P[i], hi = P[i + 1], f = P[i + 4];
+      litRuns(f, lo, hi, RUNS);
+      // dark stretches (deadly): a dim orange bar with a light orange edge on all four sides
+      const warn = f.warnT != null && perfT - f.warnT < 0.6 && (fl(perfT * 6) & 1);
+      let d0 = lo;
+      for (let j = 0; j <= RUNS.length; j += 2) {
+        const d1 = j < RUNS.length ? RUNS[j] : hi;
+        if (d1 - d0 > 0.5) {
+          const hit = blink && R.dk === "pulse" && R.side === s && R.palt > d0 - 10 && R.palt < d1 + 10;
+          c.fillStyle = warn || hit ? C("orangeL") : rgba("orange", 0.45); c.fillRect(xr - w / 2, camA - d1, w, d1 - d0);
+          if (d1 - d0 > 3) { c.strokeStyle = rgba("orangeL", 0.9); c.lineWidth = 2; c.strokeRect(xr - w / 2 - 1, camA - d1 + 1, w + 2, d1 - d0 - 2); }
+        }
+        if (j < RUNS.length) d0 = RUNS[j + 1];
+      }
+      // lit stretches (safe): glowing cyan bars with a bright core and a light cap at each end
+      for (let j = 0; j < RUNS.length; j += 2) {
+        const r0 = RUNS[j], r1 = RUNS[j + 1];
+        c.globalAlpha = RA[s] * 0.6; c.drawImage(GLOW.c, xr - 16, camA - r1 - 16, 32, r1 - r0 + 32); c.globalAlpha = RA[s];
+        c.fillStyle = C("cyan"); c.fillRect(xr - w / 2, camA - r1, w, r1 - r0);
+        c.fillStyle = C("cyanL"); c.fillRect(xr - 1, camA - r1, 2, r1 - r0);
+        if (r0 > lo + 0.5) c.fillRect(xr - 7, camA - r0 - 1.5, 14, 3);
+        if (r1 < hi - 0.5) c.fillRect(xr - 7, camA - r1 - 1.5, 14, 3);
       }
       c.fillStyle = C("ice"); c.fillRect(xr - 6, camA - lo - 2, 12, 4); c.fillRect(xr - 6, camA - hi - 2, 12, 4);
     }
@@ -2161,15 +2169,15 @@ function drawRails(c, t, aBot, aTop, camA, M, sh) {
   if (!R.dead || R.freeze > 0) {
     const gx = M * (R.side ? RX : -RX), ga = R.palt;
     c.globalAlpha = R.attached ? 0.8 : 0.3 + 0.4 * clamp((R.t - R.ft0) / TFLY, 0, 1);
-    c.globalAlpha = 0.69 * c.globalAlpha; c.drawImage(GLOW.c, gx - 18, camA - ga - 90, 36, 180);
-    c.globalAlpha = 0.8 * c.globalAlpha; c.drawImage(GLOW.c, gx - 6, camA - ga - 40, 12, 80);
+    c.globalAlpha = 0.5 * c.globalAlpha; c.drawImage(GLOW.w, gx - 18, camA - ga - 90, 36, 180);
+    c.globalAlpha = 0.8 * c.globalAlpha; c.drawImage(GLOW.w, gx - 6, camA - ga - 40, 12, 80);
     c.globalAlpha = 1;
     // the rail answers a landing (bar 1.2.2): for 90 ms the stretch under the pod flashes and springs 2 px outward
     const lk = R.attached && !R.dead ? (R.t - R.landT) / 0.09 : 1;
     if (lk >= 0 && lk < 1) {
       const kx = gx + (gx < 0 ? -2 : 2) * Math.sin(Math.PI * lk) * Math.abs(M), w0 = 7 * Math.min(vs(), 1.2);
-      c.globalAlpha = 1 - lk; c.drawImage(GLOW.c, kx - 20, camA - ga - 50, 40, 100);
-      c.fillStyle = C("cyanL"); c.fillRect(kx - w0 / 2, camA - ga - 25, w0, 50); c.globalAlpha = 1;
+      c.globalAlpha = 1 - lk; c.drawImage(GLOW.w, kx - 20, camA - ga - 50, 40, 100);
+      c.fillStyle = C("ice"); c.fillRect(kx - w0 / 2, camA - ga - 25, w0, 50); c.globalAlpha = 1;
     }
     // the magnet's field (the game's name, drawn): two field lines loop from the rail above the pod, around it, and
     // back to the rail below, stepping on the beat while attached; a flip stretches them from the rail it left for its
@@ -2280,7 +2288,7 @@ function drawHazards(c, t, aBot, aTop, camA, M) {
   }
 }
 const TPX = new Float64Array(TRN), TPY = new Float64Array(TRN);
-const TRAIL = [[0.32, rgba("cyan", 0.07)], [0.21, rgba("cyan", 0.14)], [0.11, rgba("cyan", 0.22)], [0.18, rgba("trailCore", 0.7)]];
+const TRAIL = [[0.32, rgba("white", 0.05)], [0.21, rgba("white", 0.1)], [0.11, rgba("white", 0.16)], [0.18, rgba("white", 0.6)]];   // white: cyan beside a rail means a lit pulse bar only (kouhei 10-13)
 function drawPod(c, t, camA, M, sh) {
   const sg = M < 0 ? -1 : 1, P = vs() * (DEMO && L.wide ? 1.65 : 1);   // the recorded wide demo keeps the pod over 3 % of the frame width
   // trail: the last 0.32 s of the path in three fading lengths, so it tapers; every flip leaves a corner
@@ -2308,24 +2316,24 @@ function drawPod(c, t, camA, M, sh) {
     c.fillStyle = rgba("white", 0.6 * fa); c.fill();
     if (hint.active && R.flips === 0) {
       const lx = M * (R.side ? -PX : PX), ly = camA - ALT(R.t + TFLY), pu = 0.45 + 0.55 * cam.beat;
-      c.globalAlpha = 0.7 * pu; c.drawImage(GLOW.c, lx - 30, ly - 30, 60, 60); c.globalAlpha = 1;
-      c.strokeStyle = rgba("cyan", 0.9 * pu); c.lineWidth = 2.5; c.beginPath(); c.arc(lx, ly, 13 + 5 * (1 - cam.beat), 0, TAU); c.stroke();
+      c.globalAlpha = 0.7 * pu; c.drawImage(GLOW.w, lx - 30, ly - 30, 60, 60); c.globalAlpha = 1;
+      c.strokeStyle = rgba("white", 0.9 * pu); c.lineWidth = 2.5; c.beginPath(); c.arc(lx, ly, 13 + 5 * (1 - cam.beat), 0, TAU); c.stroke();
     }
   }
   // pulse rails in a player's first five runs: when a flip now would land on one, the landing spot shows whether that
-  // beat holds (a bright cyan ring) or not (a dim steel ring), with the flight arc (bar 1.7.2)
+  // beat holds (a bright cyan ring) or not (a dim grey ring), with the flight arc (bar 1.7.2)
   const la = ALT(R.t + TFLY);
   let pcs = null;
   if (R.mode === "play" && !autopilot && (LV.soft || runsOf() < 5) && R.attached && !R.dead) {
     for (const f of WF[1 - R.side]) if (f.k === 1 && la > f.a0 - 5 && la < f.a1 + 5) { pcs = f; break; }
   }
   if (pcs) {
-    const ok = litOK(R.t + TFLY, pcs), lx = M * (R.side ? -PX : PX), ly = camA - la;
+    const ok = litNow(R.t + TFLY, pcs), lx = M * (R.side ? -PX : PX), ly = camA - la;
     c.beginPath();
     for (let q = 1; q <= 10; q++) { const tau = TFLY * q / 10; c.rect(flx(R.side, tau) * M - 2, camA - ALT(R.t + tau) - 2, 4, 4); }
     c.fillStyle = rgba("white", ok ? 0.75 : 0.25); c.fill();
     if (ok) { c.globalAlpha = 0.7; c.drawImage(GLOW.c, lx - 30, ly - 30, 60, 60); c.globalAlpha = 1; }
-    c.strokeStyle = ok ? C("cyan") : rgba("steelD", 0.7); c.lineWidth = ok ? 3 : 2; c.beginPath(); c.arc(lx, ly, ok ? 15 : 12, 0, TAU); c.stroke();
+    c.strokeStyle = ok ? C("cyan") : rgba("railLn", 0.7); c.lineWidth = ok ? 3 : 2; c.beginPath(); c.arc(lx, ly, ok ? 15 : 12, 0, TAU); c.stroke();
   }
   if (R.dead && R.freeze <= 0 && R.dk !== "void" && R.dk !== "pulse") {
     // shock ring where the pod burst, so the cause stays readable
