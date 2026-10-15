@@ -1,0 +1,1530 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ゼンマイとりで / Clockwork Fort</title>
+<style>
+/* Clockwork Fort: everything is drawn on one canvas; the DOM holds only transparent hit areas over the drawn
+   controls, so tools/qa.mjs can find them by data-qa. */
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#9fdcff}
+body{font-family:system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none}
+#wrap{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block;touch-action:none}
+#ui{position:absolute;inset:0;pointer-events:none}
+.ov{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+#ui button{position:absolute;margin:0;padding:0;border:0;background:transparent;color:transparent;font:8px system-ui,sans-serif;overflow:hidden;cursor:pointer;pointer-events:auto;touch-action:manipulation}
+#ui button:focus{outline:none}
+#ui button:focus-visible{outline:2px dashed #1d2340;outline-offset:1px}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="cv"></canvas>
+<div id="ui">
+  <section id="ovTitle" class="ov">
+    <button id="btnStart" type="button" data-qa="start" data-s="start"></button>
+    <button id="btnLang" type="button" data-qa="lang"></button>
+  </section>
+  <section id="ovPause" class="ov" hidden>
+    <button id="btnResume" type="button" data-qa="resume" data-s="resume"></button>
+    <button id="btnRestart" type="button" data-qa="restart" data-s="restart"></button>
+    <button id="btnQuit" type="button" data-qa="quit" data-s="toTitle"></button>
+  </section>
+  <section id="ovOver" class="ov" hidden>
+    <button id="btnRetry" type="button" data-qa="retry" data-s="retry"></button>
+    <button id="btnToTitle" type="button" data-qa="title" data-s="toTitle"></button>
+  </section>
+  <button id="btnPause" type="button" data-qa="pause" aria-label="pause" hidden>II</button>
+  <button id="btnMute" type="button" data-qa="mute" aria-label="sound"></button>
+</div>
+</div>
+<script>
+(function () {
+"use strict";
+// Portal SDK adapter: a portal build can replace this object before the game script runs.
+window.Platform = window.Platform || { gameplayStart() {}, gameplayStop() {}, happytime() {}, gameOver(score) {} };
+const platform = (name, ...args) => { try { window.Platform[name](...args); } catch (e) { /* SDK failures never break the game */ } };
+
+// ==== ART KIT START ====
+// From the template's kit (layout, paths, shapes, text, sprite cache, juice, particles, audio bus, hint), with this
+// game's own palette and one flat "toy" style: flat colour, one shade tone, a dark navy ink line. No gradients.
+
+// ---------- palette: one table (the only hex colours in the script) ----------
+const PALS = {
+  T: { // a bright toy meadow at noon
+    ink: "#1d2340", paper: "#fffaf0", paperD: "#e9e1cf", grey: "#b9bfcc", greyD: "#6e7488", white: "#ffffff",
+    sky: "#9fdcff", skyL: "#c8ecff", cloud: "#ffffff", hill: "#7ccb6c", hillD: "#62b45a", far: "#a8d9c0",
+    grass: "#9fd86c", grassL: "#b2e27e", grassD: "#86c75c", hedge: "#4fa356", hedgeD: "#3c8a47", trunk: "#a06f48",
+    soil: "#e8cf98", soilD: "#d3b57a", floor: "#efe2c2", floorD: "#d9c9a4",
+    red: "#ef5a4c", redD: "#c03f3a", redL: "#ff8f80", blue: "#3f86e0", blueD: "#2b62b0", blueL: "#8cc0ff",
+    yellow: "#ffc93c", yellowD: "#d99b1f", green: "#5cc46a", greenD: "#3d9a50", purple: "#8a63d2", purpleD: "#6544a8", purpleL: "#b79cf0",
+    orange: "#ff9a3c", orangeD: "#d9741f", pink: "#ff8fb0",
+    tin: "#c4cfe0", tinD: "#93a0b8", tinL: "#e8eef8", wood: "#e7b97c", woodD: "#bd8a52", stone: "#ddd8cc", stoneD: "#b0a999",
+    gold: "#ffcf3a", goldD: "#d79a12", goldL: "#fff0a6", hp: "#52cf6c", hpD: "#2f9a4c", bar: "#2b3352", lock: "#cdd1da"
+  }
+};
+
+// ---------- style: how fills, ink and shade look ----------
+const SANS = '"Hiragino Maru Gothic ProN","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",Meiryo,"Noto Sans JP","Noto Sans CJK JP",system-ui,sans-serif';
+let PAL = PALS.T, MONO = false, FLASH = false;
+// palette name -> colour. Under MONO (bake(..., mono)) colours print as greys and the ink stays ink
+function C(c) {
+  const v = PAL[c] || c; if (FLASH) return v === PAL.ink ? v : PAL.white;
+  if (!MONO || v === PAL.ink) return v;
+  const n = parseInt(v.slice(1), 16), l = (0.3 * (n >> 16) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255;
+  return l > 0.72 ? PAL.paperD : l > 0.55 ? PAL.grey : PAL.greyD;
+}
+function rgba(c, a) { const n = parseInt(C(c).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
+const ST = { id: "T", lw: 2, ui: SANS, title: SANS,
+  fill(x, p, c, rule) { x.fillStyle = C(c); x.fill(p, rule || "nonzero"); },
+  edge(x, p, w) { x.lineJoin = "round"; x.lineCap = "round"; x.strokeStyle = PAL.ink; x.lineWidth = w || this.lw; x.stroke(p); },
+  line(x, p, w, c) { x.lineCap = x.lineJoin = "round"; x.strokeStyle = C(c || "ink"); x.lineWidth = w; x.stroke(p); },
+  shade(x, p, c, ox, oy) { celShade(x, p, C(c), ox, oy); }, light() {} };
+// ---------- small helpers ----------
+const TAU = Math.PI * 2, fl = Math.floor;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const easeOut = x => 1 - (1 - clamp(x, 0, 1)) ** 3;
+const easeBack = x => { x = clamp(x, 0, 1) - 1; return 1 + 2.7 * x * x * x + 1.7 * x * x; };   // overshoots about 10 %
+const wob = (k, f, d) => k < 0 || k > 1 ? 0 : Math.exp(-k * d) * Math.cos(k * f);           // damped wobble 1 -> 0
+const cnv = (w, h) => { const c = document.createElement("canvas"); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
+// seeded PRNG (mulberry32) for everything that changes the outcome, so a run replays the same at any frame rate
+function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function gauss(r, mu, sigma) { const u = Math.max(1e-9, r()), v = r(); return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+// ---------- storage: one JSON record under "<prefix>save"; never throws, works in memory when blocked ----------
+function makeStore(prefix) {
+  const KEY = prefix + "save"; let data = {};
+  try { const v = JSON.parse(localStorage.getItem(KEY) || "{}"); if (v && typeof v === "object") data = v; } catch (e) { data = {}; }
+  return {
+    get(k, d) { return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : d; },
+    set(k, v) { data[k] = v; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } }
+  };
+}
+
+// ---------- screen layout: a cw x ch logical scene drawn at device resolution ----------
+// K = device px per logical px (one uniform scale, devicePixelRatio capped at 2). Space around the scene shows more
+// world, never bars; (L.x0, L.y0) is the scene's (0, 0). L.wide: the side areas can take the HUD while the play area
+// keeps the full height. L.u scales UI and text up on small landscape screens (TEXT_MIN, bar 1.4.4).
+const TEXT_MIN = 14;
+const L = { K: 1, dpr: 1, kc: 1, W: 360, H: 640, x0: 0, y0: 0, u: 1, wide: false };
+function artResize(cv, cssW, cssH, cw, ch, sideMin) {
+  const dpr = L.dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dw = Math.max(2, Math.round(cssW * dpr)), dh = Math.max(2, Math.round(cssH * dpr)), K = Math.min(dw / cw, dh / ch);
+  if (K !== L.K) SPR.clear();
+  cv.width = dw; cv.height = dh;
+  Object.assign(L, { K, kc: K / dpr, W: dw / K, H: dh / K });
+  L.x0 = (L.W - cw) / 2; L.y0 = (L.H - ch) * 0.6;   // extra height goes mostly to the sky
+  L.u = clamp(12.6 / (TEXT_MIN * L.kc), 1, L.x0 > 40 ? 1.45 : 1.1);
+  L.wide = L.x0 >= (sideMin || 200) * L.u;
+}
+// scene coords -> device px, with a shake (sx, sy in logical px) and a camera zoom z = { x, y, s } around a scene point
+function view(x, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  x.setTransform(K * s, 0, 0, K * s, K * (fx * (1 - s) + s * (L.x0 + (sx || 0))), K * (fy * (1 - s) + s * (L.y0 + (sy || 0))));
+}
+// a cached layer: the whole screen plus a margin m for the shake; fn(x, X0, Y0, W, H) fills that rect in scene coords
+function layer(m, fn) {
+  const K = L.K, c = cnv((L.W + 2 * m) * K, (L.H + 2 * m) * K), x = c.getContext("2d");
+  x.setTransform(K, 0, 0, K, K * (m + L.x0), K * (m + L.y0));
+  c.txt = baking(() => fn(x, -L.x0 - m, -L.y0 - m, L.W + 2 * m, L.H + 2 * m));
+  c.m = m; return c;
+}
+function putLayer(x, c, sx, sy, z) {
+  const K = L.K, s = z ? z.s : 1, fx = z ? z.x + L.x0 : 0, fy = z ? z.y + L.y0 : 0;
+  let ox = K * (fx * (1 - s) + s * ((sx || 0) - c.m)), oy = K * (fy * (1 - s) + s * ((sy || 0) - c.m));
+  if (s === 1) { ox = Math.round(ox); oy = Math.round(oy); }   // whole device px: a plain copy without filtering
+  x.setTransform(s, 0, 0, s, ox, oy); x.drawImage(c, 0, 0); carry(x, c.txt, s);
+}
+// a transparent DOM hit area over something drawn at scene rect (x, y, w, h)
+function place(el, x, y, w, h) { const k = L.kc; el.style.left = (x + L.x0) * k + "px"; el.style.top = (y + L.y0) * k + "px"; el.style.width = w * k + "px"; el.style.height = h * k + "px"; }
+// draw fn in a frame moved to (X, Y), scaled by s and turned by a
+function at(x, X, Y, s, a, fn) { x.save(); x.translate(X, Y); if (s !== 1) x.scale(s, s); if (a) x.rotate(a); fn(); x.restore(); }
+
+// ---------- paths: shapes drawn by hand with curves, never compass-made clip art ----------
+const P2 = () => new Path2D();
+const mtx = (dx, dy) => new DOMMatrix([1, 0, 0, 1, dx, dy]);
+function pEll(cx, cy, rx, ry, rot) { const p = P2(); p.ellipse(cx, cy, rx, ry, rot || 0, 0, TAU); return p; }
+function pRR(x, y, w, h, r) {
+  const p = P2(); r = Math.min(r, w / 2, h / 2);
+  p.moveTo(x + r, y); p.arcTo(x + w, y, x + w, y + h, r); p.arcTo(x + w, y + h, x, y + h, r); p.arcTo(x, y + h, x, y, r); p.arcTo(x, y, x + w, y, r); p.closePath();
+  return p;
+}
+function pPoly(pts, open) { const p = P2(); p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) p.lineTo(pts[i][0], pts[i][1]); if (!open) p.closePath(); return p; }
+const pLine = (x0, y0, x1, y1) => pPoly([[x0, y0], [x1, y1]], true);
+const pCut = (x, y, w, h, c) => pPoly([[x + c, y], [x + w - c, y], [x + w, y + c], [x + w, y + h - c], [x + w - c, y + h], [x + c, y + h], [x, y + h - c], [x, y + c]]);
+// a smooth curve through the midpoints of the points: reads as drawn by hand
+function pSmooth(pts, open) {
+  const p = P2(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (open) { p.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n - 1; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[i + 1])); p.lineTo(pts[n - 1][0], pts[n - 1][1]); return p; }
+  p.moveTo(...mid(pts[n - 1], pts[0]));
+  for (let i = 0; i < n; i++) p.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(pts[i], pts[(i + 1) % n]));
+  p.closePath(); return p;
+}
+function pPolar(cx, cy, rx, ry, fn, n) { const pts = []; for (let i = 0; i < n; i++) { const t = i / n * TAU, f = fn(t); pts.push([cx + Math.cos(t) * rx * f, cy + Math.sin(t) * ry * f]); } return pSmooth(pts); }
+// a disc whose edge wanders a little, like something cut or turned by hand
+function pBlob(cx, cy, rx, ry, amp, seed) { const r = seeded(seed), k1 = r() * TAU, k2 = r() * TAU, k3 = r() * TAU; return pPolar(cx, cy, rx, ry, t => 1 + amp * (Math.sin(2 * t + k1) * 0.5 + Math.sin(3 * t + k2) * 0.3 + Math.sin(5 * t + k3) * 0.2), 40); }
+function pStar(cx, cy, ro, ri, n, rot) { const pts = []; for (let i = 0; i < 2 * n; i++) { const a = (rot || 0) + i * Math.PI / n, r = i % 2 ? ri : ro; pts.push([cx + Math.sin(a) * r, cy - Math.cos(a) * r]); } return pPoly(pts); }
+// crescent: half a circle back along a narrower half ellipse (k: 0 thin .. 1 half moon), turned by rot
+function pMoon(cx, cy, r, k, rot) { const p = P2(); p.ellipse(cx, cy, r, r, rot, -Math.PI / 2, Math.PI / 2); p.ellipse(cx, cy, r * k, r, rot, Math.PI / 2, -Math.PI / 2, true); p.closePath(); return p; }
+function chaikin(pts, k) {
+  for (let j = 0; j < k; j++) {
+    const o = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; o.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]); }
+    o.push(pts[pts.length - 1]); pts = o;
+  }
+  return pts;
+}
+
+// ---------- drawing helpers ----------
+// one inked shape: flat colour, an optional shade tone sc (the shape moved ox, oy away from the light), the light
+// lt = [colour, ox, oy, w, mx, my, mr] (style A only, see glint), brush ink of width w
+function shape(x, p, c, w, sc, ox, oy, lt) { ST.fill(x, p, c); if (sc) ST.shade(x, p, sc, ox, oy); if (lt) ST.light(x, p, ...lt); ST.edge(x, p, w); return p; }
+// one flat shade tone: the part of a shape not covered by itself moved toward the light
+function celShade(x, path, col, ox, oy) {
+  x.save(); x.clip(path);
+  const p = P2(); p.rect(-4e3, -4e3, 8e3, 8e3); p.addPath(path, mtx(-ox, -oy));
+  x.fillStyle = col; x.fill(p, "evenodd"); x.restore();
+}
+
+// tapered brush stroke along points: thin at both ends, full in the middle
+function brush(x, pts, w, col) {
+  const s = chaikin(pts, 3), n = s.length, A = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = s[Math.max(0, i - 1)], b = s[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const k = w * 0.5 * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * i / (n - 1))), 0.6) / d, dx = (b[0] - a[0]) * k, dy = (b[1] - a[1]) * k;
+    A.push([s[i][0] - dy, s[i][1] + dx]); B.push([s[i][0] + dy, s[i][1] - dx]);
+  }
+  x.fillStyle = C(col || "ink"); x.fill(pPoly(A.concat(B.reverse())));
+}
+// inked cord: a dark line with a coloured core (cords, stems, rope ends)
+function cordLine(x, path, w, col, iw) {
+  x.lineCap = x.lineJoin = "round";
+  x.strokeStyle = C("ink"); x.lineWidth = w + 2 * (iw == null ? 0.5 : iw); x.stroke(path);
+  x.strokeStyle = C(col); x.lineWidth = w; x.stroke(path);
+}
+// cords from points straight up to a beam at y = top: how boards, tags and lanterns hang in the world
+function cords(x, pts, top, col) { for (const [px, py] of pts) cordLine(x, pLine(px, top, px, py), 1.5, col || "red"); }
+
+// ---------- sprite cache: a drawing is made once per size at device resolution, then drawn turned and scaled ----------
+const SPR = new Map();
+// Text drawn while baking (bake, lit, layer) is kept with the picture and recorded again, at its on-screen size,
+// each time the picture is drawn (carry), so QA measures a baked sign the way the player sees it.
+let BAKED = null;
+function baking(fn) { const keep = BAKED, t = BAKED = []; try { fn(); } finally { BAKED = keep; } return t.length ? t : null; }
+function carry(x, txt, k) { if (!txt) return; k = k || Math.hypot(x.getTransform().c, x.getTransform().d) / L.K; for (const t of txt) noteText(t.str, t.px * k); }
+// bake: fn draws in logical px with (0, 0) at (ox, oy) in a w x h box; mono prints it locked (greys, full ink)
+function bake(key, w, h, ox, oy, fn, mono) {
+  let b = SPR.get(key);
+  if (!b) {
+    const K = L.K, c = cnv(w * K + 2, h * K + 2), x = c.getContext("2d");
+    x.setTransform(K, 0, 0, K, 1 + ox * K, 1 + oy * K);
+    const txt = baking(() => { MONO = !!mono; try { fn(x); } finally { MONO = false; } });
+    b = { c, w: c.width / K, h: c.height / K, ox: ox + 1 / K, oy: oy + 1 / K, txt }; SPR.set(key, b);
+  }
+  return b;
+}
+function put(x, b, X, Y, a, sx, sy) {
+  if (!a && !sx) { x.drawImage(b.c, X - b.ox, Y - b.oy, b.w, b.h); carry(x, b.txt); return; }
+  x.save(); x.translate(X, Y); if (sx) x.scale(sx, sy || sx); if (a) x.rotate(a); x.drawImage(b.c, -b.ox, -b.oy, b.w, b.h); carry(x, b.txt); x.restore();
+}
+
+// ---------- text: system fonts, an optional ink outline; TXT records each string and the smallest size (logical px) ----------
+const TXT = { min: Infinity, seen: [], last: [] };
+function textEnd() { TXT.last = TXT.seen; TXT.seen = []; }   // call once at the end of every drawn frame
+function noteText(str, px) { if (BAKED) BAKED.push({ str, px }); else { if (px < TXT.min) TXT.min = px; if (TXT.seen.length < 300) TXT.seen.push(str); } }
+// o: { a align, f font, w weight, ol outline colour, ow its share of size, deep: a second print down right, max: fit width }
+function text(x, str, X, Y, size, col, o) {
+  o = o || {}; str = String(str);
+  const font = s => (o.w || 800) + " " + s + "px " + (o.f || ST.ui);
+  x.font = font(size);
+  if (o.max) { const w = x.measureText(str).width; if (w > o.max) x.font = font(size *= o.max / w); }
+  const m = x.getTransform(), px = size * Math.hypot(m.c, m.d) / L.K;
+  noteText(str, px);
+  x.textAlign = o.a || "center"; x.textBaseline = "middle";
+  if (o.deep) { x.fillStyle = C(o.deep); x.fillText(str, X + size * 0.035, Y + size * 0.06); }
+  if (o.ol) { x.lineJoin = "round"; x.miterLimit = 2; x.lineWidth = size * (o.ow || 0.2); x.strokeStyle = C(o.ol); x.strokeText(str, X, Y); }
+  x.fillStyle = C(col); x.fillText(str, X, Y);
+}
+function textW(x, str, size, o) { x.font = ((o && o.w) || 800) + " " + size + "px " + ((o && o.f) || ST.ui); return x.measureText(String(str)).width; }
+
+// ---------- juice: trauma shake (squared, smooth noise), capped hitstop, camera punch ----------
+const Juice = { trauma: 0, t: 0, stop: 0, reduce: false, zoom: null };
+function addTrauma(a) { Juice.trauma = Math.min(1, Juice.trauma + a); }
+function hitstop(sec) { Juice.stop = Math.max(Juice.stop, Math.min(0.15, sec)); }
+function zoomPunch(x, y, s, ms, now) { if (!Juice.reduce) Juice.zoom = { x, y, s, t: now, ms }; }
+function juiceStep(dt) { Juice.trauma = Math.max(0, Juice.trauma - dt * 1.8); Juice.t += dt; Juice.stop = Math.max(0, Juice.stop - dt); }
+const hash1 = i => { let h = Math.imul(i ^ 0x2c1b3c6d, 0x297a2d39); h ^= h >>> 15; h = Math.imul(h, 0x165667b1); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
+function vnoise(x) { const i = fl(x), f = x - i; return lerp(hash1(i), hash1(i + 1), f * f * (3 - 2 * f)); }
+function shakeOffset(max) { // logical px
+  const a = Juice.trauma * Juice.trauma * max * (Juice.reduce ? 0.3 : 1);
+  return a < 0.05 ? { x: 0, y: 0 } : { x: vnoise(Juice.t * 24) * a, y: vnoise(Juice.t * 24 + 57.3) * a };
+}
+function zoomNow(now) {
+  const z = Juice.zoom; if (!z) return null;
+  const k = (now - z.t) / z.ms; if (k < 0 || k >= 1) { Juice.zoom = null; return null; }
+  return { x: z.x, y: z.y, s: 1 + (z.s - 1) * (k < 0.12 ? k / 0.12 : 1 - smooth((k - 0.5) / 0.5)) };
+}
+
+// ---------- particles: a capped pool of small turning shapes (dot, chip, spark, star) ----------
+const PARTS = [], PART_MAX = 300, rnd = () => Math.random(); // looked up on each call, so tools can seed it
+function addPart(o) { if (PARTS.length >= PART_MAX) PARTS.shift(); PARTS.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, max: 1, col: "paper", kind: "dot", s: 2, rot: 0, vr: 0 }, o)); }
+function burst(x, y, n, spd, o) { for (let i = 0; i < n; i++) { const a = rnd() * TAU, v = spd * (0.4 + rnd() * 0.8), life = 0.45 + rnd() * 0.35; addPart(Object.assign({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - spd * 0.4, g: 600, life, max: life, rot: rnd() * TAU, vr: (rnd() - 0.5) * 14 }, o)); } }
+function partsStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i]; p.life -= dt;
+    if (p.life <= 0) { PARTS.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+}
+function partsDraw(x) {
+  const m = x.getTransform(); x.lineWidth = 0.6; x.strokeStyle = C("ink");
+  for (const p of PARTS) {
+    const s = p.s * (0.3 + 0.7 * p.life / p.max), k = p.kind;
+    const q = k === "star" ? pStar(0, 0, s * 2, s * 0.6, 4) : k === "chip" ? pPoly([[-s, -s * 0.5], [s * 0.8, -s * 0.7], [s, s * 0.5], [-s * 0.6, s * 0.6]])
+      : k === "spark" ? pPoly([[0, -s * 2], [s * 0.45, 0], [0, s * 2], [-s * 0.45, 0]]) : pEll(0, 0, s, s * 0.85);
+    x.setTransform(m); x.translate(p.x, p.y); x.rotate(p.rot); x.fillStyle = C(p.col); x.fill(q);
+    if (k !== "dot" && s > 2) x.stroke(q);
+  }
+  x.setTransform(m);
+}
+
+// ---------- audio bus: every voice -> (sfx | music) -> master gain -> compressor -> speakers ----------
+const AU = { ctx: null, master: null, comp: null, sfx: null, music: null, noise: null, muted: false, vol: 0.7, offline: false };
+function auBuild(ctx) {
+  const g = v => { const n = ctx.createGain(); n.gain.value = v; return n; }, comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.15;
+  const master = g(AU.muted ? 0 : AU.vol), sfx = g(0.8), music = g(0.75);
+  master.connect(comp); comp.connect(ctx.destination); // the only connection to the speakers
+  sfx.connect(master); music.connect(master);
+  // one shared echo, so dry voices sit in a small room: music fully, sfx through a lower send
+  const echo = ctx.createDelay(1), fb = g(0.3), wet = g(0.16), send = g(0.45);
+  echo.delayTime.value = 0.15; echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(master); music.connect(echo); sfx.connect(send); send.connect(echo);
+  const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = nb.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1;
+  Object.assign(AU, { ctx, comp, master, sfx, music, noise: nb });
+}
+function auInit() {
+  if (AU.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  try { auBuild(new AC()); } catch (e) { AU.ctx = null; return false; }
+  try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) { /* not supported */ }
+  return true;
+}
+function auResume() { if (AU.ctx && AU.ctx.state !== "running" && AU.ctx.state !== "closed") AU.ctx.resume().catch(() => {}); }
+const audioOn = () => !!AU.ctx && (AU.ctx.state === "running" || AU.offline);
+// unlock on every kind of first gesture (iOS needs touchend/click), and again whenever the tab comes back
+function auUnlock() {
+  const f = () => { if (auInit()) auResume(); };
+  for (const t of ["pointerdown", "pointerup", "touchend", "click", "keydown", "mousedown"]) document.addEventListener(t, f, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) auResume(); });
+}
+function auMute(m) { AU.muted = m; if (AU.master) { const t = AU.ctx.currentTime; AU.master.gain.cancelScheduledValues(t); AU.master.gain.setTargetAtTime(m ? 0 : AU.vol, t, 0.012); } }
+const cents = c => Math.pow(2, c / 1200);
+function vary(c, gv) { return { f: cents((rnd() * 2 - 1) * (c == null ? 40 : c)), g: 1 + (rnd() * 2 - 1) * (gv == null ? 0.1 : gv) }; }
+// envelope from silence to peak and back to silence (the default gain of 1 would leak a click)
+function env(gn, peak, when, att, dur) { gn.gain.value = 0; gn.gain.setValueAtTime(0.0001, when); gn.gain.linearRampToValueAtTime(peak, when + att); gn.gain.exponentialRampToValueAtTime(0.0001, when + dur); }
+// one oscillator voice with stop() always scheduled; square and saw go through a lowpass
+function tone(type, f0, f1, dur, peak, when, dest, att, lp) {
+  const c = AU.ctx, o = c.createOscillator(), gn = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, when);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, when + dur * 0.9);
+  env(gn, peak, when, att || 0.004, dur);
+  let head = o;
+  if (lp || type === "square" || type === "sawtooth") { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400; o.connect(f); head = f; }
+  head.connect(gn); gn.connect(dest || AU.sfx);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function hiss(ftype, freq, q, dur, peak, when, dest, f1) { // filtered noise voice (transients, wood, water, air)
+  const c = AU.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), gn = c.createGain();
+  s.buffer = AU.noise; f.type = ftype; f.frequency.setValueAtTime(freq, when); f.Q.value = q;
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, when + dur);
+  env(gn, peak, when, 0.002, dur);
+  s.connect(f); f.connect(gn); gn.connect(dest || AU.sfx);
+  s.start(when, rnd() * 0.5); s.stop(when + dur + 0.05);
+}
+// Fire voices together through a fresh copy of the bus on an OfflineAudioContext and return the peak sample
+// (window.__game.peak, bar 1.3.2). The live bus is restored before rendering, so play is unaffected.
+async function auPeak(fire, sec) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext; if (!OAC) return 0;
+  const keep = Object.assign({}, AU), oc = new OAC(1, Math.round(44100 * (sec || 1.5)), 44100);
+  auBuild(oc); AU.master.gain.value = AU.vol; AU.offline = true;
+  try { fire(); } finally { Object.assign(AU, keep); AU.offline = false; }
+  const d = (await oc.startRendering()).getChannelData(0); let p = 0;
+  for (let i = 0; i < d.length; i++) p = Math.max(p, Math.abs(d[i]));
+  return p;
+}
+
+// ---------- tap hint per player: shown until the first success, back after two quick deaths (< 5 s) ----------
+function makeHint(store, key) {
+  let quick = 0;
+  return {
+    active: false,
+    begin() { this.active = !store.get(key, false) || quick >= 2; },
+    success() { if (this.active) { this.active = false; quick = 0; store.set(key, true); } },
+    runEnded(sec) { quick = sec < 5 ? quick + 1 : 0; }
+  };
+}
+// ==== ART KIT END ====
+
+// ======================================================================================================
+// Clockwork Fort. Rules follow a proven idle-defense game (NOTES.md): enemies march at the fort, the player taps
+// them, coins from each kill buy upgrades between waves (crossbow, archers, cannon, wall), and the waves keep
+// getting tougher. RULES is pure and stepped at 60 Hz; everything after it only draws and plays sound.
+// ======================================================================================================
+
+// ---------- identity, scene size ----------
+const SLUG = "clockwork-fort", WEEK = 11;
+const CW = 360, CH = 640;          // the core 9:16 scene in logical px
+const DEMO = /[?&]demo=1(&|$)/.test(location.search);
+const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
+const reduceMotion = mq("(prefers-reduced-motion: reduce)"), finePointer = mq("(hover: hover) and (pointer: fine)");
+Juice.reduce = reduceMotion;
+const store = makeStore(SLUG + "-");
+
+// ==== RULES START ====
+// Pure rules: no DOM, no wall clock. A run is a fixed 60 Hz step over a seeded state, so it replays the same at any
+// frame rate and tools can run whole games headless (__game.balance). The renderer only reads G and its events.
+const SIM_HZ = 60, DT = 1 / SIM_HZ;
+const FIELD = { x0: 22, x1: 338, spawn: 64, wall: 462 };   // enemies walk from spawn (scene y) down to the wall line
+const TURRET = { x: 180, y: 490 }, MORTAR = { x: 318, y: 598 };                         // where the player's crossbow bolts start
+const WAVES = 12, BOSS_WAVES = [4, 8, 12], LIVES = 3;
+const FIRE_CD = 0.2, BOLT_R = 24, BOLT_SPD = 1100, ARROW_CD = 1.15, ARROW_SPD = 620, CANNON_CD = 2.6, CANNON_R = 46;
+// enemy kinds: hp and coins grow with the wave (hpMul, coinMul); dps = damage per second to the wall
+const EN = {
+  walk: { hp: 14, spd: 30, dps: 5, coin: 2, r: 13 },
+  run: { hp: 8, spd: 60, dps: 4, coin: 2, r: 11 },
+  lob: { hp: 10, spd: 28, dps: 3, coin: 3, r: 12, stop: 150 },     // stops short of the wall and lobs at it
+  brute: { hp: 64, spd: 18, dps: 13, coin: 7, r: 18 },
+  boss: { hp: 360, spd: 11, dps: 18, coin: 60, r: 30 }
+};
+const UPG_KEYS = ["tap", "archer", "cannon", "wall"];
+const UPG = { tap: { base: 12, mul: 1.36, from: 1 }, archer: { base: 18, mul: 1.33, from: 1 }, cannon: { base: 60, mul: 1.38, from: 0 }, wall: { base: 14, mul: 1.28, from: 1 } };
+const hpMul = w => Math.pow(1.2, w - 1), coinMul = w => Math.pow(1.12, w - 1), hitMul = w => Math.pow(1.14, w - 1);
+const cost = (k, l) => Math.round(UPG[k].base * Math.pow(UPG[k].mul, l - UPG[k].from));
+function stats(lv) {
+  return {
+    tapDmg: 5 * Math.pow(1.2, lv.tap - 1),
+    archers: Math.min(6, lv.archer), arrowDmg: 3 * Math.pow(1.2, lv.archer - 1),
+    cannonDmg: lv.cannon ? 16 * Math.pow(1.27, lv.cannon - 1) : 0,
+    wallMax: Math.round(100 * Math.pow(1.27, lv.wall - 1))
+  };
+}
+function buildWave(w, rng) { // spawn list: time (s), kind, x; some arrive in small packs
+  const boss = BOSS_WAVES.indexOf(w) >= 0, n = boss ? 3 + w : 5 + 2 * w, dur = 5 + 0.5 * w, list = [];
+  const lobP = w >= 3 ? 0.14 : 0, bruteP = w >= 3 ? Math.min(0.26, 0.08 + 0.016 * w) : 0, runP = w >= 2 ? 0.26 : 0;
+  for (let i = 0; i < n;) {
+    const t = (i / n) * dur + rng() * 0.5, pack = w >= 2 && rng() < 0.3 ? (w >= 7 ? 4 : 3) : 1, x0 = FIELD.x0 + 30 + rng() * (FIELD.x1 - FIELD.x0 - 60);
+    for (let j = 0; j < pack && i < n; j++, i++) {
+      const v = rng(), k = v < runP ? "run" : v > 1 - bruteP ? "brute" : v < runP + lobP ? "lob" : "walk";
+      list.push({ t: t + j * 0.25, k, x: Math.max(FIELD.x0 + 14, Math.min(FIELD.x1 - 14, x0 + (j - 1) * 30)) });
+    }
+  }
+  if (boss) list.push({ t: dur * 0.4, k: "boss", x: 180 });
+  if (w === 1) list[0].t = 0, list[0].x = 180, list[0].y0 = 200;   // the first enemy starts close: a hit in the first seconds
+  return list.sort((a, b) => a.t - b.t);
+}
+function newGame(seed, o) {
+  o = o || {};
+  const G = {
+    seed, rng: seeded(seed), step: 0, wave: o.wave || 1, lives: o.lives || LIVES, coins: o.coins || 0, score: 0, earned: 0, kills: 0,
+    lv: Object.assign({ tap: 1, archer: 1, cannon: 0, wall: 1 }, o.lv || {}), pace: o.pace || 1, phase: "battle", phaseT: 0, wallHp: 0, wallMax: 0,
+    en: [], shots: [], spawns: [], spawnT: 0, nextId: 1, fireCd: 0, fire: false, aim: { x: 180, y: 300 },
+    arrowT: [], cannonT: 1, pulse: 0, ev: [], won: false, retries: 0, waveLoss: 0, bossHp: 0, bossMax: 0, bought: 0, perfects: 0
+  };
+  G.st = stats(G.lv); G.wallMax = G.wallHp = G.st.wallMax; G.bossY = o.bossY || 0;
+  startWave(G);
+  if (o.prefill) { // the demo clip opens in the middle of a wave: robots already on their way
+    for (const sp of G.spawns) sp.t -= o.prefill;
+    while (G.spawns.length && G.spawns[0].t < 0) { const sp = G.spawns.shift(), d = EN[sp.k], hp = d.hp * hpMul(G.wave), y = Math.min(FIELD.wall - 90, FIELD.spawn - d.r - sp.t * d.spd); G.en.push({ id: G.nextId++, k: sp.k, x: sp.x, y, px: sp.x, py: y, hp, max: hp, spd: d.spd, r: d.r, atk: false, hitT: -99, born: 0 }); }
+  }
+  return G;
+}
+function startWave(G) {
+  G.phase = "battle"; G.phaseT = 0; G.spawnT = 0; G.en.length = 0; G.shots.length = 0;
+  G.spawns = buildWave(G.wave, seeded((G.seed ^ (G.wave * 0x9e3779b1) ^ (G.retries * 0x85ebca6b)) >>> 0));
+  for (const sp of G.spawns) sp.t *= G.pace;   // the demo clip packs a wave into less time
+  G.st = stats(G.lv); G.wallMax = G.st.wallMax; G.wallHp = G.wallMax; G.waveLoss = 0;
+  G.arrowT = []; for (let i = 0; i < 6; i++) G.arrowT.push(0.4 + i * ARROW_CD / 6);
+  G.ev.push({ e: "wave", w: G.wave });
+}
+function buy(G, k) {
+  if (G.phase !== "break") return false;
+  const c = cost(k, G.lv[k]);
+  if (G.coins < c || false) return false;
+  G.coins -= c; G.lv[k]++; G.st = stats(G.lv); G.wallMax = G.wallHp = G.st.wallMax; G.bought++;
+  G.ev.push({ e: "buy", k, lv: G.lv[k] });
+  return true;
+}
+const frontEnemy = G => { let b = null; for (const e of G.en) if (!b || e.y > b.y) b = e; return b; };
+function hurt(G, e, d, src) {
+  if (e.hp <= 0) return;
+  e.hp -= d; e.hitT = G.step;
+  if (e.hp <= 0) {
+    const c = Math.max(1, Math.round(EN[e.k].coin * coinMul(G.wave)));
+    G.coins += c; G.score += c; G.earned += c; G.kills++;
+    G.ev.push({ e: "kill", k: e.k, x: e.x, y: e.y, c, src });
+  } else G.ev.push({ e: "hit", x: e.x, y: e.y, k: e.k, src });
+}
+function shoot(G, kind, x0, y0, x1, y1, dmg, target) {
+  const T = Math.max(0.05, Math.hypot(x1 - x0, y1 - y0) / (kind === "bolt" ? BOLT_SPD : kind === "arrow" ? ARROW_SPD : 380));
+  G.shots.push({ kind, x0, y0, x1, y1, t: 0, T, dmg, target: target ? target.id : 0 });
+}
+const ARCHER_X = [128, 232, 84, 276, 40, 320], ARCHER_Y = 456;
+function stepGame(G) {
+  G.step++; G.phaseT += DT;
+  if (G.phase === "battle") {
+    G.spawnT += DT;
+    while (G.spawns.length && G.spawns[0].t <= G.spawnT) {
+      const s = G.spawns.shift(), d = EN[s.k], hp = d.hp * hpMul(G.wave);
+      if (s.k === "boss" && G.bossY) s.y0 = G.bossY;
+      G.en.push({ id: G.nextId++, k: s.k, x: s.x, y: s.y0 || FIELD.spawn - d.r, px: s.x, py: s.y0 || FIELD.spawn - d.r, hp, max: hp, spd: d.spd, r: d.r, atk: false, hitT: -99, born: G.step });
+      if (s.k === "boss") { G.bossMax = hp; G.ev.push({ e: "boss" }); }
+    }
+    for (const e of G.en) { // walk down; at the wall, stop and strike it
+      e.px = e.x; e.py = e.y;
+      const stop = FIELD.wall - (EN[e.k].stop || e.r);
+      if (!e.atk) { e.y += e.spd * DT; if (e.y >= stop) { e.y = stop; e.atk = true; e.atkT = 0; G.ev.push({ e: "reach", x: e.x, k: e.k }); } }
+      else if (EN[e.k].stop) { // a lobber: one stone every 1.5 s
+        e.atkT += DT;
+        if (e.atkT >= 1.5) { e.atkT -= 1.5; const d = EN[e.k].dps * 1.5 * hitMul(G.wave); G.wallHp -= d; G.waveLoss += d; G.ev.push({ e: "lob", x: e.x, y: e.y }); }
+      } else { const d = EN[e.k].dps * hitMul(G.wave) * DT; G.wallHp -= d; G.waveLoss += d; }
+    }
+    // the player's crossbow: fires while held, at the aim point
+    G.fireCd = Math.max(0, G.fireCd - DT);
+    if ((G.fire || G.pulse > 0) && G.fireCd <= 0) { G.pulse = 0; G.fireCd = FIRE_CD; shoot(G, "bolt", TURRET.x, TURRET.y - 18, G.aim.x, G.aim.y, G.st.tapDmg); G.ev.push({ e: "fire", x: G.aim.x, y: G.aim.y }); }
+    // archers on the wall: each takes the enemy closest to the wall (homing arrows)
+    for (let i = 0; i < G.st.archers; i++) {
+      G.arrowT[i] -= DT;
+      if (G.arrowT[i] <= 0) { const t = frontEnemy(G); if (t && t.y > FIELD.spawn - 10) { G.arrowT[i] = ARROW_CD; shoot(G, "arrow", ARCHER_X[i], ARCHER_Y, t.x, t.y, G.st.arrowDmg, t); G.ev.push({ e: "arrow", i }); } else G.arrowT[i] = 0.1; }
+    }
+    // the cannon: a heavy shell at the enemy with the most others around it
+    if (G.lv.cannon) {
+      G.cannonT -= DT;
+      if (G.cannonT <= 0) {
+        let best = null, bn = 0;
+        for (const e of G.en) { let n = 0; for (const f of G.en) if (Math.hypot(f.x - e.x, f.y - e.y) < CANNON_R) n += f.k === "boss" ? 3 : 1; if (n > bn || (n === bn && best && e.y > best.y)) { bn = n; best = e; } }
+        if (best) { G.cannonT = CANNON_CD; const lead = Math.min(best.atk ? 0 : best.spd * 0.5, FIELD.wall - best.r - best.y); shoot(G, "shell", MORTAR.x, MORTAR.y - 14, best.x, best.y + lead, G.st.cannonDmg); G.ev.push({ e: "cannon" }); }
+        else G.cannonT = 0.1;
+      }
+    }
+    for (let i = G.shots.length - 1; i >= 0; i--) {
+      const s = G.shots[i]; s.t += DT;
+      if (s.kind === "arrow") { const t = G.en.find(e => e.id === s.target); if (t) { s.x1 = t.x; s.y1 = t.y; } }
+      if (s.t < s.T) continue;
+      G.shots.splice(i, 1);
+      if (s.kind === "arrow") { const t = G.en.find(e => e.id === s.target); if (t) hurt(G, t, s.dmg, "arrow"); continue; }
+      const R = s.kind === "bolt" ? BOLT_R : CANNON_R; let any = false;
+      for (const e of G.en) if (Math.hypot(e.x - s.x1, e.y - s.y1) < R + e.r * 0.6) { hurt(G, e, s.dmg, s.kind); any = true; }
+      G.ev.push({ e: s.kind === "bolt" ? "boltHit" : "boom", x: s.x1, y: s.y1, any });
+    }
+    for (let i = G.en.length - 1; i >= 0; i--) if (G.en[i].hp <= 0) G.en.splice(i, 1);
+    const boss = G.en.find(e => e.k === "boss"); G.bossHp = boss ? boss.hp : 0;
+    if (G.wallHp <= 0) { G.wallHp = 0; G.phase = "lost"; G.phaseT = 0; G.lives--; G.fire = false; G.ev.push({ e: "broken", lives: G.lives }); }
+    else if (!G.spawns.length && !G.en.length) {
+      const perfect = G.waveLoss <= 0, bonus = Math.round((6 + 4 * G.wave) * (BOSS_WAVES.indexOf(G.wave) >= 0 ? 2 : 1)) + (perfect ? 5 + 3 * G.wave : 0);
+      G.coins += bonus; G.score += bonus; G.earned += bonus; G.fire = false; G.shots.length = 0;
+      G.ev.push({ e: "clear", w: G.wave, bonus, perfect }); if (perfect) G.perfects++;
+      G.phase = "clear"; G.phaseT = 0;
+    }
+  } else if (G.phase === "clear" && G.phaseT >= 1.4) {
+    if (G.wave >= WAVES) { G.won = true; G.score += G.lives * 100; G.phase = "over"; G.ev.push({ e: "win" }); }
+    else { G.wave++; G.phase = "break"; G.phaseT = 0; G.ev.push({ e: "break" }); }
+  } else if (G.phase === "lost" && G.phaseT >= 1.6) {
+    G.en.length = 0; G.shots.length = 0;
+    if (G.lives <= 0) { G.phase = "over"; G.ev.push({ e: "over" }); }
+    else { G.retries++; G.phase = "break"; G.phaseT = 0; G.ev.push({ e: "break", retry: true }); }
+  }
+}
+// ---------- AI players: the attract and demo player, autoplay, and the balance bots (several kinds of players) ----------
+// prof: aim error (px, one sigma), duty (share of time the finger is down), look (s between new targets),
+// shop: "even" | "tap" | "archer" | "none", stopAt: wave from which it stops shooting and buying (stand-still probe),
+// think: seconds it spends in the shop before it starts the next wave
+const PROFILES = {
+  demo: { err: 10, duty: 0.92, look: 0.22, shop: "even", think: 1.1, noWall: true, ignoreBoss: true },
+  auto: { err: 14, duty: 0.8, look: 0.3, shop: "even", think: 2 },
+  good: { err: 9, duty: 0.9, look: 0.22, shop: "even", think: 2 },
+  casual: { err: 18, duty: 0.6, look: 0.4, shop: "even", think: 3 },
+  sloppy: { err: 30, duty: 0.45, look: 0.6, shop: "even", think: 3 },
+  tapOnly: { err: 12, duty: 0.85, look: 0.3, shop: "tap", think: 2 },
+  archerOnly: { err: 18, duty: 0.4, look: 0.5, shop: "archer", think: 2 },
+  noShop: { err: 10, duty: 0.9, look: 0.22, shop: "none", think: 1 },
+  idle5: { err: 12, duty: 0.8, look: 0.3, shop: "even", think: 2, stopAt: 5 }
+};
+function aiShop(G, prof) {
+  if (prof.shop === "none") return;
+  for (let guard = 0; guard < 60; guard++) {
+    let pick = null, pv = Infinity;
+    for (const k of UPG_KEYS) {
+      if (prof.shop === "tap" && k !== "tap") continue;
+      if (prof.shop === "archer" && k !== "archer") continue;
+      if (k === "cannon" && G.wave < 3) continue;
+      if (k === "wall" && prof.noWall) continue;
+      const c = cost(k, G.lv[k]), wt = k === "wall" ? (G.waveLoss > G.wallMax * 0.35 || G.retries ? 0.55 : 1.5) : k === "cannon" ? 1.05 : k === "archer" ? 0.9 : 1;
+      if (c <= G.coins && c * wt < pv) { pv = c * wt; pick = k; }
+    }
+    if (!pick || !buy(G, pick)) return;
+  }
+}
+function aiStep(G, A) { // A = { prof, rng, t, tgt, shopT }
+  const p = A.prof, still = p.stopAt && G.wave >= p.stopAt;
+  if (G.phase === "break") {
+    G.fire = false;
+    if (A.shopT == null) A.shopT = 0;
+    A.shopT += DT;
+    if (A.shopT > p.think * 0.5 && !A.bought) { A.bought = true; if (!still) aiShop(G, p); }
+    if (A.shopT > p.think) { A.shopT = null; A.bought = false; startWave(G); }
+    return;
+  }
+  if (G.phase !== "battle" || still) { G.fire = false; return; }
+  A.t -= DT;
+  if (A.t <= 0) {
+    A.t = p.look * (0.7 + A.rng() * 0.6);
+    let f = frontEnemy(G);
+    if (p.ignoreBoss && f && f.k === "boss") { f = null; for (const e of G.en) if (e.k !== "boss" && (!f || e.y > f.y)) f = e; }
+    A.down = A.rng() < p.duty && !!f;
+    if (f) { A.tgt = f.id; A.ex = gauss(A.rng, 0, p.err); A.ey = gauss(A.rng, 0, p.err); }
+  }
+  const t = G.en.find(e => e.id === A.tgt) || (p.ignoreBoss ? null : frontEnemy(G));
+  if (!t) { G.fire = false; return; }
+  G.aim.x = t.x + (A.ex || 0); G.aim.y = t.y + (t.atk ? 0 : t.spd * 0.08) + (A.ey || 0);
+  G.fire = !!A.down;
+}
+function newAI(prof, seed) { return { prof: typeof prof === "string" ? PROFILES[prof] : prof, rng: seeded(seed >>> 0), t: 0.35, tgt: 0, shopT: null, bought: false, down: false }; }
+// a whole run headless; returns where and when it ended (seconds of play, shop time included)
+function simRun(seed, prof, maxSec) {
+  const G = newGame(seed), A = newAI(prof, seed ^ 0x51ed), lim = (maxSec || 1500) * SIM_HZ, log = [];
+  let lastW = 0;
+  while (G.phase !== "over" && G.step < lim) {
+    aiStep(G, A); stepGame(G); G.ev.length = 0;
+    if (G.wave !== lastW && G.phase === "battle") { lastW = G.wave; log.push([G.wave, Math.round(G.step / SIM_HZ)]); }
+    if (G.phase === "battle") { const f = G.wallHp / G.wallMax; G.minF = Math.min(G.minF == null ? 1 : G.minF, f); (G.mins || (G.mins = {}))[G.wave] = Math.min((G.mins[G.wave] == null ? 1 : G.mins[G.wave]), f); }
+  }
+  return { won: G.won, wave: G.wave, lives: G.lives, sec: Math.round(G.step / SIM_HZ), score: G.score, lv: G.lv, retries: G.retries, log, mins: G.mins };
+}
+// ==== RULES END ====
+
+// ---------- wave table notes (the rules' phase table is buildWave + EN; this is what each wave brings, as data) ----------
+// 1 walkers only (safe, learn to tap) / 2 fast runners / 3 lobbers and brutes, the cannon can be built / 4 first boss /
+// 5-7 packs grow / 8 second boss / 9-11 packs of four / 12 the last boss. A new thing every one or two waves.
+const WAVE_NEW = { 2: "newRun", 3: "newLob", 4: "newBoss", 8: "newBoss", 12: "lastBoss" };
+// ?demo=1: a 30 s clip that holds the whole loop: a busy wave with coins flying, a quick shop, then a boss wave
+// that breaks the wall on the last life, the result, and the loop starts again.
+const DEMO_START = { wave: 7, lv: { tap: 5, archer: 6, cannon: 2, wall: 2 }, coins: 30, lives: 1, pace: 0.5, prefill: 7.5, bossY: 320 };
+const RANKS = [0, 400, 900, 1600, 2400, 2850];
+const rankOf = s => RANKS.reduce((a, t, i) => s >= t ? i : a, 0);
+const FREEZE = 450;                // ms the last broken wall holds still before the result
+
+// ---------- strings (every visible text, ja first, en is its translation) ----------
+const STRINGS = {
+  ja: {
+    title: "ゼンマイとりで", titleEn: "CLOCKWORK FORT", start: "スタート", how1: "ロボをタップして うつ", how2: "コインで とりでを強くしよう",
+    lang: "EN", paused: "ひとやすみ", resume: "つづける", restart: "さいしょから", toTitle: "タイトル", retry: "もう一回",
+    wave: "ウェーブ {n}", waveOf: "{n}/12", boss: "ボス", bossIn: "ボスが来た!", clear: "ウェーブクリア!", perfect: "ノーダメージ!",
+    broken: "城壁がこわれた!", left: "のこり {n}", again: "もう一度 ウェーブ {n}", win: "守りきった!",
+    newRun: "はやいロボが来る", newLob: "石を投げるロボと 大きいロボ", newBoss: "ボス戦!", lastBoss: "さいごのボス!",
+    shop: "強化しよう", up_tap: "攻撃", up_archer: "弓兵", up_cannon: "大砲", up_wall: "城壁", lv: "Lv{n}", build: "建てる", next: "つぎのウェーブ",
+    teachTap: "ロボをタップ! おしっぱなしで連射", teachShop: "コインで 強化しよう", teachNext: "じゅんびOK? ここをタップ",
+    over: "とりでが落ちた", causeWall: "ロボに城壁をこわされた", causeBoss: "ボスに城壁をこわされた", causeWin: "12ウェーブ 守りきった",
+    rWave: "ウェーブ", rKills: "たおしたロボ", rBest: "ベスト", toBest: "あと {n}", tieBest: "ならんだ!", newBest: "ベスト更新!", score: "コイン",
+    g_wave: "ウェーブ {n} まで行く", g_score: "{n}コイン かせぐ", g_win: "12ウェーブ 守りきる", g_perf: "ノーダメージを {n}回",
+    ranks: ["みならい", "見はり番", "守り手", "隊長", "城主", "伝説"], best: "ベスト", space: "SPACE", credit: "Made with Claude"
+  },
+  en: {
+    title: "CLOCKWORK FORT", titleEn: "CLOCKWORK FORT", start: "START", how1: "TAP THE ROBOTS TO SHOOT", how2: "SPEND COINS TO POWER UP",
+    lang: "日本語", paused: "PAUSED", resume: "RESUME", restart: "RESTART", toTitle: "TITLE", retry: "AGAIN",
+    wave: "WAVE {n}", waveOf: "{n}/12", boss: "BOSS", bossIn: "BOSS!", clear: "WAVE CLEAR!", perfect: "NO DAMAGE!",
+    broken: "THE WALL BROKE!", left: "{n} LEFT", again: "TRY WAVE {n} AGAIN", win: "FORT SAVED!",
+    newRun: "FAST ROBOTS AHEAD", newLob: "THROWERS AND BIG ONES", newBoss: "BOSS WAVE!", lastBoss: "THE LAST BOSS!",
+    shop: "POWER UP", up_tap: "POWER", up_archer: "ARCHERS", up_cannon: "CANNON", up_wall: "WALL", lv: "Lv{n}", build: "BUILD", next: "NEXT WAVE",
+    teachTap: "TAP A ROBOT. HOLD TO KEEP FIRING", teachShop: "SPEND COINS TO POWER UP", teachNext: "READY? TAP HERE",
+    over: "THE FORT FELL", causeWall: "THE ROBOTS BROKE THE WALL", causeBoss: "THE BOSS BROKE THE WALL", causeWin: "ALL 12 WAVES HELD",
+    rWave: "WAVE", rKills: "ROBOTS", rBest: "BEST", toBest: "{n} TO GO", tieBest: "TIED!", newBest: "NEW BEST!", score: "COINS",
+    g_wave: "REACH WAVE {n}", g_score: "EARN {n} COINS", g_win: "HOLD ALL 12 WAVES", g_perf: "{n} NO-DAMAGE WAVES",
+    ranks: ["ROOKIE", "LOOKOUT", "GUARD", "CAPTAIN", "LORD", "LEGEND"], best: "BEST", space: "SPACE", credit: "Made with Claude"
+  }
+};
+let lang = store.get("lang", null);
+if (lang !== "ja" && lang !== "en") lang = (navigator.language || "").toLowerCase().startsWith("ja") ? "ja" : "en";
+const S = (k, n) => { const v = (STRINGS[lang] && STRINGS[lang][k]) || STRINGS.ja[k] || k; return n == null || typeof v !== "string" ? v : v.replace("{n}", n); };
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const wrap = $("wrap"), cv = $("cv"), ctx = cv.getContext("2d", { alpha: false });
+const ovTitle = $("ovTitle"), ovPause = $("ovPause"), ovOver = $("ovOver"), btnPause = $("btnPause"), btnMute = $("btnMute");
+
+// ---------- state ----------
+// title (attract AI) | title-dying | play | paused | dying | over | demo | demo-dying | demo-over
+let state = "title", run = null, fx = null, runCount = 0, manual = false, simT = 0, pfPlaying = false, overShownAt = 0, autopilot = false;
+const T = () => manual ? simT : performance.now();
+const hint = makeHint(store, "hintDone");
+const isTitle = () => state === "title" || state === "title-dying";
+const isDying = () => state === "dying" || state === "demo-dying" || state === "title-dying";
+const isOver = () => state === "over" || state === "demo-over";
+function pfStart() { if (!pfPlaying) { pfPlaying = true; platform("gameplayStart"); } }
+function pfStop() { if (pfPlaying) { pfPlaying = false; platform("gameplayStop"); } }
+const loud = () => run && run.mode !== "attract"; // the title's attract play keeps its sounds to itself
+const bestOf = () => Number(store.get("best", 0)) || 0, runsOf = () => Number(store.get("runs", 0)) || 0;
+
+// fx: visual state only (the rules never read it)
+function newFx() {
+  return { vt: 0, call: null, coinsDisp: 0, coinT: -1e9, coins: [], pops: [], rings: [], lobs: [], arch: [-1e9, -1e9, -1e9, -1e9, -1e9, -1e9],
+    mortarT: -1e9, shotT: -1e9, turretA: -Math.PI / 2, wallT: -1e9, buyT: -1e9, buyK: null, nopeT: -1e9, nopeK: null, shopT: -1e9, pauseT: 0,
+    keyHeld: false, ptr: null, downT: -1e9, taughtKill: false, wallTier: -1, sndT: {}, streak: 0, streakT: -1e9, confT: -1e9 };
+}
+function newRun(mode, seed) {
+  const G = newGame(seed, mode === "demo" ? DEMO_START : null);
+  run = { mode, ai: mode !== "play", seed, G, A: newAI(mode === "play" ? "auto" : mode === "demo" ? "demo" : "good", (seed ^ 0x2545f491) >>> 0),
+    offset: T(), holdAt: null, pauseClock: 0, startAt: T(), dead: null, result: null };
+  fx = newFx(); fx.coinsDisp = G.coins; PARTS.length = 0; Juice.trauma = 0; Juice.zoom = null; Juice.stop = 0;
+  if (mode === "play") hint.begin();
+  musicLevel(mode === "attract" ? "title" : "play");
+  events(G, T());
+}
+const clockNow = () => {
+  if (!run) return 0;
+  if (isDying() || isOver()) return run.dead.c;
+  if (state === "paused") return run.pauseClock;
+  return (run.holdAt == null ? T() : run.holdAt) - run.offset;
+};
+
+// ---------- run: step the rules up to the run clock, then turn their events into sound and pictures ----------
+function updateRun(now) {
+  const G = run.G, target = Math.floor((now - run.offset) * SIM_HZ / 1000);
+  for (let n = 0; G.step < target && n < 900 && !run.dead; n++) {
+    if (run.ai || autopilot) aiStep(G, run.A);
+    else if (fx.keyHeld && !fx.ptr && G.phase === "battle") { const f = frontEnemy(G); G.fire = !!f; if (f) { G.aim.x = f.x; G.aim.y = f.y; } }
+    stepGame(G);
+    events(G, now);
+    if (G.phase === "lost" && G.lives <= 0) kill(G.bossHp > 0 ? "boss" : "wall", now);
+    else if (G.phase === "over" && G.won) kill("win", now);
+  }
+}
+const fieldPt = (x, y) => ({ x: clamp(x, FIELD.x0, FIELD.x1), y: clamp(y, FIELD.spawn - 20, FIELD.wall + 4) });
+function sound(k, gap, n) { // one voice per kind per gap ms, so a busy wave never turns into noise
+  const now = T(); if (!loud() || now - (fx.sndT[k] || -1e9) < (gap || 0)) return; fx.sndT[k] = now; sfx[k](n);
+}
+function events(G, now) {
+  for (const v of G.ev) {
+    switch (v.e) {
+      case "wave":
+        call(BOSS_WAVES.indexOf(v.w) >= 0 ? "boss" : "wave", now, WAVE_NEW[v.w] ? S(WAVE_NEW[v.w]) : "", v.w);
+        sound("wave"); musicLevel(BOSS_WAVES.indexOf(v.w) >= 0 ? "boss" : "play"); break;
+      case "boss": call("bossIn", now, "", 0); sound("horn"); addTrauma(0.35); break;
+      case "fire": fx.shotT = now; sound("shot", 60); break;
+      case "arrow": fx.arch[v.i] = now; sound("twang", 90); break;
+      case "cannon": fx.mortarT = now; sound("mortar"); burst(MORTAR.x - 6, MORTAR.y - 30, 6, 60, { col: "white", kind: "dot", s: 4, g: -60 }); break;
+      case "hit": burst(v.x, v.y - 6, 3, 90, { col: v.src === "bolt" ? "yellow" : "tinL", kind: "spark", s: 2.2 }); sound("tink", 50); break;
+      case "kill": {
+        const col = { walk: "tin", run: "yellow", lob: "green", brute: "red", boss: "purple" }[v.k];
+        burst(v.x, v.y - 6, v.k === "boss" ? 26 : v.k === "brute" ? 12 : 7, v.k === "boss" ? 300 : 190, { col, kind: "chip", s: v.k === "boss" ? 4 : 3 });
+        burst(v.x, v.y - 6, v.k === "boss" ? 8 : 2, 160, { col: "orange", kind: "star", s: 2.6 });
+        for (let i = 0; i < Math.min(v.k === "boss" ? 8 : 3, v.c); i++) fx.coins.push({ x: v.x + (i - 1) * 6, y: v.y - 8, t: now + i * 40 });
+        fx.pops.push({ x: v.x, y: v.y - 18, t: now, c: v.c });
+        if (fx.pops.length > 8) fx.pops.shift();
+        fx.streak = now - fx.streakT < 900 ? fx.streak + 1 : 0; fx.streakT = now;
+        sound("pop", 45); sound("coin", 70, fx.streak);
+        if (v.k === "boss") { addTrauma(0.7); hitstop(0.12); zoomPunch(v.x, v.y, 1.05, 380, now); if (run.mode === "play") platform("happytime"); }
+        else if (v.k === "brute") addTrauma(0.18);
+        if (v.src === "bolt") fx.taughtKill = true;
+        break;
+      }
+      case "boltHit": if (!v.any) burst(v.x, v.y + 2, 4, 60, { col: "soilD", kind: "dot", s: 2.4, g: 200 }); break;
+      case "boom": fx.rings.push({ x: v.x, y: v.y, t: now, r: CANNON_R }); burst(v.x, v.y, 10, 170, { col: "soilD", kind: "chip", s: 2.6 }); addTrauma(0.22); sound("boom", 80); break;
+      case "reach": sound("thud", 120); break;
+      case "lob": fx.lobs.push({ x: v.x, y: v.y - 14, t: now }); sound("lob", 120); break;
+      case "broken": fx.wallT = now; addTrauma(0.9); hitstop(0.1); for (let i = 0; i < 5; i++) burst(40 + i * 70, FIELD.wall + 12, 6, 220, { col: wallCols()[0], kind: "chip", s: 4 });
+        if (v.lives > 0) call("broken", now, S("left", v.lives), 0); sound("broken"); musicLevel("duck"); break;
+      case "clear": call(v.perfect ? "perfect" : "clear", now, "+" + v.bonus, 0);
+        for (let i = 0; i < 6; i++) fx.coins.push({ x: 180 + (i - 2.5) * 16, y: 250, t: now + 200 + i * 60 });
+        sound("clear"); musicLevel("bed"); break;
+      case "break": fx.shopT = now; if (v.retry) call("again", now, "", G.wave); break;
+      case "buy": fx.buyT = now; fx.buyK = v.k; sound("buy"); break;
+      case "win": call("win", now, "", 0); fx.confT = now; sound("win"); break;
+    }
+  }
+  G.ev.length = 0;
+}
+
+// ---------- failure and the end of a run ----------
+function kill(reason, now) {
+  run.dead = { reason, at: now, c: clockNow() };
+  state = state === "demo" ? "demo-dying" : state === "title" ? "title-dying" : "dying";
+  if (run.mode === "play") { pfStop(); hint.runEnded((now - run.startAt) / 1000); }
+  if (loud() && reason !== "win") sfx.fail();
+  if (reason !== "win") musicLevel("duck");
+}
+
+// ---------- one big call in the middle of the field (never stacked popups) ----------
+function call(key, now, sub, n) { fx.call = { key, t: now, sub: sub || "", n }; }
+
+// ---------- audio. SFX are data-like functions (w = start time); every voice goes through the kit bus ----------
+const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0];
+const pz = d => PENTA[((d % 5) + 5) % 5] * Math.pow(2, Math.floor(d / 5)); // pentatonic degree -> Hz
+const SFX = {
+  shot(w) { const q = vary(60, 0.1); hiss("bandpass", 1500 * q.f, 1.4, 0.06, 0.2 * q.g, w, null, 600); tone("triangle", 420 * q.f, 160, 0.07, 0.16, w); },
+  twang(w) { const q = vary(80, 0.15); tone("triangle", 700 * q.f, 520 * q.f, 0.09, 0.06 * q.g, w); },
+  tink(w) { const q = vary(120, 0.2); tone("square", 1800 * q.f, 1500 * q.f, 0.04, 0.05 * q.g, w, null, 0.002, 3200); },
+  pop(w) { const q = vary(50, 0.1); tone("sine", 260 * q.f, 90, 0.12, 0.32 * q.g, w); hiss("bandpass", 2200, 1.2, 0.07, 0.16, w, null, 900); tone("square", 1200 * q.f, 900, 0.05, 0.05, w, null, 0.002, 3000); },
+  coin(w, n) { const d = 10 + Math.min(n || 0, 8); tone("sine", pz(d), pz(d), 0.09, 0.14, w + 0.02); tone("sine", pz(d + 2), pz(d + 2), 0.16, 0.12, w + 0.08); },
+  mortar(w) { const q = vary(30, 0.08); tone("sine", 120 * q.f, 45, 0.3, 0.5 * q.g, w); hiss("lowpass", 900, 1, 0.18, 0.3, w, null, 150); },
+  boom(w) { const q = vary(40, 0.1); tone("sine", 90 * q.f, 35, 0.45, 0.55 * q.g, w); hiss("lowpass", 1400, 0.8, 0.35, 0.42, w, null, 120); },
+  thud(w) { tone("sine", 110, 60, 0.12, 0.25, w); hiss("lowpass", 500, 1, 0.08, 0.15, w); },
+  lob(w) { tone("triangle", 500, 900, 0.15, 0.05, w); tone("sine", 140, 70, 0.1, 0.2, w + 0.45); },
+  broken(w) { tone("sine", 80, 30, 0.8, 0.6, w); hiss("lowpass", 1100, 0.7, 0.7, 0.5, w, null, 90); [7, 5, 2, 0].forEach((n, i) => tone("triangle", pz(n), pz(n) * 0.97, 0.22, 0.1, w + 0.3 + i * 0.12)); },
+  wave(w) { for (let i = 0; i < 6; i++) hiss("bandpass", 1800, 1.5, 0.05, 0.08 + i * 0.02, w + i * 0.06); [0, 4, 7].forEach((n, i) => tone("triangle", pz(5 + n % 5 + (n >= 5 ? 5 : 0)), pz(5 + n % 5 + (n >= 5 ? 5 : 0)), 0.22, 0.12, w + 0.38 + i * 0.09)); },
+  horn(w) { tone("sawtooth", 110, 104, 0.9, 0.22, w, null, 0.06, 900); tone("sawtooth", 165, 156, 0.9, 0.14, w + 0.02, null, 0.06, 900); tone("sine", 55, 50, 1, 0.3, w); },
+  clear(w) { [5, 7, 9, 10, 12].forEach((n, i) => tone("triangle", pz(n), pz(n), 0.3, 0.13, w + i * 0.08)); tone("sine", pz(15), pz(15), 0.5, 0.08, w + 0.42); },
+  buy(w) { const q = vary(20, 0.05); tone("square", 1320 * q.f, 1320 * q.f, 0.06, 0.08, w, null, 0.002, 4000); tone("square", 1760 * q.f, 1760 * q.f, 0.2, 0.08, w + 0.06, null, 0.002, 4000); tone("sine", 200, 80, 0.12, 0.3, w); },
+  nope(w) { tone("triangle", 220, 180, 0.14, 0.12, w); tone("triangle", 196, 160, 0.16, 0.12, w + 0.1); },
+  win(w) { [0, 2, 4, 5, 7, 9, 10, 12].forEach((n, i) => tone("triangle", pz(n + 5), pz(n + 5), 0.3, 0.12, w + i * 0.09)); tone("sine", 110, 55, 0.6, 0.4, w); hiss("highpass", 5000, 1, 0.5, 0.05, w + 0.7); },
+  fail(w) { [7, 5, 3, 0].forEach((n, i) => tone("triangle", pz(n), pz(n) * 0.95, 0.28, 0.12, w + 0.12 + i * 0.14)); tone("sine", 200, 70, 0.6, 0.15, w + 0.67); },
+  best(w) { [0, 2, 4, 5, 7, 10].forEach((n, i) => tone("triangle", pz(n + 5), pz(n + 5), 0.28, 0.13, w + i * 0.07)); hiss("highpass", 5000, 1, 0.4, 0.04, w + 0.4); },
+  tick(w, i) { tone("sine", 900 + (i % 12) * 40, 900 + (i % 12) * 40, 0.035, 0.3, w); },
+  stamp(w) { tone("sine", 140, 60, 0.15, 0.5, w); hiss("lowpass", 1200, 1, 0.08, 0.3, w); },
+  ui(w) { tone("sine", 880, 1320, 0.09, 0.4, w); }
+};
+const sfx = {};
+for (const k in SFX) sfx[k] = n => { if (audioOn()) SFX[k](AU.ctx.currentTime, n); };
+const PEAK_SET = ["broken", "boom", "mortar", "horn", "win", "buy", "clear", "pop"]; // the 8 loudest, for the peak test
+// Music: a short original march in the pentatonic scale, scheduled ahead on the audio clock. Boss waves add a low
+// horn line and a faster drum; the shop and the result soften it to a bed; a broken wall ducks it.
+const MEL = [5, -1, 7, 9, 7, -1, 5, 4, 5, -1, 7, 9, 10, -1, 9, -1, 7, -1, 9, 7, 5, -1, 4, 2, 4, -1, 5, 4, 2, -1, 0, -1];
+const BASS = [65.41, 98.0, 87.31, 98.0], STEP = 0.18;
+const mus = { bus: null, next: 0, i: 0, level: "title", drop: -1 };
+function musicLevel(lv) {
+  mus.level = lv;
+  if (!mus.bus || !AU.ctx) return;
+  const v = { title: 0.45, play: 0.75, boss: 0.85, bed: 0.4, duck: 0.12, off: 0 }[lv], t = AU.ctx.currentTime;
+  mus.bus.gain.cancelScheduledValues(t); mus.bus.gain.setTargetAtTime(v, t, lv === "duck" ? 0.02 : 0.25);
+  if (lv === "duck") mus.drop = mus.i + 16;
+}
+function musicStep() {
+  if (!audioOn() || AU.offline) return;
+  const c = AU.ctx;
+  if (!mus.bus || mus.bus.context !== c) { mus.bus = c.createGain(); mus.bus.gain.value = 0; mus.bus.connect(AU.music); musicLevel(mus.level); mus.next = c.currentTime + 0.05; }
+  if (mus.level === "off") { mus.next = c.currentTime + 0.05; return; }
+  if (mus.next < c.currentTime) mus.next = c.currentTime + 0.02;
+  while (mus.next < c.currentTime + 0.15) {
+    const i = mus.i++, w = mus.next, lv = mus.level, boss = lv === "boss", soft = lv === "bed" || lv === "title" || i < mus.drop;
+    if (i % 2 === 0) tone("triangle", BASS[(i >> 3) % 4] * (i % 4 === 2 ? 1.5 : 1), BASS[(i >> 3) % 4] * (i % 4 === 2 ? 1.5 : 1) * 0.98, 0.16, soft ? 0.1 : 0.18, w, mus.bus, 0.004);
+    if (!soft && i % 4 === 2) hiss("bandpass", 2400, 1.2, 0.05, 0.1, w, mus.bus);
+    if (!soft && boss && i % 2 === 1) hiss("lowpass", 260, 1, 0.06, 0.12, w, mus.bus);
+    if (!soft && i % 8 === 0) tone("sine", 90, 50, 0.12, 0.22, w, mus.bus);
+    const m = MEL[i % 32];
+    if (m >= 0 && (!soft || i % 4 === 0)) tone("square", pz(m + (boss ? -2 : 0)), pz(m + (boss ? -2 : 0)), 0.14, soft ? 0.025 : 0.04, w, mus.bus, 0.003, 2200);
+    if (boss && !soft && i % 16 === 0) tone("sawtooth", pz(-5), pz(-5), STEP * 7, 0.05, w, mus.bus, 0.05, 700);
+    mus.next += STEP;
+  }
+}
+
+// ---------- result screen. Steps in order (count-up, rank, rows, NEW BEST, goal), skippable by tap ----------
+const RES = { drop: 300, head: 220, cause: 300, count: 420, countDur: 650, rank: 1100, rows: 1150, best: 1300, goal: 1450 };
+function makeResult(now) {
+  const play = run.mode === "play", best = bestOf(), runs = runsOf(), G = run.G, d = run.dead;
+  const r = { at: now, score: G.score, best, newBest: play && G.score > best && G.score > 0, rank: rankOf(G.score), showRank: !play || runs >= 1,
+    cause: S(d.reason === "win" ? "causeWin" : d.reason === "boss" ? "causeBoss" : "causeWall"), won: d.reason === "win", ticks: 0, rankDone: false, stamped: false, goal: null };
+  const next = RANKS.find(t => t > G.score), pool = [
+    r.won ? null : { k: "g_wave", n: Math.min(WAVES, G.wave + 1) }, next ? { k: "g_score", n: next } : null, r.won ? null : { k: "g_win" }, { k: "g_perf", n: G.perfects + 2 }
+  ];
+  for (let i = 0; i < pool.length && !r.goal; i++) r.goal = pool[(runs + i) % pool.length];
+  return r;
+}
+function resultStep(now) {
+  const r = run.result, age = resAge(r, now);
+  if (age > RES.count && age < RES.count + RES.countDur) { const k = fl((age - RES.count) / 55); if (k > r.ticks) { r.ticks = k; if (state === "over" || k % 3 === 0) sfx.tick(k); } }
+  if (!r.rankDone && r.showRank && age > RES.rank) { r.rankDone = true; sfx.stamp(); }
+  if (!r.stamped && r.newBest && age > RES.best) { // never in demo: newBest is only set in play
+    r.stamped = true; sfx.best(); platform("happytime");
+    burst(250, overY() + 250 * L.u, 16, 220, { col: "gold", kind: "chip", s: 3 }); burst(250, overY() + 250 * L.u, 5, 240, { kind: "star", col: "goldL", s: 3 });
+  }
+}
+const resAge = (r, now) => state === "demo-over" ? RES.count + (now - r.at) * 2.5 : now - r.at;
+function skipResult(now) { const r = run && run.result; if (r && now - r.at < RES.goal) { r.at = now - RES.goal; r.ticks = 99; r.rankDone = true; return true; } return false; }
+
+// ---------- where things sit (scene coords; the screen may show more world around the scene) ----------
+const vTop = () => -L.y0, vBot = () => L.H - L.y0, vLeft = () => -L.x0, vRight = () => CW + L.x0;
+const sideX = s => s < 0 ? -L.x0 / 2 : CW + L.x0 / 2;
+const hudS = () => L.wide ? clamp(L.x0 / 230, L.u, 1.6) : L.u;
+const pauseY = () => vTop() + 150, overY = () => vTop() + (L.wide ? 40 : 70);
+const UI = {};
+function layoutUI() {
+  const u = L.u, ty = Math.min(560, vBot() - 70 * u), py = pauseY(), lw = Math.max(52, textW(ctx, S("lang"), 15) + 24), ui = (cx, y, w, h, s) => ({ cx, y, w, h, s: s || u });
+  UI.start = ui(180, ty - 60 * u, 200, 58);
+  UI.retry = ui(180, ty - 6 * u, 190, 56);
+  UI.toTitle = L.wide ? ui(180 + 170 * u, ty, 130, 44) : ui(180, ty + 58 * u, 130, 40);
+  UI.resume = ui(180, py + 84 * u, 200, 54);
+  UI.restart = ui(180 - 74 * u, py + 156 * u, 136, 44);
+  UI.quit = ui(180 + 74 * u, py + 156 * u, 136, 44);
+  UI.mute = ui(vRight() - 10 - 21 * u, vTop() + 8, 42, 42);
+  UI.pause = ui(UI.mute.cx - 50 * u, vTop() + 8, 42, 42);
+  UI.lang = ui(vLeft() + 10 + lw * u / 2, vTop() + 8, lw, 42);
+  // HUD: wave and coins at the top of the scene, or large in the left side area on a wide screen
+  const hs = hudS();
+  if (L.wide) { UI.wave = ui(sideX(-1), vTop() + 70, 150, 50, hs); UI.coin = ui(sideX(-1), vTop() + 70 + 64 * hs, 150, 50, hs); }
+  else { UI.wave = ui(10 + 58 * u, vTop() + 8, 116, 42); UI.coin = ui(Math.min(196, UI.pause.cx - 30 * u - 62 * u), vTop() + 8, 120, 42); }
+  // the shop: a row of four cards at the bottom, or a 2 x 2 block in the right side area on a wide screen
+  UI.cards = [];
+  if (L.wide) {
+    const s = hs, cx = sideX(1), y0 = vTop() + 96 * s;
+    UI.shop = { cx, y: y0 - 64 * s, w: 196, h: 316, s, wide: true };
+    for (let i = 0; i < 4; i++) UI.cards.push(ui(cx + (i % 2 ? 46 : -46) * s, y0 + (i >> 1) * 102 * s, 84, 94, s));
+    UI.next = ui(cx, y0 + 212 * s, 176, 48, s);
+  } else {
+    const s = u, y0 = vBot() - 156 * s;
+    UI.shop = { cx: 180, y: y0, w: 360, h: 160, s, wide: false };
+    for (let i = 0; i < 4; i++) UI.cards.push(ui(180 + (i - 1.5) * 86 * s, y0 + 10 * s, 80, 94, s));
+    UI.next = ui(180, y0 + 110 * s, 236, 40, s);
+  }
+  const hit = (el, e, p) => place(el, e.cx - e.w * e.s / 2 - p, e.y - p, e.w * e.s + 2 * p, e.h * e.s + 2 * p);
+  hit($("btnStart"), UI.start, 6); hit($("btnRetry"), UI.retry, 4); hit($("btnToTitle"), UI.toTitle, 2);
+  hit($("btnResume"), UI.resume, 2); hit($("btnRestart"), UI.restart, 2); hit($("btnQuit"), UI.quit, 2);
+  hit(btnMute, UI.mute, 4); hit(btnPause, UI.pause, 4); hit($("btnLang"), UI.lang, 4);
+}
+const inBox = (e, x, y, p) => x >= e.cx - e.w * e.s / 2 - (p || 0) && x <= e.cx + e.w * e.s / 2 + (p || 0) && y >= e.y - (p || 0) && y <= e.y + e.h * e.s + (p || 0);
+
+// ---------- the stage: a bright toy meadow, drawn once per screen size into a cached layer ----------
+// The robots come over the far hill at the top and cross a mown meadow to the fort at the bottom. Hedges mark the
+// sides of the field; past them the meadow goes on with trees, bushes and flowers, so a wide screen shows more world.
+let BG = null, WALL = null;
+const BGM = 16, WALL_Y = FIELD.wall + 4, YARD_Y = WALL_Y + 46;
+const h01 = n => (hash1(n) + 1) / 2;
+const wallTier = () => run ? (run.G.lv.wall >= 7 ? 2 : run.G.lv.wall >= 4 ? 1 : 0) : 0;
+const wallCols = () => [["wood", "woodD", "yellow"], ["stone", "stoneD", "blue"], ["blueL", "blue", "gold"]][wallTier()];
+function tree(x, X, Y, s, n) { // a round toy tree: a trunk and two or three stacked blobs
+  shape(x, pRR(X - 3 * s, Y - 16 * s, 6 * s, 18 * s, 2), "trunk", 1.4);
+  const k = 2 + n % 2;
+  for (let i = 0; i < k; i++) shape(x, pBlob(X + (i - (k - 1) / 2) * 7 * s, Y - (24 + (i % 2) * 8) * s, 13 * s, 12 * s, 0.08, n + i), "hedge", 1.6, "hedgeD", 2.5 * s, 3 * s);
+}
+function flower(x, X, Y, c, n) {
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + n; x.fillStyle = C(c); x.fill(pEll(X + Math.cos(a) * 2.6, Y + Math.sin(a) * 2.6, 2, 2)); }
+  x.fillStyle = C("yellow"); x.fill(pEll(X, Y, 1.5, 1.5));
+}
+function buildBg() {
+  BG = layer(BGM, (x, X0, Y0, W, H) => {
+    const X1 = X0 + W, Y1 = Y0 + H, r = seeded(17);
+    x.fillStyle = C("sky"); x.fillRect(X0, Y0, W, H);
+    // clouds, far hills and the ridge the robots come over
+    for (let n = Math.floor((X0 - 120) / 140); n * 140 < X1; n++) { const cx = n * 140 + 50 * hash1(n), cy = Math.min(-8, Y0 + 30) + 18 * h01(n * 3); shape(x, pBlob(cx, cy, 30 + 14 * h01(n * 5), 10, 0.12, n + 3), "cloud", 1.4, "skyL", 0, 3); }
+    const ridge = (y, amp, k, col, ink) => { const pts = []; for (let X = X0 - 10; X <= X1 + 10; X += 10) pts.push([X, y + Math.sin(X / 47 + k) * amp + Math.sin(X / 19 + k * 2) * amp * 0.3]); const q = pSmooth(pts, true); q.lineTo(X1 + 12, 3e3); q.lineTo(X0 - 12, 3e3); q.closePath(); x.fillStyle = C(col); x.fill(q); if (ink) ST.line(x, pSmooth(pts, true), ink); };
+    ridge(18, 8, 1, "far", 1.4); ridge(40, 6, 2.4, "hill", 1.6);
+    for (let X = X0 - (((X0 % 52) + 52) % 52); X < X1; X += 52) tree(x, X + 20 * hash1(X), 46 + 4 * hash1(X + 1), 0.7, X & 7);
+    ridge(FIELD.spawn - 4, 3, 0.4, "hillD", 2);
+    // the mown meadow: wide bands, flowers, small stones
+    x.fillStyle = C("grass"); x.fillRect(X0, FIELD.spawn + 2, W, Y1 - FIELD.spawn);
+    for (let y = FIELD.spawn + 30, i = 0; y < WALL_Y; y += 52, i++) { x.fillStyle = C(i % 2 ? "grassD" : "grassL"); x.fillRect(X0, y, W, 26); }
+    for (let i = 0; i < W * 0.22; i++) { const fx_ = X0 + r() * W, fy = FIELD.spawn + 14 + r() * (WALL_Y - FIELD.spawn - 30); flower(x, fx_, fy, ["white", "pink", "yellow", "white"][fl(r() * 4)], r() * 6); }
+    for (let i = 0; i < W * 0.015; i++) shape(x, pBlob(X0 + r() * W, FIELD.spawn + 20 + r() * 360, 3 + r() * 3, 2 + r() * 2, 0.2, i), "stone", 1, "stoneD", 0.8, 1);
+    // hedges along both sides of the field; past them trees and bushes in the side meadow
+    for (const s of [-1, 1]) {
+      const hx = s < 0 ? FIELD.x0 - 14 : FIELD.x1 + 14;
+      for (let y = FIELD.spawn + 6; y < WALL_Y; y += 22) shape(x, pBlob(hx, y, 11, 13, 0.1, y + s), "hedge", 1.5, "hedgeD", s * -2, 2.5);
+      const q = seeded(s < 0 ? 41 : 87);
+      for (let X = hx + s * 40; s < 0 ? X > X0 - 40 : X < X1 + 40; X += s * (46 + q() * 30)) {
+        for (let y = FIELD.spawn + 40 + q() * 40; y < WALL_Y - 10; y += 90 + q() * 70) {
+          const v = q();
+          if (v < 0.5) tree(x, X, y, 1 + q() * 0.3, fl(q() * 8));
+          else if (v < 0.8) shape(x, pBlob(X, y, 14, 9, 0.12, fl(q() * 99)), "hedge", 1.5, "hedgeD", 2, 2.5);
+          else { shape(x, pRR(X - 12, y - 10, 24, 14, 3), "wood", 1.4, "woodD", 0, 3); ST.line(x, pLine(X - 12, y - 4, X + 12, y - 4), 1, "woodD"); }   // a toy crate
+        }
+      }
+    }
+    // the yard behind the wall: big floor tiles
+    x.fillStyle = C("floor"); x.fillRect(X0, YARD_Y - 10, W, Y1 - YARD_Y + 10);
+    for (let y = YARD_Y + 8, i = 0; y < Y1; y += 30, i++) { x.fillStyle = C("floorD"); x.fillRect(X0, y, W, 2); for (let X = X0 - ((X0 % 60) + 60) % 60 + (i % 2) * 30; X < X1; X += 60) x.fillRect(X, y, 2, 30); }
+  });
+}
+// the wall: toy blocks across the whole screen with merlons, the gate tower in the middle; its look follows the
+// wall level (wood blocks, then stone, then blue with gold trim), so buying WALL shows on the fort at once
+function buildWall() {
+  const tier = wallTier(), [c1, c2, trim] = wallCols();
+  WALL = layer(BGM, (x, X0, Y0, W) => {
+    const X1 = X0 + W, top = WALL_Y + 6;
+    shape(x, pPoly([[X0 - 4, top], [X1 + 4, top], [X1 + 4, YARD_Y], [X0 - 4, YARD_Y]]), c1, 2, c2, 0, 5);
+    for (let y = top + 13, i = 0; y < YARD_Y - 2; y += 13, i++) { ST.line(x, pLine(X0, y, X1, y), 1.2, c2); for (let X = X0 - ((X0 % 28) + 28) % 28 + (i % 2) * 14; X < X1; X += 28) ST.line(x, pLine(X, y - 13, X, y), 1.2, c2); }
+    for (let X = X0 - ((X0 % 24) + 24) % 24; X < X1; X += 24) shape(x, pRR(X + 2, top - 10, 14, 12, 2), c1, 1.8, c2, 0, 3);
+    if (tier >= 1) { x.fillStyle = C(trim); x.fillRect(X0, top + 1, W, 3); }
+    // the gate tower holds the crossbow
+    const tw = pRR(150, WALL_Y - 22, 60, 70, 4);
+    shape(x, tw, c1, 2, c2, 4, 0); for (let i = 0; i < 3; i++) shape(x, pRR(148 + i * 23, WALL_Y - 32, 18, 13, 2), c1, 1.8, c2, 0, 3);
+    shape(x, pRR(166, YARD_Y - 26, 28, 26, 13), "ink", 1.5); x.fillStyle = C(c2); x.fill(pRR(169, YARD_Y - 23, 22, 23, 11));
+    if (tier >= 1) shape(x, pStar(180, WALL_Y - 2, 6, 3, 5), trim, 1.2);
+    ST.line(x, pLine(203, WALL_Y - 32, 203, WALL_Y - 62), 2.2, "ink");
+    shape(x, pPoly([[204, WALL_Y - 62], [226, WALL_Y - 56], [204, WALL_Y - 49]]), tier === 2 ? "gold" : "red", 1.6);
+  });
+  fx.wallTier = tier;
+}
+
+// ---------- sprites (made once per size by the kit's sprite cache) ----------
+// wind-up tin robots: flat tin colours, one shade tone, navy ink; flash = the same robot printed white for a hit
+const ROBO = { walk: ["tin", "tinD"], run: ["yellow", "yellowD"], lob: ["green", "greenD"], brute: ["red", "redD"], boss: ["purple", "purpleD"] };
+function eye(x, X, Y, r) { shape(x, pEll(X, Y, r, r), "white", 1.2); x.fillStyle = C("ink"); x.fill(pEll(X + r * 0.15, Y + r * 0.1, r * 0.55, r * 0.6)); x.fillStyle = C("white"); x.fill(pEll(X - r * 0.1, Y - r * 0.2, r * 0.2, r * 0.2)); }
+function rivets(x, pts) { x.fillStyle = C("ink"); for (const [X, Y] of pts) x.fill(pEll(X, Y, 1, 1)); }
+function robotSpr(k, flash) {
+  const d = EN[k], R = d.r, [c, cd] = ROBO[k];
+  return bake("rb" + k + (flash ? "f" : ""), R * 4, R * 4, R * 2, R * 2.6, x => {
+    FLASH = !!flash;
+    try {
+      if (k === "walk") {
+        ST.line(x, pLine(0, -16, 0, -23), 1.6); shape(x, pEll(0, -25, 3, 3), "red", 1.3);
+        shape(x, pRR(-11, -17, 22, 21, 6), c, 2, cd, 3, 3);
+        shape(x, pRR(-8, -13, 16, 10, 3), "paper", 1.4); eye(x, -3.6, -8, 2.6); eye(x, 3.6, -8, 2.6);
+        ST.line(x, pLine(-5, 0, 5, 0), 1.2); rivets(x, [[-8, 2], [8, 2]]);
+      } else if (k === "run") {
+        ST.line(x, pLine(-4, -12, -8, -18), 1.5); shape(x, pEll(-8, -19, 2.4, 2.4), "red", 1.2);
+        shape(x, pRR(-10, -13, 20, 15, 7), c, 2, cd, 3, 3);
+        shape(x, pRR(-8, -9, 16, 6, 3), "blue", 1.3); eye(x, 0, -6, 2.4);
+        rivets(x, [[-6, -1], [6, -1]]);
+      } else if (k === "lob") {
+        shape(x, pRR(-10, -16, 20, 20, 5), c, 2, cd, 3, 3);
+        shape(x, pRR(-7, -12, 14, 9, 3), "paper", 1.4); eye(x, -3, -8, 2.3); eye(x, 3, -8, 2.3);
+        ST.line(x, pLine(-4, 0, 4, 0), 1.2);
+      } else if (k === "brute") {
+        for (const s of [-1, 1]) shape(x, pEll(s * 19, -4, 6, 6), "tin", 1.8, "tinD", s * -1.5, 2);
+        shape(x, pRR(-16, -22, 32, 28, 6), c, 2.2, cd, 4, 4);
+        shape(x, pPoly([[-15, -18], [-12, -27], [12, -27], [15, -18]]), "tin", 2, "tinD", 0, 2.5);
+        shape(x, pRR(-11, -16, 22, 11, 3), "paper", 1.4); eye(x, -5, -10.5, 3); eye(x, 5, -10.5, 3);
+        ST.line(x, pPoly([[-9, -16.5], [-2, -14]], true), 1.8); ST.line(x, pPoly([[9, -16.5], [2, -14]], true), 1.8);
+        rivets(x, [[-12, 0], [12, 0], [-9, -24], [0, -25], [9, -24]]); ST.line(x, pLine(-6, -1, 6, -1), 1.6);
+      } else {
+        for (const s of [-1, 1]) { shape(x, pRR(s * 30 - 5, -18, 10, 22, 4), "tin", 2, "tinD", 0, 2); shape(x, pPoly([[s * 30 - 7, 4], [s * 30, 12], [s * 30 + 7, 4]]), "tinD", 1.8); }
+        for (const [X, h] of [[-14, 12], [0, 18], [14, 12]]) { ST.line(x, pLine(X, -36, X, -36 - h), 2.4); shape(x, pStar(X, -38 - h, 5, 2.4, 5), "gold", 1.4); }
+        shape(x, pRR(-26, -38, 52, 46, 10), c, 2.4, cd, 5, 5);
+        shape(x, pRR(-19, -32, 38, 15, 4), "paper", 1.6); eye(x, -8, -25, 4.2); eye(x, 8, -25, 4.2);
+        ST.line(x, pPoly([[-15, -33], [-4, -29]], true), 2.4); ST.line(x, pPoly([[15, -33], [4, -29]], true), 2.4);
+        shape(x, pEll(0, -4, 9, 9), "paper", 1.6); ST.line(x, pLine(0, -4, 5, -9), 1.6, "red");
+        rivets(x, [[-21, -8], [21, -8], [-21, 2], [21, 2]]);
+      }
+    } finally { FLASH = false; }
+  });
+}
+// the wind-up key turns on the robot's side (drawn live: its width follows the cosine of its turn)
+function windKey(x, X, Y, s, a) {
+  const w = Math.cos(a);
+  at(x, X, Y, s, 0, () => {
+    x.save(); x.scale(1, 1);
+    ST.line(x, pLine(0, 0, 6, 0), 1.8, "orangeD");
+    const p = P2(); p.addPath(pEll(9, -3.2 * w, 3, Math.max(0.6, Math.abs(3.2 * w)))); p.addPath(pEll(9, 3.2 * w, 3, Math.max(0.6, Math.abs(3.2 * w))));
+    shape(x, p, "orange", 1.2); x.restore();
+  });
+}
+// a toy archer on the wall (tier by the archer level: blue coat, then red, then purple with gold)
+function archerSpr(tier) {
+  return bake("ar" + tier, 30, 40, 15, 34, x => {
+    const coat = ["blue", "red", "purple"][tier], coatD = ["blueD", "redD", "purpleD"][tier];
+    shape(x, pRR(-6, -14, 12, 14, 4), coat, 1.6, coatD, 2, 0);
+    x.fillStyle = C(tier === 2 ? "gold" : "white"); x.fillRect(-6, -8, 12, 2);
+    shape(x, pEll(0, -19, 5.5, 5.5), "paper", 1.6); x.fillStyle = C("ink"); x.fill(pEll(-2, -19, 0.9, 1.1)); x.fill(pEll(2, -19, 0.9, 1.1));
+    shape(x, pRR(-5, -32, 10, 10, 2), tier === 2 ? "gold" : "ink", 1.4); x.fillStyle = C("red"); x.fillRect(-5, -24.5, 10, 2);
+  });
+}
+const bowSpr = () => bake("bow", 20, 24, 4, 12, x => { const p = P2(); p.arc(0, 0, 10, -1.1, 1.1); ST.line(x, p, 2.4, "woodD"); ST.line(x, pLine(Math.cos(-1.1) * 10, Math.sin(-1.1) * 10, Math.cos(1.1) * 10, Math.sin(1.1) * 10), 0.8, "ink"); });
+// the crossbow on the gate tower (origin = pivot; drawn pointing right, turned toward the aim)
+const crossbowSpr = () => bake("xb", 50, 40, 14, 20, x => {
+  shape(x, pRR(-10, -4, 34, 8, 3), "woodD", 1.6);
+  const p = P2(); p.moveTo(14, -16); p.quadraticCurveTo(26, 0, 14, 16); ST.line(x, p, 4.2, "ink"); ST.line(x, p, 2.4, "red");
+  ST.line(x, pPoly([[14, -16], [4, 0], [14, 16]], true), 0.9, "ink");
+  shape(x, pEll(0, 0, 7, 7), "gold", 1.6, "goldD", 1.5, 1.5);
+});
+// the mortar in the yard (origin = base centre)
+const mortarSpr = lvTier => bake("mt" + lvTier, 52, 56, 26, 44, x => {
+  shape(x, pRR(-20, -8, 40, 14, 4), "wood", 1.8, "woodD", 0, 3);
+  shape(x, pPoly([[-10, -6], [-14, -30], [8, -34], [10, -6]]), lvTier ? "ink" : "greyD", 2, null);
+  shape(x, pEll(-3, -32, 11.5, 4.5, -0.2), lvTier === 2 ? "gold" : "grey", 1.8);
+  x.fillStyle = C("ink"); x.fill(pEll(-3, -32, 7.5, 2.6, -0.2));
+  for (const s of [-1, 1]) shape(x, pEll(s * 16, 4, 6, 6), "red", 1.6, "redD", 1, 1);
+});
+function coinIcon(x, X, Y, r) { shape(x, pEll(X, Y, r, r), "gold", Math.max(1.2, r * 0.18), "goldD", r * 0.2, r * 0.25); ST.line(x, pEll(X, Y, r * 0.55, r * 0.55), Math.max(0.8, r * 0.12), "goldD"); }
+const coinSpr = () => bake("coin", 20, 20, 10, 10, x => coinIcon(x, 0, 0, 7));
+function shieldIcon(x, X, Y, s, on) {
+  const p = pPoly([[X - 7 * s, Y - 8 * s], [X + 7 * s, Y - 8 * s], [X + 7 * s, Y], [X, Y + 9 * s], [X - 7 * s, Y]]);
+  shape(x, pSmooth([[X - 7.5 * s, Y - 8 * s], [X, Y - 9.5 * s], [X + 7.5 * s, Y - 8 * s], [X + 7 * s, Y + 1 * s], [X, Y + 9.5 * s], [X - 7 * s, Y + 1 * s]]), on ? "blue" : "lock", 1.6, on ? "blueD" : "grey", 1.5 * s, 1.5 * s);
+  if (on) { x.fillStyle = C("white"); x.fill(pStar(X, Y - 0.5 * s, 3.6 * s, 1.6 * s, 5)); }
+  return p;
+}
+// upgrade icons (in a 40 x 40 box around 0, 0)
+function upIcon(x, k) {
+  if (k === "tap") { at(x, 0, 0, 1, -0.8, () => { shape(x, pRR(-15, -3, 26, 6, 2), "woodD", 1.6); shape(x, pPoly([[11, -7], [20, 0], [11, 7]]), "grey", 1.6); shape(x, pPoly([[-15, -3], [-20, -8], [-12, -3]]), "red", 1.2); shape(x, pPoly([[-15, 3], [-20, 8], [-12, 3]]), "red", 1.2); }); }
+  else if (k === "archer") { put(x, archerSpr(0), -4, 14); put(x, bowSpr(), 4, -2); }
+  else if (k === "cannon") put(x, mortarSpr(1), 0, 12, 0, 0.8);
+  else { const p = pRR(-16, -8, 32, 22, 2); shape(x, p, "stone", 1.6, "stoneD", 0, 3); for (let i = 0; i < 3; i++) shape(x, pRR(-16 + i * 12, -15, 8, 8, 1.5), "stone", 1.4); ST.line(x, pLine(-16, 3, 16, 3), 1, "stoneD"); ST.line(x, pLine(0, -8, 0, 3), 1, "stoneD"); ST.line(x, pLine(-8, 3, -8, 14), 1, "stoneD"); ST.line(x, pLine(8, 3, 8, 14), 1, "stoneD"); }
+}
+
+// ---------- UI pieces: cream panels and chunky buttons with a flat lower edge (no gradients, no glow) ----------
+function panel(x, X, Y, w, h, col, colD, r) { shape(x, pRR(X, Y + 4, w, h, r || 12), colD || "paperD", 2.2); shape(x, pRR(X, Y, w, h, r || 12), col || "paper", 2.2); }
+function button(x, w, h, label, size, kind, down) { // origin = top centre
+  const [c, cd] = kind === "go" ? ["green", "greenD"] : kind === "off" ? ["lock", "grey"] : kind === "plain" ? ["paper", "paperD"] : ["yellow", "yellowD"], dy = down ? 3 : 0;
+  shape(x, pRR(-w / 2, 5, w, h - 5, 12), cd, 2.2); shape(x, pRR(-w / 2, dy, w, h - 5, 12), c, 2.2);
+  text(x, label, 0, dy + (h - 5) / 2 + 1, size, kind === "go" ? "white" : "ink", { ol: kind === "go" ? "ink" : null, ow: 0.18, w: 900, max: w - 16 });
+}
+// a pointing glove (fingertip at X, Y; a = 0 points up)
+function hand(x, X, Y, a, s) {
+  put(x, bake("hand", 40, 56, 20, 2, q => {
+    shape(q, pRR(-12, 34, 24, 12, 3), "blue", 1.6, "blueD", 0, 2);
+    shape(q, pSmooth([[-12, 34], [-14, 22], [-10, 16], [-4, 16], [-4, 4], [-3, 0], [3, 0], [4, 4], [4, 14], [10, 15], [14, 19], [13, 34]]), "white", 1.8, "paperD", 2, 0);
+    for (const y of [20, 26]) ST.line(q, pLine(5, y, 12, y), 1.1);
+  }), X, Y, a, s);
+}
+
+// ---------- the play field ----------
+const RS = 1.22; // robots are drawn a little larger than their hit circles
+function drawEnemy(x, e, a, G) {
+  const X = lerp(e.px, e.x, a), Y = lerp(e.py, e.y, a), d = EN[e.k], R = d.r * RS, t = (G.step + e.id * 13) / SIM_HZ;
+  const ph = t * (e.k === "run" ? 16 : e.k === "boss" ? 5 : 9), walk = !e.atk, flash = G.step - e.hitT < 4;
+  let bob = 0, tilt = 0, lean = 0;
+  if (walk) { bob = -Math.abs(Math.sin(ph)) * (e.k === "run" ? 1 : 2.2); tilt = e.k === "run" ? 0 : Math.sin(ph) * 0.07; }
+  else if (d.stop) { const k = (e.atkT || 0) / 1.5; lean = k > 0.75 ? -0.25 * Math.sin((k - 0.75) / 0.25 * Math.PI) : 0; }
+  else { tilt = Math.sin(t * 12) * 0.12; bob = -Math.abs(Math.sin(t * 12)) * 3; }
+  x.fillStyle = C("grassD"); x.fill(pEll(X, Y + R * 0.15 + 2, R * 0.9, R * 0.28));
+  if (e.k === "run") { at(x, X, Y + 2, 1, ph, () => { shape(x, pEll(0, 0, 5, 5), "ink", 1); x.strokeStyle = C("grey"); x.lineWidth = 1.2; x.beginPath(); x.moveTo(-4, 0); x.lineTo(4, 0); x.moveTo(0, -4); x.lineTo(0, 4); x.stroke(); }); }
+  else { const fw = R * 0.42, lift = walk ? Math.sin(ph) * 2.5 : 0; x.fillStyle = C("ink"); x.fill(pEll(X - fw, Y + 2 - Math.max(0, lift), R * 0.3, R * 0.18)); x.fill(pEll(X + fw, Y + 2 - Math.max(0, -lift), R * 0.3, R * 0.18)); }
+  at(x, X, Y + bob, RS, tilt + lean, () => {
+    put(x, robotSpr(e.k, flash), 0, 0);
+    if (e.k === "lob") { // the spring arm with a stone, swung on each throw
+      const k = (e.atkT || 0) / 1.5, sw = e.atk ? (k > 0.75 ? -1.2 * Math.sin((k - 0.75) / 0.25 * Math.PI) : 0.25 * k) : 0;
+      at(x, 6, -16, 1, sw, () => { const p = P2(); p.moveTo(0, 0); for (let i = 1; i <= 5; i++) p.lineTo(i % 2 ? 3 : -3, -i * 2.2); ST.line(x, p, 1.6, "greyD"); if (!(e.atk && k > 0.85)) shape(x, pBlob(0, -13, 3.6, 3.2, 0.1, e.id), "stone", 1.3); });
+    }
+    windKey(x, d.r * 0.85, -d.r * 0.55, d.r / 13, t * 8 + e.id);
+  });
+  if (e.hp < e.max && e.k !== "boss") { const w = Math.max(18, R * 1.7), k = clamp(e.hp / e.max, 0, 1), by = Y - R * 2.1 - 6; x.fillStyle = C("bar"); x.fill(pRR(X - w / 2 - 1, by - 1, w + 2, 6, 2)); x.fillStyle = C(k > 0.4 ? "hp" : "red"); x.fill(pRR(X - w / 2, by, w * k, 4, 1.5)); }
+}
+function drawShots(x, G, a) {
+  for (const s of G.shots) {
+    const k = clamp((s.t + a * DT) / s.T, 0, 1), X = lerp(s.x0, s.x1, k), Y = lerp(s.y0, s.y1, k), ang = Math.atan2(s.y1 - s.y0, s.x1 - s.x0);
+    if (s.kind === "bolt") at(x, X, Y, 1, ang, () => { ST.line(x, pLine(-16, 0, 6, 0), 3.4, "ink"); ST.line(x, pLine(-14, 0, 5, 0), 1.6, "yellow"); shape(x, pPoly([[4, -4], [11, 0], [4, 4]]), "grey", 1.2); });
+    else if (s.kind === "arrow") at(x, X, Y, 1, ang, () => { ST.line(x, pLine(-9, 0, 4, 0), 1.6, "woodD"); shape(x, pPoly([[3, -2.4], [8, 0], [3, 2.4]]), "ink", 0.6); });
+    else { const h = 90 * 4 * k * (1 - k); x.fillStyle = C("grassD"); x.fill(pEll(X, Y, 5, 2)); shape(x, pEll(X, Y - h, 5.5, 5.5), "ink", 1, null); x.fillStyle = C("grey"); x.fill(pEll(X - 1.6, Y - h - 1.8, 1.6, 1.6)); }
+  }
+  const now = fx.vt;
+  for (const l of fx.lobs) { const k = (T() - l.t) / 600; if (k < 0 || k > 1) continue; const X = l.x, Y = lerp(l.y, WALL_Y + 6, k) - 60 * 4 * k * (1 - k); shape(x, pBlob(X, Y, 3.6, 3.2, 0.1, 3), "stone", 1.2); }
+}
+function drawFort(x, G, now) {
+  const tier = Math.min(2, fl((G.lv.archer - 1) / 4)), shot = now - Math.max(fx.shotT, fx.downT);
+  for (let i = 0; i < G.st.archers; i++) {
+    const X = ARCHER_X[i], k = (now - fx.arch[i]) / 260, pull = k >= 0 && k < 1 ? Math.sin(k * Math.PI) * 2 : 0;
+    put(x, archerSpr(tier), X, ARCHER_Y + 12 + pull * 0.4);
+    put(x, bowSpr(), X + 6 - pull, ARCHER_Y - 2, -0.5);
+  }
+  // the crossbow turns toward where the player aims; it kicks back on each shot
+  const rc = shot >= 0 && shot < 160 ? Math.sin(shot / 160 * Math.PI) * 5 : 0;
+  put(x, crossbowSpr(), TURRET.x - Math.cos(fx.turretA) * rc, TURRET.y - 22 - Math.sin(fx.turretA) * rc, fx.turretA);
+  // the mortar: an empty stone pad until it is built
+  if (G.lv.cannon) { const m = now - fx.mortarT, sq = m >= 0 && m < 220 ? Math.sin(m / 220 * Math.PI) * 0.12 : 0; put(x, mortarSpr(G.lv.cannon >= 6 ? 2 : 1), MORTAR.x, MORTAR.y, 0, 1 + sq, 1 - sq); }
+  else { x.setLineDash([4, 4]); ST.line(x, pRR(MORTAR.x - 20, MORTAR.y - 10, 40, 18, 4), 1.4, "floorD"); x.setLineDash([]); }
+  // cracks when the wall is low
+  const f = G.wallHp / G.wallMax;
+  if (f < 0.55) for (let i = 0; i < (f < 0.25 ? 6 : 3); i++) { const X = 30 + i * 58 + (i % 2) * 14; ST.line(x, pPoly([[X, WALL_Y + 8], [X + 5, WALL_Y + 18], [X - 2, WALL_Y + 26], [X + 4, WALL_Y + 36]], true), 1.8); }
+  const hk = (now - fx.wallT) / 300; if (hk >= 0 && hk < 1 && f > 0) { x.fillStyle = rgba("white", 0.5 * (1 - hk)); x.fillRect(vLeft(), WALL_Y - 6, L.W, 52); }
+}
+function drawWallBar(x, G, now) { // the wall's health sits on the wall: three shields (lives), then the bar
+  const s = L.u, w = 170, X = 180 - (w + 64) * s / 2, Y = YARD_Y + 14;
+  at(x, X, Y, s, 0, () => {
+    for (let i = 0; i < LIVES; i++) shieldIcon(x, 10 + i * 20, 9, 1, G.lives > i);
+    const k = clamp(G.wallHp / G.wallMax, 0, 1), bx = 66, low = k < 0.3 && (fl(now / 160) & 1);
+    shape(x, pRR(bx, 1, w, 16, 6), "bar", 2);
+    if (k > 0) { x.fillStyle = C(k > 0.5 ? "hp" : k > 0.25 ? "yellow" : "red"); x.fill(pRR(bx + 2, 3, (w - 4) * k, 12, 4)); }
+    if (low) ST.line(x, pRR(bx - 3, -2, w + 6, 22, 8), 2.4, "red");
+  });
+}
+function drawBossBar(x, G) {
+  if (!(G.bossHp > 0 && G.phase === "battle")) return;
+  const s = L.u, w = 220, y = vTop() + (L.wide ? 14 : 58) * s;
+  at(x, 180, y, s, 0, () => {
+    shape(x, pRR(-w / 2, 0, w, 16, 6), "bar", 2); x.fillStyle = C("purpleL"); x.fill(pRR(-w / 2 + 2, 2, (w - 4) * clamp(G.bossHp / G.bossMax, 0, 1), 12, 4));
+    text(x, S("boss"), -w / 2 - 6, 8, 14, "white", { a: "right", ol: "ink", ow: 0.3 });
+  });
+}
+function drawFlyCoins(x, now) {
+  const tx = UI.coin.cx - 38 * UI.coin.s, ty = UI.coin.y + 21 * UI.coin.s;
+  for (let i = fx.coins.length - 1; i >= 0; i--) {
+    const c = fx.coins[i], k = (now - c.t) / 520;
+    if (k < 0) continue;
+    if (k >= 1) { fx.coins.splice(i, 1); fx.coinT = now; continue; }
+    const e = k * k, X = lerp(c.x, tx, e) + Math.sin(k * Math.PI) * 20, Y = lerp(c.y, ty, e) - Math.sin(k * Math.PI) * 30;
+    put(x, coinSpr(), X, Y, 0, 0.8 + 0.4 * (1 - k));
+  }
+  for (const p of fx.pops) { const k = (now - p.t) / 700; if (k < 0 || k >= 1) continue; x.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1; text(x, "+" + p.c, p.x, p.y - 18 * easeOut(k), 14 * L.u, "goldL", { ol: "ink", ow: 0.32, w: 900 }); x.globalAlpha = 1; }
+  for (const r of fx.rings) { const k = (now - r.t) / 320; if (k < 0 || k >= 1) continue; ST.line(x, pEll(r.x, r.y, r.r * (0.4 + 0.6 * easeOut(k)), r.r * 0.45 * (0.4 + 0.6 * easeOut(k))), 3 * (1 - k) + 0.5, "white"); }
+  if (fx.rings.length > 6) fx.rings.shift();
+}
+function drawAim(x, now) { // where the bolts land while the finger is down
+  if (!(fx.ptr != null || fx.keyHeld) || state !== "play" || run.G.phase !== "battle") return;
+  const a = run.G.aim, r = BOLT_R * (0.85 + 0.1 * Math.sin(now / 90));
+  ST.line(x, pEll(a.x, a.y, r, r * 0.6), 3.6, "ink"); ST.line(x, pEll(a.x, a.y, r, r * 0.6), 1.8, "white");
+}
+
+// ---------- HUD (never shakes): wave and coins; the wall's bar sits on the wall ----------
+function drawHud(x, now, G) {
+  const w = UI.wave, c = UI.coin, boss = BOSS_WAVES.indexOf(G.wave) >= 0;
+  at(x, w.cx, w.y, w.s, 0, () => {
+    panel(x, -w.w / 2, 0, w.w, w.h - 4, "paper", "paperD", 10);
+    text(x, S("wave", G.wave), 0, (w.h - 4) / 2 - (L.wide ? 6 : 0), L.wide ? 18 : 15, boss ? "redD" : "ink", { w: 900, max: w.w - 14 });
+    if (L.wide) text(x, S("waveOf", G.wave), 0, (w.h - 4) / 2 + 13, 14, "greyD", { w: 800 });
+  });
+  const pk = (now - fx.coinT) / 200, sc = pk >= 0 && pk < 1 ? 1 + 0.12 * Math.sin(pk * Math.PI) : 1;
+  at(x, c.cx, c.y, c.s, 0, () => {
+    panel(x, -c.w / 2, 0, c.w, c.h - 4, "paper", "paperD", 10);
+    at(x, -c.w / 2 + 20, (c.h - 4) / 2, sc, 0, () => coinIcon(x, 0, 0, 10));
+    text(x, Math.round(fx.coinsDisp), -c.w / 2 + 36, (c.h - 4) / 2 + 1, 20, "ink", { a: "left", w: 900 });
+  });
+}
+// ---------- the shop between waves ----------
+function shopK(i) { return UPG_KEYS[i]; }
+function drawShop(x, now, G) {
+  const sh = UI.shop, k = easeOut((now - fx.shopT) / 260), slide = (1 - k) * (sh.wide ? 0 : 160 * sh.s);
+  x.save(); x.translate(0, slide);
+  if (sh.wide) at(x, sh.cx, sh.y, sh.s, 0, () => { panel(x, -sh.w / 2, 0, sh.w, sh.h, "paper", "paperD", 14); text(x, S("shop"), 0, 28, 18, "ink", { w: 900 }); });
+  else { x.fillStyle = C("paperD"); x.fill(pRR(vLeft() - 10, sh.y + 4, L.W + 20, vBot() - sh.y + 10, 16)); shape(x, pRR(vLeft() - 10, sh.y, L.W + 20, vBot() - sh.y + 10, 16), "paper", 2.2); }
+  for (let i = 0; i < 4; i++) {
+    const e = UI.cards[i], key = shopK(i), lvl = G.lv[key], c = cost(key, lvl), ok = G.coins >= c, bk = fx.buyK === key ? (now - fx.buyT) / 260 : 2, nk = fx.nopeK === key ? (now - fx.nopeT) / 300 : 2;
+    const pop = bk < 1 ? 1 + 0.1 * Math.sin(bk * Math.PI) : 1, shake = nk < 1 ? Math.sin(nk * 30) * 4 * (1 - nk) : 0;
+    at(x, e.cx + shake * e.s, e.y + e.h * e.s / 2, e.s * pop, 0, () => {
+      const W = e.w, H = e.h;
+      shape(x, pRR(-W / 2, -H / 2 + 4, W, H, 10), ok ? "yellowD" : "paperD", 2); shape(x, pRR(-W / 2, -H / 2, W, H, 10), ok ? "white" : "paperD", 2);
+      text(x, S("up_" + key), 0, -H / 2 + 13, 15, "ink", { w: 900 });
+      at(x, 0, -6, 0.72, 0, () => upIcon(x, key));
+      const lvS = key === "cannon" && !lvl ? S("build") : S("lv", lvl);
+      text(x, lvS, 0, H / 2 - 33, 14, ok ? "blueD" : "greyD", { w: 900 });
+      shape(x, pRR(-W / 2 + 4, H / 2 - 21, W - 8, 17, 7), ok ? "yellow" : "lock", 1.6);
+      coinIcon(x, -W / 2 + 15, H / 2 - 12.5, 6);
+      text(x, c, 6, H / 2 - 12, 14, ok ? "ink" : "greyD", { w: 900, max: W - 30 });
+    });
+  }
+  const n = UI.next;
+  at(x, n.cx, n.y, n.s, 0, () => button(x, n.w, n.h, S("next"), 17, "go"));
+  x.restore();
+}
+// ---------- the call: one big word in the middle of the field ----------
+function drawCall(x, now) {
+  const cl = fx.call; if (!cl) return;
+  const age = now - cl.t, life = cl.key === "wave" || cl.key === "boss" ? 1500 : 1300; if (age > life) { fx.call = null; return; }
+  const sc = L.u * (age < 200 ? lerp(0.92, 1, easeBack(age / 200)) : 1), big = cl.key === "win" || cl.key === "bossIn" || cl.key === "perfect";
+  const col = { wave: "white", boss: "redL", bossIn: "redL", clear: "goldL", perfect: "goldL", broken: "redL", again: "white", win: "goldL" }[cl.key] || "white";
+  x.globalAlpha = age > life - 250 ? (life - age) / 250 : 1;
+  at(x, 180, 236, sc, 0, () => {
+    const label = cl.key === "wave" || cl.key === "boss" || cl.key === "again" ? S(cl.key === "again" ? "again" : "wave", cl.n) : S(cl.key);
+    text(x, label, 0, 0, big ? 40 : 34, col, { w: 900, ol: "ink", ow: 0.26, max: 330 });
+    if (cl.sub) text(x, cl.sub, 0, 36, 18, "white", { ol: "ink", ow: 0.3, w: 900, max: 320 });
+  });
+  x.globalAlpha = 1;
+}
+// ---------- first-run teaching: one line and the glove, at the one thing to do next ----------
+function drawTeach(x, now, G) {
+  if (state !== "play" || !hint.active) return;
+  const bob = Juice.reduce ? 0 : (fl(now / 300) & 1) * 5;
+  let line = null, hx = 0, hy = 0, ang = 0;
+  if (G.phase === "battle" && G.wave === 1 && !fx.taughtKill) { const f = frontEnemy(G); if (f) { line = "teachTap"; hx = f.x; hy = f.y + 6; } }
+  else if (G.phase === "break" && G.wave === 2) {
+    if (!G.bought) { let bi = -1, bc = Infinity; for (let i = 0; i < 4; i++) { const c = cost(shopK(i), G.lv[shopK(i)]); if (c <= G.coins && c < bc) { bc = c; bi = i; } } if (bi >= 0) { const e = UI.cards[bi]; line = "teachShop"; hx = e.cx; hy = e.y - 2; ang = Math.PI; } }
+    if (!line) { const n = UI.next; line = "teachNext"; hx = n.cx + n.w * n.s * 0.3; hy = n.y + n.h * n.s * 0.6; ang = -0.3; }
+  }
+  if (!line) return;
+  hand(x, hx, hy + 4 + bob, ang, L.u);
+  const ly = G.phase === "battle" ? 330 : (UI.shop.wide ? 380 : UI.shop.y - 84 * L.u);
+  at(x, 180, ly, L.u, 0, () => text(x, S(line), 0, 0, 18, "white", { ol: "ink", ow: 0.3, w: 900, max: 330 }));
+}
+// ---------- title, pause, result, demo label, system buttons ----------
+function drawTitle(x, now) {
+  const u = L.u, ty = vTop() + (L.wide ? 40 : 70) * u, still = Juice.reduce, ja = lang === "ja";
+  at(x, 180, ty, u, still ? 0 : Math.sin(now / 1100) * 0.01, () => {
+    panel(x, -150, 0, 300, 176, "paper", "paperD", 18);
+    for (const s of [-1, 1]) windKey(x, s * 132 - (s > 0 ? 18 : -4), 30, 2.2 * s, now / 300);
+    text(x, S("title"), 0, 52, ja ? 38 : 34, "red", { w: 900, ol: "ink", ow: 0.16, max: 250 });
+    text(x, ja ? S("titleEn") : STRINGS.ja.title, 0, 88, 15, "blueD", { w: 800 });
+    ST.line(x, pLine(-110, 108, 110, 108), 2, "paperD");
+    text(x, S("how1"), 0, 130, 17, "ink", { w: 900, max: 270 }); text(x, S("how2"), 0, 154, 15, "greenD", { w: 900, max: 270 });
+  });
+  const b = bestOf();
+  if (b > 0) {
+    const rk = runsOf() >= 2 ? S("ranks")[rankOf(b)] : "", t = S("best") + " " + b + (rk ? "  " + rk : "");
+    at(x, L.wide ? sideX(1) : 180, L.wide ? vTop() + 90 : ty + 194 * u, L.wide ? hudS() : u, 0, () => { const w = textW(x, t, 16) + 32; panel(x, -w / 2, 0, w, 32, "blue", "blueD", 10); text(x, t, 0, 16, 16, "white", { w: 900 }); });
+  }
+  const st = UI.start;
+  at(x, st.cx, st.y + (still ? 0 : Math.sin(now / 260) * 1.5), u, 0, () => button(x, st.w, st.h, S("start"), 24, "go"));
+  hand(x, st.cx + st.w * u * 0.32, st.y + st.h * u * 0.62 + (still ? 0 : (fl(now / 300) & 1) * 4), -0.3, u);
+  if (finePointer) text(x, S("space"), st.cx + (st.w / 2 + 12) * u, st.y + 28 * u, 14 * u, "white", { a: "left", ol: "ink", ow: 0.3 });
+  text(x, S("credit"), vLeft() + 10, vBot() - 14, 14 * u, "white", { a: "left", ol: "ink", ow: 0.3, w: 800 });
+}
+function drawPause(x, now) {
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = rgba("ink", 0.45); x.fillRect(0, 0, cv.width, cv.height); x.restore();
+  const u = L.u, dy = -60 * (1 - easeBack((now - fx.pauseT) / 260)), y = pauseY() + dy;
+  at(x, 180, y, u, 0, () => { panel(x, -150, 0, 300, 220, "paper", "paperD", 16); text(x, S("paused"), 0, 40, 28, "ink", { w: 900 }); });
+  const bt = (e, label, size, kind) => at(x, e.cx, e.y + dy, e.s, 0, () => button(x, e.w, e.h, label, size, kind));
+  bt(UI.resume, S("resume"), 22, "go"); bt(UI.restart, S("restart"), 16, "plain"); bt(UI.quit, S("toTitle"), 16, "plain");
+}
+function drawOver(x, now) {
+  const r = run.result, play = state === "over", age = resAge(r, now), u = L.u, H = play ? 330 : 280, G = run.G;
+  const y = overY() - (H + 80) * u * (1 - easeBack(age / RES.drop));
+  at(x, 180, y, u, 0, () => {
+    panel(x, -158, 0, 316, H, "paper", "paperD", 18);
+    if (age > RES.head) text(x, S(r.won ? "win" : "over"), 0, 38, 30, r.won ? "greenD" : "redD", { w: 900, max: 290 });
+    if (age > RES.cause) text(x, r.cause, 0, 70, 16, "greyD", { w: 800, max: 290 });
+    if (age > RES.count) {
+      const v = Math.round(r.score * easeOut((age - RES.count) / RES.countDur));
+      coinIcon(x, (r.showRank ? -56 : 0) - textW(x, v, 48, { w: 900 }) / 2 - 18, 116, 12);
+      text(x, v, r.showRank ? -56 : 0, 118, 48, "ink", { w: 900 });
+      if (r.showRank && r.rankDone) { const rk = S("ranks")[r.rank], ra = age - RES.rank, ss = 1 + 0.5 * (1 - easeOut(ra / 140)); at(x, 90, 116, ss, -0.08, () => { const w = textW(x, rk, 17) + 22; shape(x, pRR(-w / 2, -16, w, 32, 8), "red", 2, "redD", 0, 3); text(x, rk, 0, 1, 17, "white", { w: 900 }); }); }
+    }
+    if (age > RES.rows) {
+      const row = (ry, k, v) => { text(x, S(k), -134, ry, 16, "ink", { a: "left", w: 800 }); if (v != null) text(x, v, 134, ry, 19, "blueD", { a: "right", w: 900 }); x.fillStyle = C("paperD"); for (let i = -134; i < 134; i += 6) x.fillRect(i, ry + 14, 2, 2); };
+      row(168, "rWave", r.won ? S("waveOf", WAVES) : S("waveOf", G.wave)); row(202, "rKills", G.kills);
+      if (play && (r.newBest || r.best > 0)) {
+        row(236, "rBest", r.newBest ? null : r.best);
+        if (r.newBest) { if (age > RES.best) { const sa = age - RES.best, ss = 1 + 0.5 * (1 - easeOut(sa / 140)); at(x, 70, 236, ss, -0.06, () => { const t = S("newBest"), w = textW(x, t, 16) + 20; shape(x, pRR(-w / 2, -14, w, 28, 8), "gold", 2, "goldD", 0, 3); text(x, t, 0, 1, 16, "ink", { w: 900 }); }); } }
+        else text(x, r.score === r.best ? S("tieBest") : S("toBest", r.best - r.score), 30, 236, 16, "redD", { w: 800 });
+      }
+    }
+    if (play && age > RES.goal && r.goal) { const gt = S(r.goal.k, r.goal.n), tw = textW(x, gt, 16); hand(x, -tw / 2 - 8, 292, Math.PI / 2, 0.6); text(x, gt, -tw / 2 + 4, 292, 16, "greenD", { a: "left", w: 900 }); }
+  });
+  if (play) { at(x, UI.retry.cx, UI.retry.y, u, 0, () => button(x, UI.retry.w, UI.retry.h, S("retry"), 24, "go")); at(x, UI.toTitle.cx, UI.toTitle.y, u, 0, () => button(x, UI.toTitle.w, UI.toTitle.h, S("toTitle"), 16, "plain")); if (retryReady()) hand(x, UI.retry.cx + UI.retry.w * u * 0.3, UI.retry.y + UI.retry.h * u * 0.6 + (fl(now / 300) & 1) * 4, -0.3, u); }
+}
+function drawDemoLabel(x) { // ?demo=1: a small bilingual title instead of any tool, BEST or button
+  at(x, 180, vBot() - 66 * L.u, L.u, 0, () => { panel(x, -100, 0, 200, 46, "paper", "paperD", 10); text(x, STRINGS.ja.title, 0, 15, 16, "red", { w: 900 }); text(x, STRINGS.en.title, 0, 33, 14, "blueD", { w: 800 }); });
+}
+function drawSys(x) { // round system buttons: sound, pause, language
+  const b = (e, fn) => at(x, e.cx, e.y, e.s, 0, () => { shape(x, pEll(0, e.h / 2 + 2, e.h / 2 - 1, e.h / 2 - 1), "paperD", 2); shape(x, pEll(0, e.h / 2 - 1, e.h / 2 - 1, e.h / 2 - 1), "paper", 2); fn(); });
+  if (!btnMute.hidden) b(UI.mute, () => { const m = AU.muted; x.fillStyle = C("ink"); x.fill(pPoly([[-9, 16], [-5, 16], [0, 11], [0, 29], [-5, 24], [-9, 24]])); if (m) { ST.line(x, pLine(4, 15, 11, 24), 2.2); ST.line(x, pLine(11, 15, 4, 24), 2.2); } else for (const r of [5, 9]) { const p = P2(); p.arc(0, 20, r, -0.8, 0.8); ST.line(x, p, 2); } });
+  if (!btnPause.hidden) b(UI.pause, () => { x.fillStyle = C("ink"); x.fill(pRR(-6, 12, 4.4, 16, 1)); x.fill(pRR(1.6, 12, 4.4, 16, 1)); });
+  if (isTitle() && !ovTitle.hidden) { const e = UI.lang; at(x, e.cx, e.y, e.s, 0, () => { shape(x, pRR(-e.w / 2, 3, e.w, e.h - 3, 12), "paperD", 2); shape(x, pRR(-e.w / 2, 0, e.w, e.h - 4, 12), "paper", 2); text(x, S("lang"), 0, (e.h - 4) / 2 + 1, 15, "ink", { w: 900 }); }); }
+}
+function draw(now) {
+  if (!run) return;
+  const x = ctx, G = run.G, c = clockNow(), sh = shakeOffset(10), a = run.dead || state === "paused" ? 1 : clamp(c * SIM_HZ / 1000 - G.step + 1, 0, 1);
+  if (fx.wallTier !== wallTier()) buildWall();
+  const zm = zoomNow(now);
+  putLayer(x, BG, sh.x, sh.y, zm);
+  view(x, sh.x, sh.y, zm);
+  const ens = G.en.slice().sort((p, q) => p.y - q.y);
+  for (const e of ens) drawEnemy(x, e, a, G);
+  drawShots(x, G, a);
+  view(x); putLayer(x, WALL, sh.x, sh.y, zm); view(x, sh.x, sh.y, zm);
+  drawFort(x, G, now);
+  partsDraw(x);
+  drawAim(x, now);
+  view(x); // the HUD and the panels never shake
+  const shop = G.phase === "break" && !isTitle() && !isOver() && !isDying() && !DEMO;
+  if (!isTitle() && !isOver() && (L.wide || !shop)) drawWallBar(x, G, now);
+  if (!isTitle() && !isOver()) { drawBossBar(x, G); drawCall(x, now); }
+  if (shop || (DEMO && G.phase === "break")) drawShop(x, now, G);
+  drawFlyCoins(x, now);
+  if (!isTitle() && !isOver() && !DEMO) drawHud(x, now, G);
+  if (DEMO && !isOver()) drawHud(x, now, G);
+  drawTeach(x, now, G);
+  if (isTitle()) drawTitle(x, now);
+  if (state === "paused") drawPause(x, now);
+  if (isOver()) drawOver(x, now);
+  if (DEMO) drawDemoLabel(x); else drawSys(x);
+  textEnd();
+}
+function visualStep(dt, now) { // smooth follows of the visuals (the rules never read them)
+  if (!dt || !run) return;
+  const G = run.G, a = G.aim, want = Math.atan2(a.y - (TURRET.y - 22), a.x - TURRET.x);
+  if (G.fire || now - fx.shotT < 300) fx.turretA += (want - fx.turretA) * Math.min(1, dt * 18);
+  else fx.turretA += (-Math.PI / 2 - fx.turretA) * Math.min(1, dt * 3);
+  fx.coinsDisp = fx.coinsDisp + (G.coins - fx.coinsDisp) * Math.min(1, dt * 10);
+  if (Math.abs(G.coins - fx.coinsDisp) < 0.5) fx.coinsDisp = G.coins;
+  for (let i = fx.lobs.length - 1; i >= 0; i--) if (now - fx.lobs[i].t > 600) { const l = fx.lobs.splice(i, 1)[0]; burst(l.x, WALL_Y + 8, 4, 90, { col: "stoneD", kind: "chip", s: 2.4 }); fx.wallT = now; }
+  if (now - fx.confT < 2500 && rnd() < dt * 40) addPart({ x: rnd() * CW, y: vTop() - 10, vx: (rnd() - 0.5) * 60, vy: 40 + rnd() * 60, g: 30, life: 3, max: 3, kind: "chip", col: ["red", "yellow", "blue", "green", "pink"][fl(rnd() * 5)], s: 3, rot: rnd() * TAU, vr: (rnd() - 0.5) * 10 });
+}
+
+// ---------- screen, language, mute ----------
+function resize() {
+  artResize(cv, wrap.clientWidth || innerWidth, wrap.clientHeight || innerHeight, CW, CH, 220);
+  buildBg(); if (fx) buildWall(); layoutUI();
+  if (run && manual) draw(simT);
+}
+window.addEventListener("resize", resize);
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = STRINGS[lang].title + (lang === "ja" ? " / Clockwork Fort" : "");
+  document.querySelectorAll("[data-s]").forEach(el => { el.textContent = S(el.getAttribute("data-s")); });
+  $("btnLang").textContent = S("lang");
+  layoutUI();
+}
+function setMute(m) { if (!DEMO) store.set("mute", m); auMute(m); btnMute.textContent = m ? "sound off" : "sound on"; }
+
+// ---------- flow ----------
+function hideAll() { ovTitle.hidden = true; ovPause.hidden = true; ovOver.hidden = true; }
+const newSeed = () => (Math.random() * 4294967296) >>> 0;
+function startAI(mode, seed) { state = mode === "demo" ? "demo" : "title"; newRun(mode, seed == null ? newSeed() : seed); btnPause.hidden = true; }
+function toTitle() { pfStop(); hideAll(); ovTitle.hidden = DEMO; startAI("attract"); }
+function startPlay() {
+  if (auInit()) auResume();
+  sfx.ui(); hideAll();
+  state = "play"; runCount++;
+  newRun("play", newSeed());
+  btnPause.hidden = false;
+  pfStart();
+}
+function showOver(now) {
+  state = "over"; run.result = makeResult(now); musicLevel("bed");
+  if (run.result.newBest) store.set("best", run.G.score);
+  store.set("runs", runsOf() + 1);
+  ovOver.hidden = false; overShownAt = T(); btnPause.hidden = true;
+  platform("gameOver", run.G.score);
+}
+function pauseGame(at) {
+  if (state !== "play") return;
+  state = "paused"; fx.pauseT = T();
+  run.pauseClock = (at || T()) - run.offset;
+  run.G.fire = false; fx.ptr = null; fx.keyHeld = false;
+  musicLevel("off");
+  ovPause.hidden = false; btnPause.hidden = true;
+  pfStop();
+}
+function resumeGame() {
+  if (state !== "paused") return;
+  if (auInit()) auResume();
+  run.offset = T() - run.pauseClock;
+  state = "play"; ovPause.hidden = true; btnPause.hidden = false;
+  musicLevel(BOSS_WAVES.indexOf(run.G.wave) >= 0 && run.G.phase === "battle" ? "boss" : run.G.phase === "battle" ? "play" : "bed");
+  pfStart();
+}
+function holdClock() { if (run && run.holdAt == null && (state === "title" || state === "demo")) run.holdAt = T(); }
+function releaseClock() { if (run && run.holdAt != null) { run.offset += T() - run.holdAt; run.holdAt = null; } }
+function onHide() { if (state === "play") pauseGame(); else holdClock(); }
+function onShow() { releaseClock(); lastNow = performance.now(); }
+const retryReady = () => T() - overShownAt > 350; // a short lockout so a late gameplay tap does not restart by accident
+function retry() { if (state === "over" && retryReady()) startPlay(); }
+
+// ---------- input. Gameplay on pointerdown / keydown; the response is drawn on the next frame ----------
+function toScene(e) { const k = L.kc, b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) / k - L.x0, y: (e.clientY - b.top) / k - L.y0 }; }
+function tryBuy(k) {
+  const G = run.G;
+  if (G.phase !== "break") return;
+  if (buy(G, k)) { events(G, T()); if (L.wide) burst(UI.cards[UPG_KEYS.indexOf(k)].cx, UI.cards[UPG_KEYS.indexOf(k)].y + 40, 10, 160, { col: "gold", kind: "star", s: 2.6 }); }
+  else { fx.nopeT = T(); fx.nopeK = k; if (loud()) sfx.nope(); }
+}
+function nextWave() { const G = run.G; if (G.phase !== "break") return; startWave(G); if (hint.active && G.wave >= 2) hint.success(); events(G, T()); sfx.ui(); }
+function pressAt(p) { // the core input: in battle the crossbow fires at the finger; between waves the shop
+  const G = run.G;
+  if (G.phase === "break") {
+    for (let i = 0; i < 4; i++) if (inBox(UI.cards[i], p.x, p.y, 4)) { tryBuy(UPG_KEYS[i]); return; }
+    if (inBox(UI.next, p.x, p.y, 6)) nextWave();
+    return;
+  }
+  if (G.phase !== "battle") return;
+  const q = fieldPt(p.x, p.y); G.aim.x = q.x; G.aim.y = q.y; G.fire = true; fx.downT = T();
+}
+auUnlock();
+const on = (el, f) => el.addEventListener("click", e => { e.stopPropagation(); f(); });
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault(); if (state !== "play") return;
+  const p = toScene(e); fx.ptr = e.pointerId; pressAt(p);
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
+});
+cv.addEventListener("pointermove", e => { if (state !== "play" || fx.ptr !== e.pointerId || run.G.phase !== "battle") return; const q = fieldPt(...Object.values(toScene(e))); run.G.aim.x = q.x; run.G.aim.y = q.y; });
+const release = e => { if (fx && fx.ptr === e.pointerId) { fx.ptr = null; if (run && !fx.keyHeld) run.G.fire = false; } };
+cv.addEventListener("pointerup", release);
+cv.addEventListener("pointercancel", e => { e.preventDefault(); release(e); });
+ovPause.addEventListener("click", e => { if (e.target === ovPause) resumeGame(); });
+ovTitle.addEventListener("click", e => { if (!e.target.closest("button") || e.target.id === "btnStart") startPlay(); }); // a tap anywhere starts
+// inside the lockout a press only skips the result animation; after it, one press starts the next run
+ovOver.addEventListener("click", e => { if (e.target !== ovOver) return; if (retryReady()) retry(); else skipResult(T()); });
+on($("btnLang"), () => { lang = lang === "ja" ? "en" : "ja"; store.set("lang", lang); applyLang(); sfx.ui(); });
+on(btnMute, () => { if (auInit()) auResume(); setMute(!AU.muted); btnMute.blur(); });
+on(btnPause, () => { pauseGame(); btnPause.blur(); });
+on($("btnResume"), resumeGame);
+on($("btnRestart"), () => { pfStop(); startPlay(); });
+on($("btnQuit"), toTitle);
+on($("btnRetry"), retry);
+on($("btnToTitle"), () => { if (retryReady()) toTitle(); });
+document.addEventListener("keydown", e => {
+  if (DEMO || e.ctrlKey || e.metaKey || e.altKey || e.key === "Tab") return;
+  const k = e.key, ok = k === " " || k === "Enter" || k === "Spacebar", esc = k === "Escape" || k === "p" || k === "P";
+  if (ok || k.startsWith("Arrow")) e.preventDefault();
+  if (e.repeat) return;
+  if (k === "m" || k === "M") { setMute(!AU.muted); return; }
+  if (isTitle()) { if (ok) startPlay(); }
+  else if (state === "play") {
+    const G = run.G;
+    if (esc) pauseGame();
+    else if (G.phase === "break") { if (ok) nextWave(); else if (k >= "1" && k <= "4") tryBuy(UPG_KEYS[+k - 1]); }
+    else if (ok && G.phase === "battle") { fx.keyHeld = true; const f = frontEnemy(G); if (f) { G.aim.x = f.x; G.aim.y = f.y; } G.pulse = 1; G.fire = !!f; fx.downT = T(); }
+  }
+  else if (state === "paused") { if (ok || esc) resumeGame(); }
+  else if (state === "over") { if (ok) { if (retryReady()) retry(); else skipResult(T()); } else if (k === "Escape") toTitle(); }
+});
+document.addEventListener("keyup", e => { const k = e.key; if ((k === " " || k === "Enter" || k === "Spacebar") && fx) { fx.keyHeld = false; if (run && !fx.ptr) run.G.fire = false; } });
+document.addEventListener("visibilitychange", () => { if (document.hidden) onHide(); else onShow(); });
+window.addEventListener("blur", () => { if (state === "play") pauseGame(); });
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+// ---------- update and loop ----------
+function update(now, dt) {
+  if (!run) return;
+  if ((state === "play" || state === "title" || state === "demo") && run.holdAt == null) updateRun(now);
+  if (isDying()) {
+    const el = now - run.dead.at, win = run.dead.reason === "win", wait = state === "dying" ? (win ? 1500 : FREEZE) : state === "demo-dying" ? 1300 : 1400;
+    if (el > wait) { if (state === "dying") showOver(now); else if (state === "demo-dying") { state = "demo-over"; run.result = makeResult(now); musicLevel("bed"); } else startAI("attract"); }
+  }
+  if (state === "demo-over" && now - run.result.at > 3600) startAI("demo"); // a short result hold, then the clip loops
+  if (isOver()) resultStep(now);
+  juiceStep(dt);
+  if (state === "paused" || (isDying() && now - run.dead.at < FREEZE)) return; // the failure freeze holds every pose
+  const vdt = Juice.stop > 0 ? dt * 0.15 : dt; // hitstop slows the visuals only; the run clock never stops
+  fx.vt += vdt * 1000;
+  partsStep(vdt); visualStep(vdt, now);
+}
+function step(now, dt) { update(now, dt); musicStep(); }
+let lastNow = performance.now();
+function frame() {
+  requestAnimationFrame(frame);
+  if (manual) return;
+  let now = performance.now(); if (now < lastNow) now = lastNow;
+  const raw = now - lastNow, prev = lastNow; lastNow = now;
+  if (raw > 300 && state === "play") pauseGame(prev); // a long stall must not count as time the player had
+  if (raw > 250 && run && run.ai && run.holdAt == null && !isDying()) run.offset += raw - 16; // the AI never teleports
+  step(now, clamp(raw, 0, 50) / 1000);
+  draw(now);
+}
+
+// ---------- test hooks (the contract in tools/README.md; tools/qa.mjs and review-kit read them) ----------
+window.__game = {
+  get state() { return state === "demo-over" || state === "demo-dying" ? "demo" : state === "title-dying" ? "title" : state; },
+  get score() { return run ? run.G.score : 0; },
+  get mode() { return run ? run.mode : null; },
+  snap() { // gameplay state for frame-rate parity: integers only, no wall clock
+    if (!run) return null;
+    const G = run.G;
+    return { state, phase: G.phase, wave: G.wave, lives: G.lives, coins: G.coins, score: G.score, kills: G.kills, enemies: G.en.length,
+      wall: Math.round(G.wallHp), step: G.step, dead: run.dead && run.dead.reason, t: Math.round(clockNow()) };
+  },
+  manual(on) { manual = !!on; simT = performance.now(); lastNow = simT; },
+  tick(ms, render) { simT += ms; step(simT, ms / 1000); if (render) draw(simT); },
+  demo(seed) { hideAll(); btnPause.hidden = true; startAI("demo", seed); },
+  tap() { // one shot at the robot nearest the wall; between waves, the next wave
+    if (state !== "play") return; const G = run.G;
+    if (G.phase === "break") { nextWave(); return; }
+    const f = frontEnemy(G); if (f) { G.aim.x = f.x; G.aim.y = f.y; } G.pulse = 1; fx.downT = T();
+  },
+  autoplay(on) { autopilot = !!on; },
+  fail() { if (state === "play" && !run.dead) { const G = run.G; G.lives = 0; G.wallHp = 0; G.phase = "lost"; G.phaseT = 0; kill("wall", T()); } },
+  audioState() { return AU.ctx ? AU.ctx.state : "none"; },
+  view() { return { K: L.K, dpr: L.dpr, w: L.W, h: L.H, top: L.y0, left: L.x0, cw: CW, reduce: Juice.reduce, textMin: TXT.min, wide: L.wide }; },
+  texts() { return TXT.last.slice(); },
+  target() { // a fixed point: the middle of the field in battle, the NEXT WAVE button between waves
+    const k = L.kc, b = cv.getBoundingClientRect(), br = run && run.G.phase === "break" && state === "play";
+    const p = br ? { x: UI.next.cx, y: UI.next.y + UI.next.h * UI.next.s / 2 } : { x: CW / 2, y: 300 };
+    return { x: b.left + (L.x0 + p.x) * k, y: b.top + (L.y0 + p.y) * k };
+  },
+  peak(n) { return auPeak(() => PEAK_SET.slice(0, n || 8).forEach(k => sfx[k](1))); },
+  balance(seed, prof, maxSec) { return simRun(seed, prof, maxSec); }   // a whole run headless, for balance checks
+};
+
+// ---------- boot ----------
+resize();
+applyLang();
+AU.muted = !!store.get("mute", false); setMute(AU.muted);
+if (DEMO) { hideAll(); btnMute.hidden = true; btnPause.hidden = true; auInit(); startAI("demo"); } // recordings start the bus without a gesture when the browser allows it
+else toTitle();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
