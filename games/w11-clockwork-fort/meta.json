@@ -1,0 +1,30 @@
+{
+  "slug": "clockwork-fort",
+  "week": 11,
+  "title_ja": "ゼンマイとりで",
+  "title_en": "Clockwork Fort",
+  "tagline_ja": "ゼンマイのロボ軍団を倒してコインをかせぎ、とりでを強くして守りぬくタワーディフェンス。",
+  "tagline_en": "Tap down a march of wind-up robots, earn coins, and power up your fort to hold all 12 waves.",
+  "how_to_play_ja": "歩いてくるロボをタップすると、とりでの弓が うちます。おしっぱなしで連射です。ウェーブの合間に、コインで攻撃、弓兵、大砲、城壁を強化します。城壁が 3 回こわれたら おしまいです。",
+  "how_to_play_en": "Tap a marching robot and the fort's crossbow fires at it; hold to keep firing. Between waves, spend your coins on power, archers, a cannon and the wall. If the wall breaks three times, the fort falls.",
+  "controls": [
+    "tap/click",
+    "hold to keep firing",
+    "space",
+    "1-4 to buy, enter for the next wave",
+    "esc/p to pause",
+    "m to mute"
+  ],
+  "genre": "tower defense",
+  "tags": [
+    "tower-defense",
+    "upgrade",
+    "idle-defense",
+    "casual",
+    "mobile-friendly",
+    "high-score"
+  ],
+  "session_length_sec": 300,
+  "video_hook_ja": "倒してかせいで強くする。とりでが どんどん育つ。",
+  "quality_bar": 1
+}
